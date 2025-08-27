@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>피라미드</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+</head>
+
+<body>
+    <div class="buttons-wrap">
+        <button class="draw-button" data-type="0">
+            지점선택
+        </button>
+    </div>
+    <div class="buttons-wrap-bottom">
+        <button id="draw-stop-button">
+            도형그리기 종료
+        </button>
+        <button id="draw-cancel-button" class="gray">
+            그리기취소 X
+        </button>
+    </div>
+    <div id="form-wrap" class="form-wrap">
+        <label>방위각 <input type="range" value="0" id="heading" min="0" max="360"></label>
+        <label>고도각 <input type="range" value="0" id="pitch" min="90" max="180"></label>
+        <label>횡회전 <input type="range" value="0" id="roll" min="0" max="360"></label>
+    </div>
+    <div id="helper">
+        지도를 클릭하여 원하는 도형을 그려주세요.(그리기종료: 마우스 우클릭, esc키)
+    </div>
+    <div id="world-container"></div>
+    <script>
+        const entities = [];
+        //그리기 버튼
+        const drawBtn = document.querySelector('.draw-button');
+        //그리기 종료 버튼
+        const drawStopBtn = document.getElementById('draw-stop-button');
+        //그리기 취소 버튼
+        const drawCancelBtn = document.getElementById('draw-cancel-button');
+        //하단 버튼 그룹
+        const bottomBtns = document.querySelector('.buttons-wrap-bottom');
+        //도움말
+        const helper = document.getElementById('helper');
+        //그리기 버튼 이벤트: 클릭시 도형 그리기 시작
+        drawBtn.addEventListener('click', () => {
+            helper.style.display = 'block';
+            // ESC 키 이벤트 등록
+            document.addEventListener('keydown', handleKeyDown);
+            //종료버튼 보기
+            bottomBtns.style.display = 'flex';
+            //도형 그리기
+            viewer._drawAction({
+                shapeType: 0, //0:포인트, 1:라인, 2:폴리곤
+                stopDrawElement: drawStopBtn //종료버튼 지정
+            }).then((res) => {
+                // ESC 이벤트 핸들러 제거
+                document.removeEventListener('keydown', handleKeyDown);
+                //도움말 종료버튼 숨기기
+                helper.style.display = 'none';
+                bottomBtns.style.display = 'none';
+                //라인 생성
+                viewer._createFrustum({
+                    positions: res.data.positions
+                }).forEach(entity => {
+                    entities.push(entity);
+                });
+            }).catch((err) => {
+                console.error(err);
+                // 예외 발생 시도 ESC 이벤트 핸들러 제거
+                document.removeEventListener('keydown', handleKeyDown);
+                helper.style.display = 'none';
+                bottomBtns.style.display = 'none';
+            });
+        });
+
+        // ESC 키 처리용 이벤트 핸들러
+        function handleKeyDown(event) {
+            if (event.key === 'Escape') {
+                // 그리기 취소 함수 호출
+                viewer._cancelDrawAction();
+                // 도움말 및 종료버튼 숨기기
+                document.getElementById('helper').style.display = 'none';
+                bottomBtns.style.display = 'none';
+                // ESC 이벤트 핸들러 제거 (그리기 중에만 유효)
+                document.removeEventListener('keydown', handleKeyDown);
+            }
+        }
+        //그리기취소 버튼 이벤트 핸들러
+        drawCancelBtn.addEventListener('click', () => {
+            viewer._cancelDrawAction();
+            helper.style.display = 'none';
+            bottomBtns.style.display = 'none';
+            document.removeEventListener('keydown', handleKeyDown);
+        });
+        document.getElementById('heading').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            entities.forEach(entity => entity.update({ heading: value }));
+        });
+        document.getElementById('pitch').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            entities.forEach(entity => entity.update({ pitch: value }));
+        });
+        document.getElementById('roll').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            entities.forEach(entity => entity.update({ roll: value }));
+        });
+    </script>
+</body>
+
+</html>

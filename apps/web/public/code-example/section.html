@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>종횡단면 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="./lib/css/app.css" rel="stylesheet">
+    <script src="./lib/js/cesium/Cesium.js"></script>
+    <link href="./lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="./lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 차트 컨테이너 */
+        #chartContainer {
+            position: absolute;
+            top: 8vw;
+            left: 1vw;
+            width: 300px;
+            height: 200px;
+            background: white;
+            border: 1px solid gray;
+            padding: 10px;
+            z-index: 999;
+            display: none;
+            /* 기본적으로 숨겨둠 */
+        }
+
+        #profileChart {
+            width: 300;
+            height: 180;
+        }
+
+        /* 팝업 스타일 */
+        #crossSectionPopup {
+            display: none;
+            position: absolute;
+            top: 20vw;
+            left: 1vw;
+            width: 400px;
+            height: 350px;
+            background: white;
+            border: 1px solid #aaa;
+            z-index: 2000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 팝업 제목 스타일 */
+        #popupTitleBar {
+            background: #eee;
+            padding: 8px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+    <div id="helper">
+        지도를 클릭하여 2개 이상 종횡단면 분석을 실행할 점을 클릭 후 우클릭 해주세요
+    </div>
+    <div class="buttons-wrap">
+        <button id="start">시작하기</button>
+        <button id="refresh">초기화</button>
+    </div>
+
+    <!-- 차트 컨테이너 (기본적으로 숨겨짐) -->
+    <div id="chartContainer">
+        <div id="popupTitleBar">
+            <span>종단면 분석</span>
+            <div>
+                <button id="closeDistance">✖</button>
+            </div>
+        </div>
+        <canvas id="profileChart"></canvas>
+    </div>
+
+
+    <!-- 횡단면 분석 차트 -->
+    <div id="crossSectionPopup">
+        <div id="popupTitleBar">
+            <span>횡단면 분석</span>
+            <div>
+                <button id="closeCross">✖</button>
+            </div>
+        </div>
+        <div id="popupContent">
+            <select id="sectionSelector" style="margin-bottom:10px;"></select>
+            <canvas id="crossSectionChart" width="380" height="250"></canvas>
+        </div>
+    </div>
+
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+    <script>
+        window.analysisSection = () => {
+            helper.style.display = 'block';
+            let cross;
+
+            function testAnalysisSection() {
+                viewer._drawAction({
+                    shapeType: 1,
+                }).then((res) => {
+                    const helper = document.getElementById('helper');
+
+                    console.log(res.data.positions);
+                    // 종횡단면 분석 실행
+                    viewer._startAnalysisSection({
+                        positions: res.data.positions,
+                        cross: 20,
+                        distanceStep: 50
+                    }).then((res) => {
+                        helper.style.display = 'none'
+
+                        const elevation = res.data.elevation;
+                        // 거리 단위 km로 변환해서 차트 그리기
+                        const distances = elevation.map(e => parseFloat(e.distance)); // string → float
+                        const height = elevation.map(e => e.height);
+
+                        cross = res.data.cross;
+
+                        showChart(distances, height);
+                        showCrossSectionPopup();
+                    });
+                });
+            }
+
+            const selector = document.getElementById("sectionSelector");
+
+            // 차트 그리기
+            function showChart(xLabels, yHeights) {
+                requestAnimationFrame(() => {
+                    const chartContainer = document.getElementById("chartContainer");
+                    chartContainer.style.display = "block";
+                    const canvas = document.getElementById("profileChart");
+                    canvas.style.display = "block";
+
+                    if (window.distanceChart) window.distanceChart.destroy();
+
+                    window.distanceChart = new Chart(canvas, {
+                        type: "line",
+                        data: {
+                            labels: xLabels,
+                            datasets: [{
+                                label: "고도 그래프 (m)",
+                                data: yHeights,
+                                borderColor: "blue",
+                                backgroundColor: "rgba(0,0,255,0.1)",
+                                pointRadius: 2,
+                                tension: 0.1,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: false,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: "거리 (km)"
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: "고도 (m)"
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+
+            function showCrossSectionPopup() {
+                const popup = document.getElementById("crossSectionPopup");
+                const selector = document.getElementById("sectionSelector");
+                const canvas = document.getElementById("crossSectionChart");
+
+                popup.style.display = "block";
+                document.getElementById("popupContent").style.display = "block";
+
+                // 드롭다운 초기화
+                selector.innerHTML = "";
+                cross.forEach((data, idx) => {
+                    console.log(data, idx);
+                    const option = document.createElement("option");
+                    option.value = idx;
+                    option.text = `횡단면 ${data.pointIndex}`;
+                    selector.appendChild(option);
+                });
+
+                // 차트 생성 함수
+                const drawChart = (data) => {
+                    if (window.crossChart) window.crossChart.destroy();
+                    window.crossChart = new Chart(canvas, {
+                        type: "line",
+                        data: {
+                            labels: data.distances,
+                            datasets: [{
+                                label: `횡단면 ${data.pointIndex}`,
+                                data: data.heights,
+                                borderColor: "green",
+                                backgroundColor: "rgba(0,255,0,0.1)",
+                                fill: true,
+                                tension: 0.1,
+                                pointRadius: 2
+                            }]
+                        },
+                        options: {
+                            responsive: false,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { title: { display: true, text: "거리 (m)" } },
+                                y: { title: { display: true, text: "고도 (m)" } }
+                            }
+                        }
+                    });
+                };
+
+                // 기본 첫 번째 횡단면
+                drawChart(cross[0]);
+
+                selector.onchange = () => {
+                    const selected = cross[parseInt(selector.value)];
+                    drawChart(selected);
+                };
+            }
+
+            document.getElementById("closeCross").addEventListener("click", function () {
+                document.getElementById("crossSectionPopup").style.display = "none";
+            });
+            document.getElementById("closeDistance").addEventListener("click", function () {
+                document.getElementById("chartContainer").style.display = "none";
+            })
+
+            testAnalysisSection();
+
+        }
+
+
+        const startBtn = document.getElementById('start');
+        startBtn.addEventListener('click', function () {
+            analysisSection();
+        });
+
+        const refreshBtn = document.getElementById('refresh');
+        refreshBtn.addEventListener('click', function () {
+            // 캔버스 초기화
+            ["crossSectionChart", "profileChart"].forEach(id => {
+                const c = document.getElementById(id);
+                if (c) {
+                    const ctx = c.getContext("2d");
+                    ctx.clearRect(0, 0, c.width, c.height);
+                    c.style.display = "none";
+                }
+            });
+            viewer._removeAnalysisSection();
+        });
+    </script>
+</body>
+
+</html>

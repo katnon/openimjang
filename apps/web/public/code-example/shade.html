@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>음영 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="./lib/css/app.css" rel="stylesheet">
+    <script src="./lib/js/cesium/Cesium.js"></script>
+    <link href="./lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="./lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+
+    <style>
+        /* 차트 컨테이너 */
+        #chartContainer {
+            position: absolute;
+            top: 3vw;
+            left: 1vw;
+            width: 300px;
+            height: 200px;
+            background: white;
+            border: 1px solid gray;
+            padding: 10px;
+            z-index: 999;
+            display: none;
+            /* 기본적으로 숨겨둠 */
+        }
+
+        #profileChart {
+            width: 300;
+            height: 180;
+        }
+
+        /* 팝업 스타일 */
+        #crossSectionPopup {
+            display: none;
+            position: absolute;
+            top: 15vw;
+            left: 1vw;
+            width: 400px;
+            height: 350px;
+            background: white;
+            border: 1px solid #aaa;
+            z-index: 2000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 팝업 제목 스타일 */
+        #popupTitleBar {
+            background: #eee;
+            padding: 8px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+
+
+    <div id="helper">
+        지도를 클릭하여 음영 분석을 실행할 점 1개를 클릭 후 우클릭 해주세요
+    </div>
+    <div class="buttons-wrap">
+        <button id="start">시작하기</button>
+        <button id="refresh">초기화</button>
+    </div>
+
+    <!-- 차트 컨테이너 (기본적으로 숨겨짐) -->
+    <div id="chartContainer">
+        <canvas id="profileChart" width="380" height="250"></canvas>
+    </div>
+
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+    <script>
+        const helper = document.getElementById('helper');
+        window.analysisShade = () => {
+            function testAnalysisShade() {
+                helper.style.display = 'block';
+                viewer._drawAction({
+                    shapeType: 0,
+                }).then((res) => {
+
+                    helper.style.display = 'none';
+                    const point = res.data.positions[0];
+                    const d = new Date();
+                    const start = new Date(d.setHours(4, 0, 0, 0));
+                    const end = new Date(d.setHours(18, 0, 0, 0));
+                    const interval = 15
+
+                    // 종횡단면 분석 실행
+                    viewer._startAnalysisShade({
+                        position: point,
+                        start: start,
+                        end: end,
+                        interval: interval
+                    }).then((res) => {
+                        const result = res.data.Result;
+                    });
+                });
+            }
+
+            testAnalysisShade();
+        }
+
+        const startBtn = document.getElementById('start');
+        startBtn.addEventListener('click', function () {
+            analysisShade();
+        });
+
+        const refreshBtn = document.getElementById('refresh');
+        refreshBtn.addEventListener('click', function () {
+            // 캔버스 초기화
+            ["crossSectionChart", "profileChart"].forEach(id => {
+                const c = document.getElementById(id);
+                if (c) {
+                    const ctx = c.getContext("2d");
+                    ctx.clearRect(0, 0, c.width, c.height);
+                    c.style.display = "none";
+                }
+            });
+            viewer._removeAnalysisShade();
+        });
+    </script>
+</body>
+
+</html>

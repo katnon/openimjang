@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shape file upload</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+</head>
+<body>
+    <div class="buttons-wrap">
+        <input type="file" id="file" multiple/>
+        <button id="upload">업로드</button>
+        <label><input type="checkbox" id="texture">텍스처 적용</label>
+        <label><input type="text" value="rgba(135,206,235,0.7)" id="color">채움색</label>
+        <label><input type="checkbox" id="outline" checked><input type="text" value="#000000" id="outlineColor">외곽선</label>
+        <button id="remove">Shp제거</button>
+    </div>
+    <div id="world-container"></div>
+    <div id="resultTable"></div>
+    <script>
+        const uploadBtn = document.getElementById('upload');
+        const removeBtn = document.getElementById('remove');
+        const texture = document.getElementById('texture');
+        const color = document.getElementById('color');
+        const outline = document.getElementById('outline');
+        const outlineColor = document.getElementById('outlineColor');
+        const file = document.getElementById('file');
+        uploadBtn.addEventListener('click',()=>{
+            if(file.files){
+                viewer._loadShapeFile(file.files,{
+                    floorColumn:'GRO_FLO_CO',
+                    floorHeight:4,
+                    maxFeatures: 10,
+                    //texture: true,
+                    onSelect: (props)=>{
+                        let innerHTML='';
+                        Object.keys(props).forEach((key) => {
+                            innerHTML += `<li><span class="label"><strong>${key}: </strong>${props[key]}</span></li>`;
+                        });
+                        document.getElementById('resultTable').innerHTML = `<ul>${innerHTML}</ul>`;
+                    }
+                });
+            }
+        });
+        texture.addEventListener('change',(e)=>{
+            viewer._updateShapeFile({texture:e.target.checked});
+        });
+        color.addEventListener('change',(e)=>{
+            viewer._updateShapeFile({color:e.target.value});
+
+        });
+        outline.addEventListener('change',(e)=>{
+            viewer._updateShapeFile({outline:e.target.checked === false?false:document.getElementById('outlineColor').value});
+        });
+        outlineColor.addEventListener('change',(e)=>{
+            viewer._updateShapeFile({outline:e.target.value});
+
+        });
+        removeBtn.addEventListener('click',()=>{
+            viewer._removeShapeFile();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 선택: 1~2줄 커스텀만 허용(예: 블러 호환) */
+.backdrop-blur-support {
+  @apply backdrop-blur;
+}

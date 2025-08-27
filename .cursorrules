@@ -1,0 +1,19 @@
+# Project: OpenImjang
+Stack: React+Vite+TS (SPA), BFF(Hono/Fastify on Bun), PostGIS(SRID 4326)
+
+Do:
+- Frontend uses Kakao Maps JS SDK; never expose server keys.
+- Use React Query for data fetching; hooks return {data,isLoading,error}.
+- BFF routes: 
+  GET /point-info?lon&lat  // PostGIS ST_Contains for zoning/parcel
+  GET /risk-score?pnu      // combine landprice+deals to score
+  GET /nearby?lon&lat&r    // POI/역/정류장 (proxy if needed)
+- PostGIS: create GIST index on geom; return GeoJSON via ST_AsGeoJSON.
+- Code style: ESLint+Prettier, TS strict, ESM modules.
+- Cache external API responses 5–30m; limit bbox/radius and page size.
+- Secrets live only in .env (server). Client uses VITE_* env only.
+
+Don't:
+- Call server-only APIs directly from the browser.
+- Commit .env, large GeoJSON/CSV/MBTiles.
+- Block the UI on long WFS calls; use BFF + caching.

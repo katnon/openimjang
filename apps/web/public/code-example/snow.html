@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>날씨효과 (눈)</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+</head>
+
+<body>
+    <div class="buttons-wrap">
+        <button id="start">눈 효과</button>
+        <button id="refresh">초기화</button>
+    </div>
+    <div id="form-wrap" class="form-wrap">
+        <label>속도 <input type="range" value="10" id="speed" min="1" max="100"></label>
+        <label>크기 <input type="range" value="5" id="scale" min="1" max="20"></label>
+    </div>
+    <div id="world-container"></div>
+    <script>
+        //효과 적용
+        const applySnowEffect = () => {
+            viewer.scene.skyAtmosphere.hueShift = -0.8
+            viewer.scene.skyAtmosphere.saturationShift = -0.7
+            viewer.scene.skyAtmosphere.brightnessShift = -0.33
+            viewer.scene.fog.density = 0.001
+            viewer.scene.fog.minimumBrightness = 0.1
+            viewer._addSnowEffect();
+        }
+
+        const start = document.getElementById('start');
+        start.addEventListener('click', () => {
+            applySnowEffect();
+        });
+
+        //효과 해제
+        const refreshBtn = document.getElementById('refresh');
+        refreshBtn.addEventListener('click', function () {
+            // SkyAtmosphere 기본값으로 복원
+            viewer.scene.skyAtmosphere.hueShift = 0.0;
+            viewer.scene.skyAtmosphere.saturationShift = 0.0;
+            viewer.scene.skyAtmosphere.brightnessShift = 0.0;
+            viewer.scene.fog.density = 2.0e-4;
+            viewer.scene.fog.minimumBrightness = 0.01;
+
+            viewer._removeEffect();
+        });
+        //속도
+        document.getElementById('speed').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            viewer._setSnowEffect({ speed: value });
+        });
+        //크기
+        document.getElementById('scale').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            viewer._setSnowEffect({ scale: value });
+        });
+    </script>
+</body>
+
+</html>

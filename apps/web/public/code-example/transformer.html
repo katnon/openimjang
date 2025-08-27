@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>모델 Transformer</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+</head>
+<body>
+    <div id="form-wrap" class="form-wrap">
+        <label>
+            <input type="radio" value="0" checked name="transformer">
+            위치
+        </label>
+        <label>
+            <input type="radio" value="1" name="transformer">
+            회전
+        </label>
+        <label>
+            <input type="radio" value="2" name="transformer">
+            크기
+        </label>
+    </div>
+    <div id="world-container"></div>
+    <script>
+        window.onload = () => {
+            //화면이동
+            const cameraView = {
+                longitude: 127.034175,
+                latitude: 37.5207745,
+                height: 140,
+                heading: 300,
+                pitch: -45
+            };
+            viewer._setCameraView(cameraView);
+
+            //모델 추가
+            const entity = viewer._createPoint({
+                positions: Cesium.Cartesian3.fromDegrees(127.0336, 37.52102, 95), show: false,
+                model: '/static/models/Cesium_Air.glb'
+            });
+
+            //Transformer 추가
+            viewer._startTransformer({ entity: entity });
+
+            //모드변경
+            document.querySelectorAll('input[name="transformer"]').forEach((e) => {
+                e.addEventListener('change', (e) => {
+                    viewer._changeTransformerMode(e.target.value);
+                });
+            });
+        };
+    </script>
+</body>
+
+</html>

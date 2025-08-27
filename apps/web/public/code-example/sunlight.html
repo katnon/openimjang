@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>일조량 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="./lib/css/app.css" rel="stylesheet">
+    <script src="./lib/js/cesium/Cesium.js"></script>
+    <link href="./lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="./lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+
+    <style>
+        #resultTable {
+            position: absolute;
+            top: 10vw;
+            right: 1vw;
+            width: 400px;
+            height: 260px;
+            display: none;
+            bottom: 50px;
+            max-height: 70%;
+            overflow: auto;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+
+        #resultTable table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        #resultTable th,
+        #resultTable td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+
+        .time-cell {
+            cursor: pointer;
+            color: #007bff;
+            text-decoration: underline;
+        }
+
+        .time-cell:hover {
+            background-color: #f0f8ff;
+        }
+
+        .time-cell:active {
+            background-color: #e0e0e0;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+
+    <div id="helper">
+        지도를 클릭하여 3개 이상의 점으로 일조량 분석을 실행할 영역을 만든 후 우클릭 해주세요
+    </div>
+    <div class="buttons-wrap">
+        <button id="start">시작하기</button>
+        <button id="refresh">초기화</button>
+    </div>
+
+    <div id="resultTable"></div>
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+
+    <script>
+        const helper = document.getElementById('helper');
+        window.analysisInsolation = () => {
+            let AverageResult = [];
+            let cartesianGrid = [];
+            let fraction = [];
+            let grid = [];
+            let gridX;
+            let gridY;
+            let gridLayer = null;
+            let gammaValues = [];
+
+            const timeCells = document.getElementsByClassName("time-cell");
+            const tableDiv = document.getElementById("resultTable");
+
+            let positions;
+
+            // 시간 설정 함수
+            function setViewerTime(isoDateTimeKST) {
+                const date = new Date(isoDateTimeKST);
+                const isoDateTimeUTC = date.toISOString();
+                viewer.clock.currentTime = Cesium.JulianDate.fromIso8601(isoDateTimeUTC);
+            }
+
+            function testAnalysisInsolation() {
+                helper.style.display = 'block';
+                viewer._drawAction({
+                    shapeType: 2,
+                }).then((res) => {
+                    helper.style.display = 'none';
+                    positions = res.data.positions;
+
+                    // 일조량 분석 실행
+                    viewer._startAnalysisInsolation({
+                        positions: positions,
+                        interval: 30,
+                        heatmap: 6
+                    }).then((res) => {
+                        const result = res.data;
+                        AverageResult = result.AverageResult;
+                        fraction = result.Result.map(e => e.fractions);
+                        grid = result.Grid;
+                        cartesianGrid = grid.map(point =>
+                            Cesium.Cartesian3.fromDegrees(point.longitude, point.latitude, point.height)
+                        );
+                        gridX = result.gridX;
+                        gridY = result.gridY
+
+                        helper.style.display = 'none'
+                        // 시간대 별 평균 값을 테이블 형식으로 표현
+                        renderTable(AverageResult, result);
+                    });
+
+                });
+            }
+
+            function getInterpolatedColor(fraction) {
+                // 안전 범위로 클램핑
+                fraction = Math.max(0, Math.min(1, fraction));
+                const colorRamp = [
+                    { value: 0.0, color: Cesium.Color.DARKBLUE },
+                    { value: 0.2, color: Cesium.Color.CYAN },
+                    { value: 0.4, color: Cesium.Color.LIME },
+                    { value: 0.6, color: Cesium.Color.YELLOW },
+                    { value: 0.8, color: Cesium.Color.ORANGE },
+                    { value: 1.0, color: Cesium.Color.RED }
+                ];
+
+                for (let i = 0; i < colorRamp.length - 1; i++) {
+                    const a = colorRamp[i], b = colorRamp[i + 1];
+                    if (fraction >= a.value && fraction <= b.value) {
+                        const t = (fraction - a.value) / (b.value - a.value);
+                        return Cesium.Color.lerp(a.color, b.color, t, new Cesium.Color());
+                    }
+                }
+                return Cesium.Color.GRAY; // fallback
+            }
+
+            // 태양고도에 따른 대략적인 일사량 추정 함수 예시
+            function computeIrradianceByAltitude(altitudeDeg, tau = 0.75) {
+                const E0 = 1361; // 태양 상수 W/m²
+                const rad = (altitudeDeg * Math.PI) / 180;
+                if (rad <= 0) return 0;
+                return E0 * Math.sin(rad) * tau; // GHI 근사값
+            }
+
+            // — 테이블 렌더링 —
+            function renderTable(averageData, data) {
+                let totalMin = 0;
+                let totalEnergy = 0;
+                let html = "<table style='width: 28vw'><tr><th>시간</th><th>조도</th><th>고도각</th><th>일사량(W/m²)</th><th>누적 일사량 (Wh/m²)</th></tr>";
+
+                averageData.forEach((r, idx) => {
+                    const irradiance = computeIrradianceByAltitude(r.altitude); // W/m²
+                    const energy = irradiance * (r.stepMinutes / 60); // Wh/m²
+                    totalEnergy += energy;
+
+                    if (irradiance > 0) totalMin += r.stepMinutes;
+
+                    // ⬇️ 마지막 행이면 "평균" 표시
+                    const isLast = idx === averageData.length - 1;
+                    const timeLabel = isLast ? "평균" : r.time;
+                    const displayTotalEnergy = isLast ? "-" : totalEnergy.toFixed(2);
+
+                    html += `<tr>
+                            <td class="time-cell" data-time="${r.time}" data-idx="${idx}">${timeLabel}</td>
+                            <td>${(r.fraction * 100).toFixed(1)}%</td>
+                            <td>${r.altitude.toFixed(1)}°</td>
+                            <td>${irradiance.toFixed(1)}</td>
+                            <td>${displayTotalEnergy}</td>
+                        </tr>`;
+                });
+
+                html += "</table>";
+                html += `<div style="margin-top:8px;font-weight:bold;">
+                            총 햇빛 조사 시간: ${totalMin}분<br>
+                            누적 일사량: ${totalEnergy.toFixed(2)} Wh/m²
+                        </div>`;
+
+                tableDiv.innerHTML = html;
+                tableDiv.style.display = 'block';
+
+                // - 테이블 시간 클릭 리스너 - 
+                Array.from(timeCells).forEach(cell => {
+                    cell.addEventListener("click", (event) => {
+                        const idx = parseInt(event.currentTarget.dataset.idx, 10);
+
+                        // viewer._removeAnalysisInsolation("test");
+                        // renderGridAsPolygons(cartesianGrid,fraction[idx],gridX,gridY);
+
+                        // 혹은 분석을 다시 시도해서 heatmap에 값을 줘서 분석결과 시각화를 시도한다
+                        viewer._renderGridHeatmap({
+                            analysisResult: data,
+                            heatmap: idx,
+                        });
+                    });
+                });
+            }
+
+
+            testAnalysisInsolation();
+
+        }
+
+
+        document.getElementById("start").addEventListener('click', function () {
+            analysisInsolation();
+        });
+
+        const refreshBtn = document.getElementById('refresh');
+        refreshBtn.addEventListener('click', function () {
+            const tableDiv = document.getElementById("resultTable");
+            tableDiv.innerHTML = "";
+            viewer._removeAnalysisInsolation();
+        });
+
+    </script>
+</body>
+
+</html>

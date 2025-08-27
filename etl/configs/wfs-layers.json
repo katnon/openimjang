@@ -1,0 +1,75 @@
+{
+    "layers": {
+        "zoning": {
+            "name": "용도지역",
+            "type": "POLYGON",
+            "srid": 4326,
+            "fields": [
+                "zoning_type",
+                "zoning_name",
+                "geometry"
+            ],
+            "filters": {
+                "zoning_type": [
+                    "RESIDENTIAL",
+                    "COMMERCIAL",
+                    "INDUSTRIAL",
+                    "MIXED",
+                    "GREEN"
+                ]
+            }
+        },
+        "parcel": {
+            "name": "지적",
+            "type": "POLYGON",
+            "srid": 4326,
+            "fields": [
+                "pnu",
+                "address",
+                "area",
+                "land_use",
+                "geometry"
+            ],
+            "filters": {
+                "land_use": [
+                    "주거용",
+                    "상업용",
+                    "공업용",
+                    "농업용",
+                    "혼합용"
+                ]
+            }
+        },
+        "places": {
+            "name": "주변시설",
+            "type": "POINT",
+            "srid": 4326,
+            "fields": [
+                "name",
+                "type",
+                "address",
+                "geometry"
+            ],
+            "filters": {
+                "type": [
+                    "POI",
+                    "STATION",
+                    "BUS_STOP",
+                    "SCHOOL",
+                    "HOSPITAL"
+                ]
+            }
+        }
+    },
+    "api": {
+        "base_url": "http://api.vworld.kr/req/data",
+        "timeout": 30000,
+        "retry_count": 3,
+        "batch_size": 1000
+    },
+    "output": {
+        "format": "geojson",
+        "encoding": "utf-8",
+        "simplify_tolerance": 0.0001
+    }
+}
