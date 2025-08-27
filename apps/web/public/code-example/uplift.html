@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>토공량 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+</head>
+
+<body>
+    <div id="helper">
+        토공량 분석을 실행할 영역을 선택해주세요
+    </div>
+    <div class="buttons-wrap">
+        <button id="start">영역그리기</button>
+        <button id="refresh">초기화</button>
+    </div>
+    <div class="buttons-wrap-bottom">
+        <button id="draw-stop-button">
+            도형그리기 종료
+        </button>
+        <button id="draw-cancel-button" class="gray">
+            그리기취소 X
+        </button>
+    </div>
+
+    <div id="resultTable" class="resultTable"></div>
+    <div id="world-container"></div>
+    <script>
+        //그리기 버튼
+        const drawBtn = document.getElementById('start');
+        //그리기 버튼
+        const refresh = document.getElementById('refresh');
+        //그리기 종료 버튼
+        const drawStopBtn = document.getElementById('draw-stop-button');
+        //그리기 취소 버튼
+        const drawCancelBtn = document.getElementById('draw-cancel-button');
+        //하단 버튼 그룹
+        const bottomBtns = document.querySelector('.buttons-wrap-bottom');
+        //도움말
+        const helper = document.getElementById('helper');
+        //그리기 버튼 이벤트: 클릭시 도형 그리기 시작
+        drawBtn.addEventListener('click', () => {
+            helper.style.display = 'block';
+            // ESC 키 이벤트 등록
+            document.addEventListener('keydown', handleKeyDown);
+            //종료버튼 보기
+            bottomBtns.style.display = 'flex';
+            //도형 그리기
+            viewer._drawAction({
+                shapeType: 2, //0:포인트, 1:라인, 2:폴리곤
+                //면적 제한
+                limitArea: true,
+                stopDrawElement: drawStopBtn //종료버튼 지정
+            }).then((res) => {
+                // ESC 이벤트 핸들러 제거
+                document.removeEventListener('keydown', handleKeyDown);
+                //도움말 종료버튼 숨기기
+                helper.style.display = 'none';
+                bottomBtns.style.display = 'none';
+
+                //토공량 분석
+                viewer._startAnalysisVolume({
+                    positions: res.data.positions,
+                    elevation: 20,
+                    angle: 45,
+                    undergroundImage: '/static/images/send.jpg',
+                    slopeImage: '/static/images/side.jpg'
+                }).then((volumeResult) => {
+                    console.log(volumeResult);
+                    document.getElementById('resultTable').innerHTML = `<ul><li>최소높이: ${volumeResult.min.toFixed(2)}m</li><li>최대높이: ${volumeResult.max.toFixed(2)}m</li><li>절토량: ${volumeResult.cutVolume.toFixed(2)}m³</li></ul>`;
+                });
+            }).catch((err) => {
+                console.error(err);
+                // 예외 발생 시도 ESC 이벤트 핸들러 제거
+                document.removeEventListener('keydown', handleKeyDown);
+                helper.style.display = 'none';
+                bottomBtns.style.display = 'none';
+            });
+        });
+        refresh.addEventListener('click', () => {
+            viewer._removeAnalysisVolume();
+        });
+
+        // ESC 키 처리용 이벤트 핸들러
+        function handleKeyDown(event) {
+            if (event.key === 'Escape') {
+                // 그리기 취소 함수 호출
+                viewer._cancelDrawAction();
+                // 도움말 및 종료버튼 숨기기
+                document.getElementById('helper').style.display = 'none';
+                bottomBtns.style.display = 'none';
+                // ESC 이벤트 핸들러 제거 (그리기 중에만 유효)
+                document.removeEventListener('keydown', handleKeyDown);
+            }
+        }
+        //그리기취소 버튼 이벤트 핸들러
+        drawCancelBtn.addEventListener('click', () => {
+            viewer._cancelDrawAction();
+            helper.style.display = 'none';
+            bottomBtns.style.display = 'none';
+            document.removeEventListener('keydown', handleKeyDown);
+        });
+    </script>
+</body>
+
+</html>

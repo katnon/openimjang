@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스카이라인 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="./lib/css/app.css" rel="stylesheet">
+    <script src="./lib/js/cesium/Cesium.js"></script>
+    <link href="./lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="./lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+
+    <style>
+        #skyline-result-wrap {
+            position: fixed;
+            z-index: 10000;
+            display: flex;
+            visibility: hidden;
+            align-items: center;
+            justify-content: space-around;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            gap: .5rem;
+        }
+
+        #skyline-result-wrap>div {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: .5rem;
+            border-radius: .2rem;
+            background-color: white;
+            gap: .5rem;
+        }
+
+        #skyline-result-wrap img {
+            display: inline-block;
+            width: 100%;
+            border-radius: .2rem;
+            background-color: aquamarine;
+        }
+
+        #skyline-result-wrap span {
+            white-space: nowrap;
+            font-size: 1rem;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+
+    <div class="buttons-wrap">
+        <button id="skyline-button">
+            스카이라인 분석
+        </button>
+        <button id="refresh">초기화</button>
+    </div>
+
+    <div id="skyline-result-wrap" class="resultTable">
+        <div>
+            <img id="terrain-skyline-image">
+            <span id="terrain-skyline-text"></span>
+        </div>
+        <div>
+            <img id="full-skyline-image">
+            <span id="full-skyline-text"></span>
+        </div>
+    </div>
+    <div id="world-container"></div>
+    <script>
+        window.onload = () => {
+            //화면이동
+            const cameraView = {
+                longitude: 127.03325,
+                latitude: 37.52208,
+                height: 52,
+                heading: 155,
+                pitch: 7
+            };
+            viewer._setCameraView(cameraView);
+
+
+            //스카이라인 분석 버튼
+            const skylineBtn = document.getElementById("skyline-button");
+
+
+            skylineBtn.addEventListener('click', () => {
+                viewer._startAnalysisSkyline({
+                    //분석 제거시 결과 hidden 처리
+                    onClose: () => {
+                        document.getElementById('skyline-result-wrap').style.visibility = 'hidden';
+                    }
+                }).then((res) => {
+                    //결과데이터 배치
+                    document.getElementById('skyline-result-wrap').style.visibility = 'visible';
+                    //지형 스카이라인 이미지
+                    document.getElementById('terrain-skyline-image').src = res.terrainSkyline.image;
+                    //지형 땅하늘 비율 Text
+                    document.getElementById('terrain-skyline-text').innerText = `하늘: ${res.terrainSkyline.skyRatio}%, 땅: ${res.terrainSkyline.landRatio}%`;
+                    //지형 및 타일셋 기타에셋 스카이라인 이미지
+                    document.getElementById('full-skyline-image').src = res.fullSkyline.image;
+                    //지형 및 타일셋 기타에셋 땅하늘 비율 Text
+                    document.getElementById('full-skyline-text').innerText = `하늘: ${res.fullSkyline.skyRatio}%, 땅: ${res.fullSkyline.landRatio}%`;
+                });
+
+
+                const refreshBtn = document.getElementById('refresh');
+                refreshBtn.addEventListener('click', function () {
+                    viewer._removeAnalysisSkyline();
+                    document.getElementById('skyline-result-wrap').style.visibility = 'hidden';
+                });
+            });
+
+        };
+
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>날씨효과 (안개)</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+</head>
+
+<body>
+    <div class="buttons-wrap">
+    <button id="start">안개 효과</button>
+    <button id="refresh">초기화</button>
+    </div>
+    <div id="form-wrap" class="form-wrap">
+        <label>시작거리 <input type="range" value="10" id="nearDistance" min="0" max="1000"></label>
+        <label>시작투명도 <input type="range" value="0" id="nearValue" min="0" max="1" step="0.1"></label>
+        <label>최대거리 <input type="range" value="1000" id="farDistance" min="0" max="2000"></label>
+        <label>최대투명도 <input type="range" value="1" id="farValue" min="0" max="1" step="0.1"></label>
+        <label>
+            백색안개 <input type="radio" value="rgba(255,255,255,0.4)" name="color">
+        </label>
+        <label>
+            저녁노을 <input type="radio" value="rgba(255,165,0,0.3)" name="color">
+        </label>
+        <label>
+            푸른안개 <input type="radio" value="rgba(135,206,235,0.25)" name="color">
+        </label>
+        <label>
+            미세먼지/황사 <input type="radio" value="rgba(204,204,153,0.6)" name="color">
+        </label>
+    </div>
+    <div id="world-container"></div>
+    <script>
+        //효과 적용
+        const applyFogEffect = () => {
+            viewer.scene.skyAtmosphere.hueShift = -0.8
+            viewer.scene.skyAtmosphere.saturationShift = -0.7
+            viewer.scene.skyAtmosphere.brightnessShift = -0.33
+            viewer.scene.fog.density = 0.001
+            viewer.scene.fog.minimumBrightness = 0.1
+            viewer._addFogEffect();
+        }
+        const start = document.getElementById('start');
+        start.addEventListener('click', () => {
+            applyFogEffect();
+        });
+        //효과 해제
+        const refreshBtn = document.getElementById('refresh');
+        refreshBtn.addEventListener('click', function () {
+            viewer._removeEffect()
+        });
+        //시작거리
+        document.getElementById('nearDistance').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            viewer._setFogEffect({ nearDistance: value });
+        });
+        //시작투명도
+        document.getElementById('nearValue').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            viewer._setFogEffect({ nearValue: value });
+        });
+        //최대거리
+        document.getElementById('farDistance').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            viewer._setFogEffect({ farDistance: value });
+        });
+        //최대투명도
+        document.getElementById('farValue').addEventListener('change', (e) => {
+            const value = Number(e.target.value);
+            viewer._setFogEffect({ farValue: value });
+        });
+        //색상
+        document.querySelectorAll('input[name="color"]').forEach(radio => {
+            radio.addEventListener('change', event => {
+                const selectedColor = event.target.value;
+                viewer._setFogEffect({ color: selectedColor });
+
+            });
+        });
+    </script>
+</body>
+
+</html>

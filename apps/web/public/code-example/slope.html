@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>경사도 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+</head>
+<body>
+    <div id="helper">
+        경사도 분석을 실행할 영역을 선택해주세요
+    </div>
+    <div class="buttons-wrap">
+        <button id="start">영역그리기</button>
+        <button id="refresh">초기화</button>
+    </div>
+
+    <div id="resultTable"></div>
+    <div class="buttons-wrap-bottom">
+        <button id="draw-stop-button">
+            영역그리기 종료
+        </button>
+        <button id="draw-cancel-button" class="gray">
+            그리기취소 X
+        </button>
+    </div>
+    <div id="helper">
+        지도를 클릭하여 원하는 도형을 그려주세요.(그리기종료: 마우스 우클릭, esc키)
+    </div>
+    <div id="world-container"></div>
+    <script>
+        window.onload = () => {
+            //화면이동
+            const cameraView = {
+                longitude: 127.02641,
+                latitude: 37.54342,
+                height: 250,
+                heading: 25,
+                pitch: -35
+            };
+            viewer._setCameraView(cameraView);
+
+            //그리기 버튼
+            const drawBtn = document.getElementById("start");
+            //그리기 종료 버튼
+            const drawStopBtn = document.getElementById('draw-stop-button');
+            //그리기 취소 버튼
+            const drawCancelBtn = document.getElementById('draw-cancel-button');
+            //하단 버튼 그룹
+            const bottomBtns = document.querySelector('.buttons-wrap-bottom');
+            //도움말
+            const helper = document.getElementById('helper');
+            //그리기 버튼 이벤트: 클릭시 도형 그리기 시작
+            drawBtn.addEventListener('click', () => {
+                helper.style.display = 'block';
+                // ESC 키 이벤트 등록
+                document.addEventListener('keydown', handleKeyDown);
+                //종료버튼 보기
+                bottomBtns.style.display = 'flex';
+                //도형 그리기
+                viewer._drawAction({
+                    showLabel: true,
+                    limitArea: true,
+                    maxAllowedArea: 30000
+                }).then((res) => {
+                    // ESC 이벤트 핸들러 제거
+                    document.removeEventListener('keydown', handleKeyDown);
+                    //도움말 종료버튼 숨기기
+                    helper.style.display = 'none';
+                    bottomBtns.style.display = 'none';
+                    viewer._startAnalysisSlope({
+                        positions: res.data.positions,
+                        colors: ['#ffffff', '#ffff00', '#ff0000']
+                    }).then((slopeResult) => {
+                        console.log(slopeResult);
+                        const items = {};
+                        slopeResult.data.forEach(slope => {
+                            if (!items[slope.color]) {
+                                items[slope.color] = { count: 0, degreeSum: 0 };
+                            }
+                            items[slope.color].count += 1;
+                            items[slope.color].degreeSum += slope.degree;
+                        });
+                        let innerHTML = '';
+                        Object.keys(items).forEach((item) => {
+                            const { count, degreeSum } = items[item];
+                            const percent = ((count / slopeResult.data.length) * 100).toFixed(1);
+                            const avgDegree = (degreeSum / count).toFixed(1);
+                            innerHTML += `<li><span class="color" style="background:${item}"></span><span class="label">${count}개 (${percent}%), 평균각도 ${avgDegree}°</span></li>`;
+                        });
+                        document.getElementById('resultTable').innerHTML = `<ul>${innerHTML}</ul>`;
+                    });
+                });
+            });
+            // ESC 키 처리용 이벤트 핸들러
+            function handleKeyDown(event) {
+                if (event.key === 'Escape') {
+                    // 그리기 취소 함수 호출
+                    viewer._cancelDrawAction();
+                    // 도움말 및 종료버튼 숨기기
+                    document.getElementById('helper').style.display = 'none';
+                    bottomBtns.style.display = 'none';
+                    // ESC 이벤트 핸들러 제거 (그리기 중에만 유효)
+                    document.removeEventListener('keydown', handleKeyDown);
+                }
+            }
+            //그리기취소 버튼 이벤트 핸들러
+            drawCancelBtn.addEventListener('click', () => {
+                viewer._cancelDrawAction();
+                helper.style.display = 'none';
+                bottomBtns.style.display = 'none';
+                document.removeEventListener('keydown', handleKeyDown);
+            });
+            //초기화
+            const refreshBtn = document.getElementById('refresh');
+            refreshBtn.addEventListener('click', () => {
+                viewer._removeAnalysisSlope();
+            });
+        }
+    </script>
+</body>
+
+</html>

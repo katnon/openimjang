@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가시권 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="./lib/css/app.css" rel="stylesheet">
+    <script src="./lib/js/cesium/Cesium.js"></script>
+    <link href="./lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="./lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+    <style>
+
+        #resultTable {
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #resultTable table {
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        #resultTable th,
+        #resultTable td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+    <div id="helper">
+        지도를 클릭하여 가시권 분석을 진행할 시점과 종점을 클릭 후 우클릭 해주세요
+    </div>
+    <div id="resultTable"></div>
+    <div class="buttons-wrap">
+    <button id="start">분석 시작</button>
+    </div>
+
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+    <script>
+        const helper = document.getElementById('helper');
+        window.analysisVisiblity = () => {
+            function testAnalysisVisiblity() {
+                helper.style.display = 'block';
+                viewer._drawAction({
+                    shapeType: 1,
+                    applyTo: 0
+                }).then((res) => {
+                helper.style.display = 'none';
+                    const positions = res.data.positions
+
+                    const start = positions[0];
+                    const end = positions[1];
+                    const analysisPoint = [start, end];
+
+                    // 종횡단면 분석 실행
+                    viewer._startAnalysisVisibility({
+                        positions: analysisPoint,
+                        viewAngle: 120,
+                        segmentCount: 120
+                    }).then((res) => {
+                        const result = res.data;
+                        const totalArea = result.totalArea;
+                        const visibleArea = result.visibleArea;
+                        const invisibleArea = result.invisibleArea;
+
+                        renderTable(visibleArea, totalArea, invisibleArea);
+                    });
+                });
+            }
+
+            const tableDiv = document.getElementById('resultTable');
+
+            // — 테이블 렌더링 —
+            function renderTable(visibleArea, totalArea, invisibleArea) {
+                const html = `
+                <table style="width: 28vw">
+                    <tr><th>총 면적</th><th>가시면적</th><th>비가시면적</th></tr>
+                    <tr>
+                    <td>${totalArea.toFixed(2)} m²</td>
+                    <td>${visibleArea.toFixed(2)} m²</td>
+                    <td>${invisibleArea.toFixed(2)} m²</td>
+                    </tr>
+                </table>
+                `;
+                tableDiv.innerHTML = html;
+            }
+
+            testAnalysisVisiblity();
+        }
+
+
+        document.getElementById('start').addEventListener('click', function () {
+            analysisVisiblity();
+        });
+    </script>
+</body>
+
+</html>

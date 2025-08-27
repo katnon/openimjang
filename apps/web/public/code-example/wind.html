@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>바람길 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+    <style>
+        .update {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="buttons-wrap">
+        <button id="start">영역지정</button>
+        <button class="layer" data-ready="false" data-added="false" data-type="2D_DIRECTION">
+            2D바람방향
+        </button>
+        <button class="layer" data-ready="false" data-added="false" data-type="3D_GRID">
+            3D그리드
+        </button>
+        <button class="layer" data-ready="false" data-added="false" data-type="SIMULATION_MONO">
+            시뮬레이션
+        </button>
+        <button class="layer" data-ready="false" data-added="false" data-type="SIMULATION_COLOR">
+            시뮬레이션(COLOR)
+        </button>
+    </div>
+
+    <div class="buttons-wrap-bottom">
+        <button id="draw-stop-button">
+            도형그리기 종료
+        </button>
+        <button id="draw-cancel-button" class="gray">
+            그리기취소 X
+        </button>
+    </div>
+
+    <div class="update form-wrap">
+        <label>속도<input type="number" value="0.5" step="0.1" max="10" id="speed"></label>
+        <label>범위 최소<input type="range" value="0" step="1" max="40" id="min"></label>
+        <label>범위 최대<input type="range" value="10" step="1" max="40" id="max"></label>
+        <label>외곽선<input type="checkbox" checked id="outlineChecked"><input type="text" value="#ff0000"
+                id="outline"></label>
+        <label>색상<input type="text" value="#00d8ff" id="color"></label>
+        <label>색상범위<input type="text" value="#00d8ff, #00ffff, #00ff00, #ffff00, #ff0000" id="colorRamp"></label>
+        <button id="update">업데이트</button>
+    </div>
+    <div id="helper">지도를 분석 영역을 그려주세요. (종료: 마우스 우클릭)</div>
+
+    <div id="world-container"></div>
+
+    <script>
+        window.onload = () => {
+            //서버 설정
+            MapPrime3DExtension.SERVER.url = "https://mapprime.synology.me:15289/wind-svr";
+        }
+        //바람길 데이터매니져
+        let windDataManager;
+        //그리기 버튼
+        const drawBtn = document.getElementById('start');
+        //그리기 종료 버튼
+        const drawStopBtn = document.getElementById('draw-stop-button');
+        //그리기 취소 버튼
+        const drawCancelBtn = document.getElementById('draw-cancel-button');
+        //하단 버튼 그룹
+        const bottomBtns = document.querySelector('.buttons-wrap-bottom');
+        //도움말
+        const helper = document.getElementById('helper');
+        const updateBtn = document.getElementById('update');
+
+        //레이어 추가버튼
+        const layers = document.querySelectorAll('.layer');
+        //진행상태 메시지출력
+        function onMessage(message) {
+            helper.innerText = `${message.step} ${message.message} ${message.progress}%`;
+        }
+        //그리기 버튼 이벤트: 클릭시 도형 그리기 시작
+        drawBtn.addEventListener('click', () => {
+            helper.style.display = 'block';
+            // ESC 키 이벤트 등록
+            document.addEventListener('keydown', handleKeyDown);
+            //종료버튼 보기
+            bottomBtns.style.display = 'flex';
+            //도형 그리기
+            viewer._drawAction({
+                showLabel: true,
+                limitArea: true,
+                maxAllowedArea: 30000
+            }).then((res) => {
+                // ESC 이벤트 핸들러 제거
+                document.removeEventListener('keydown', handleKeyDown);
+                //종료버튼 숨기기
+                bottomBtns.style.display = 'none';
+
+                //바람길 데이터매니져 생성
+                viewer._startAnalysisWind({
+                    positions: res.data.positions,
+                    onMessage: onMessage
+                }).then((manager) => {
+                    windDataManager = manager;
+                    //데이터 준비완료시 추가버튼 활성화
+                    windDataManager.readyPromise().then(() => {
+                        helper.innerText = '바람길 데이터 준비완료!';
+                        //추가버튼 상태 업데이트
+                        layers.forEach(layer => layer.dataset.ready = 'true');
+
+                    });
+                }).catch((err)=>{
+                    console.log(err);
+                });
+            }).catch((err) => {
+                console.error(err);
+                // 예외 발생 시도 ESC 이벤트 핸들러 제거
+                document.removeEventListener('keydown', handleKeyDown);
+                helper.style.display = 'none';
+                bottomBtns.style.display = 'none';
+            });
+        });
+
+        // ESC 키 처리용 이벤트 핸들러
+        function handleKeyDown(event) {
+            if (event.key === 'Escape') {
+                // 그리기 취소 함수 호출
+                viewer._cancelDrawAction();
+                // 도움말 및 종료버튼 숨기기
+                document.getElementById('helper').style.display = 'none';
+                bottomBtns.style.display = 'none';
+                // ESC 이벤트 핸들러 제거 (그리기 중에만 유효)
+                document.removeEventListener('keydown', handleKeyDown);
+            }
+        }
+        //그리기취소 버튼 이벤트 핸들러
+        drawCancelBtn.addEventListener('click', () => {
+            viewer._cancelDrawAction();
+            helper.style.display = 'none';
+            bottomBtns.style.display = 'none';
+            document.removeEventListener('keydown', handleKeyDown);
+        });
+        layers.forEach(btn => btn.addEventListener('click', function () {
+            if (this.dataset.ready === 'true') {
+                if (this.dataset.added === 'true') {
+                    windDataManager.removeWindLayer(this.dataset.type);
+                    this.dataset.added = 'fasle';
+                } else {
+                    windDataManager.addWindLayer(this.dataset.type);
+                    this.dataset.added = 'true';
+                }
+
+                document.querySelector('.update').style.display = 'flex';
+            }
+        }));
+        
+        //바람길 레이어 업데이트
+        updateBtn.addEventListener('click', function () {
+            const options = getUpdateValues();
+            options.heightRange = [options.min, options.max];
+            options.colorRamp = options.colorRamp.split(',');
+            if (!options.outlineChecked) options.outline = false;
+            windDataManager.update(options);
+        });
+        function getUpdateValues() {
+            const inputs = document.querySelectorAll('.update input[id]');
+            const result = {};
+            inputs.forEach(input => {
+                const { id, type, value, checked } = input;
+
+                if (type === 'checkbox') {
+                    result[id] = checked;
+                } else if (type === 'number' || type === 'range') {
+                    result[id] = parseFloat(value);
+                } else {
+                    result[id] = value;
+                }
+            });
+
+            return result;
+        }
+
+
+    </script>
+</body>
+
+</html>

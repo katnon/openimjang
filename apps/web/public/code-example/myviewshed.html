@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지면 고도 프로파일</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/lib/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="main.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* 차트 컨테이너 */
+        #sectionChart {
+            position: absolute;
+            top: 3vw;
+            right: 1vw;
+            width: 400px;
+            height: 260px;
+            background: white;
+            border: 1px solid gray;
+            padding: 10px;
+            z-index: 9999;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="helper">
+        지도를 클릭하여 프로파일을 위한 라인을 그린 뒤 우클릭 해주세요
+    </div>
+    <!-- 차트 캔버스 -->
+    <canvas id="lineProfileChart" width="200" height="120" style="
+    display: none;
+    position: fixed;
+    top: 10%;
+    right: 4%;
+    width: 450px;
+    height: 350px;
+    border: 2px solid #666;
+    background: white;
+    z-index: 9999;
+    pointer-events: none;
+    "></canvas>
+
+    <div class="buttons-wrap">
+        <button id="startBtn">분석</button>
+        <button id="refreshBtn">초기화</button>
+    </div>
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+    <script>
+        const helper = document.getElementById('helper');
+        //도움말 메시지 엘리먼트 가져옴
+
+        /**
+         * 지면 고도 프로파일 분석 시작
+         */
+        window.analysisLineProfile = () => {
+            // 전역함수로 분석 시작 함수 정의
+            function startLineProfile() {
+                // 라인 프로파일 분석 시작 및 내부 함수수
+                helper.style.display = 'block';
+                // 도움말 메시지 화면에 표시
+
+                // 폴리라인 그리기 (좌측 클릭으로 점 생성, 우클릭으로 종료)
+                viewer._drawAction({
+                    // Cesium 뷰어의 그리기 액션 시작
+                    shapeType: 1, // polyline
+                    // 폴리라인 타입으로 설정
+                }).then((res) => {
+                    // 그리기 완료 후 실행될 콜백 함수
+                    const positions = res.data.positions;
+                    // 그려진 위치의 좌표 배열을 가져옴옴
+                    if (!positions || positions.length < 2) {
+                        // 위치가 2개 미만인 경우를 확인해서 
+                        alert('라인이 충분하지 않습니다.');
+                        // 경고 메시지 표시시
+                        return;
+                    }
+                    helper.style.display = 'none';
+                    // 메시지 숨김
+                    analyzeTerrainProfile(positions);
+                    // 지형 프로파일 분석 함수 호출
+                });
+            }
+
+            /**
+             * 주어진 Cartesian3 배열(폴리라인)에서 일정 간격으로 지형 높이를 샘플링하여 프로파일을 생성한다.
+             * @param {Cesium.Cartesian3[]} positions
+             */
+            function analyzeTerrainProfile(positions) {
+                // 지형 프로파일 분석 함수
+                const sampleDistance = 20; // 간격(m)
+                // 샘플링 간격 20미터로 설정 
+                const cartographics = [];
+                // 카토그래픽 좌표를 저장할 배열 
+                const distances = [];
+                // 거리를 저장할 배열열
+
+                let cumulativeDistance = 0;
+                // 누적 거리를 0으로 초기화 
+
+                for (let i = 0; i < positions.length - 1; i++) {
+                    // 각 세그먼트를 순회하는 반복문문
+                    const startCarto = Cesium.Ellipsoid.WGS84.cartesianToCartographic(positions[i]);
+                    // 시작점을 카토그래픽 좌표로 변환 
+                    const endCarto = Cesium.Ellipsoid.WGS84.cartesianToCartographic(positions[i + 1]);
+                    // 끝점을 카토그래픽 좌표로 변환 
+
+                    const geodesic = new Cesium.EllipsoidGeodesic(startCarto, endCarto);
+                    // 시작점과 끝점 사이의 측지선 객체 생성 
+                    const segmentLength = geodesic.surfaceDistance; // meter
+                    // 세그먼트의 표면 거리를 미터 단위로 계산 
+                    const sampleCount = Math.ceil(segmentLength / sampleDistance);
+                    // 샘플링 개수를 계산 (올림 함수 사용)
+
+                    for (let j = 0; j <= sampleCount; j++) {
+                        // 각 샘플링 포인트를 순회하는 반복문
+
+                        // 첫 세그먼트 외에는 시작점을 중복 저장하지 않도록 처리
+                        if (i > 0 && j === 0) continue;
+                        // 첫 번째 세그먼트가 아니고 첫 번째 샘플링 포인트인 경우 건너뛰기기
+                        const fraction = j / sampleCount;
+                        // 보간 비율을 게산 (0~1 사이 값)
+                        const carto = geodesic.interpolateUsingFraction(fraction);
+                        // 보간된 카토그래픽 좌표 계산 
+                        cartographics.push(carto);
+                        // 카토그래픽 좌표를 배열에 추가 
+
+                        if (distances.length === 0) {
+                            // 첫 번째 포인트인 경우
+                            distances.push(0);
+                            // 거리 0으로 배열에 추가
+                        } else {
+                            const prevCarto = cartographics[cartographics.length - 2];
+                            // 이전 카토그래픽 좌표를 가져옴 
+                            const segGeo = new Cesium.EllipsoidGeodesic(prevCarto, carto);
+                            // 이전 점과 현재 점 사이의 측지선을 생성
+                            cumulativeDistance += segGeo.surfaceDistance;
+                            // 누적 거리에 세그먼트 거리 추가
+                            distances.push(cumulativeDistance);
+                            // 누적 거리를 배열에 추가
+                        }
+                    }
+                }
+
+                Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics).then((updated) => {
+                    // 지형 데이터를 가장 상세한 레벨로 샘플링링
+                    
+                    const terrainHeights = updated.map(c => c.height);
+                    // 지형 높이 배열을 추출 
+                    drawSectionChart(distances, terrainHeights);
+                    // 섹션 차트 그리기 함수를 호출출
+                });
+            }
+
+            /**
+             * 차트 렌더링 (지면 고도만 표시)
+             */
+             function drawSectionChart(distances, heights) {
+                // 섹션 차트 그리기 함수
+                const canvas = document.getElementById("lineProfileChart");
+                // 차트 캔버스 요소를 가져옴
+                const ctx = canvas.getContext("2d");
+                // 2D 컨텍스트를 가져옴
+
+                canvas.width = 450;
+                // 캔버스 너비를 450px로 설정
+                canvas.height = 350;
+                // 캔버스 높이를 350px로 설정
+                canvas.style.display = "block";
+                // 캔버스를 화면에 표시
+
+                const minHeight = Math.min(...heights);
+                // 높이 배열에서 최소값을 계산
+                const maxHeight = Math.max(...heights);
+                // 높이 배열에서 최대값을 계산
+
+                const datasets = [{
+                    // 차트 데이터셋을 정의
+                    label: "지면 고도",
+                    // 데이터셋 라벨 설정
+                    data: distances.map((d, i) => ({ x: d, y: heights[i] })),
+                    // 거리와 높이를 x,y 좌표로 매핑
+                    borderColor: "blue",
+                    // 선 색상을 파란색으로 설정
+                    backgroundColor: "rgba(0, 0, 255, 0.1)",
+                    // 배경색을 반투명 파란색으로 설정
+                    borderWidth: 3,
+                    // 선 두께를 3px로 설정
+                    pointRadius: 0,
+                    // 포인트 반지름을 0으로 설정 (포인트 숨김)
+                    fill: true,
+                    // 영역 채우기를 활성화
+                    tension: 0,
+                    // 곡선 긴장도를 0으로 설정 (직선)
+                }];
+
+                // 기존 차트 제거
+                if (window.lineProfileChartInstance instanceof Chart) {
+                    // 기존 차트 인스턴스가 있는지 확인
+                    window.lineProfileChartInstance.destroy();
+                    // 기존 차트를 제거
+                }
+
+                window.lineProfileChartInstance = new Chart(ctx, {
+                    // 새로운 Chart.js 차트를 생성
+                    type: "line",
+                    // 선형 차트 타입으로 설정
+                    data: { datasets },
+                    // 데이터셋을 설정
+                    options: {
+                        // 차트 옵션을 설정
+                        responsive: false,
+                        // 반응형을 비활성화
+                        animation: false,
+                        // 애니메이션을 비활성화
+                        scales: {
+                            // 축 설정
+                            x: {
+                                // X축 설정
+                                type: "linear",
+                                // 선형 축 타입으로 설정
+                                position: "bottom",
+                                // 하단 위치로 설정
+                                title: {
+                                    // X축 제목 설정
+                                    display: true,
+                                    // 제목을 표시
+                                    text: "거리 (m)",
+                                    // 제목 텍스트 설정
+                                    font: { size: 14 }
+                                    // 폰트 크기를 14로 설정
+                                },
+                                ticks: {
+                                    // 눈금 설정
+                                    callback: (v) => v.toFixed(2) + " m",
+                                    // 눈금 라벨 포맷 (소수점 2자리 + m)
+                                    font: { size: 12 }
+                                    // 폰트 크기를 12로 설정
+                                },
+                                grid: {
+                                    // 격자 설정
+                                    color: "#ccc",
+                                    // 격자 색상을 회색으로 설정
+                                    borderDash: [5, 5]
+                                    // 점선 패턴을 설정
+                                }
+                            },
+                            y: {
+                                // Y축 설정
+                                min: minHeight,
+                                // 최소값을 설정
+                                max: maxHeight,
+                                // 최대값을 설정
+                                title: {
+                                    // Y축 제목 설정
+                                    display: true,
+                                    // 제목을 표시
+                                    text: "높이 (m)",
+                                    // 제목 텍스트 설정
+                                    font: { size: 14 }
+                                    // 폰트 크기를 14로 설정
+                                },
+                                ticks: {
+                                    // 눈금 설정
+                                    callback: (v) => v.toFixed(0) + " m",
+                                    // 눈금 라벨 포맷 (정수 + m)
+                                    font: { size: 12 }
+                                    // 폰트 크기를 12로 설정
+                                },
+                                grid: {
+                                    // 격자 설정
+                                    color: "#ccc",
+                                    // 격자 색상을 회색으로 설정
+                                    borderDash: [5, 5]
+                                    // 점선 패턴을 설정
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            startLineProfile();
+            // 라인 프로파일 분석 시작 함수를 호출
+        };
+
+        // 버튼 이벤트 연결
+        const startBtn = document.getElementById('startBtn');
+        // 분석 버튼 요소를 가져옴
+        startBtn.addEventListener('click', function () {
+            // 분석 버튼 클릭 이벤트 리스너를 추가
+            analysisLineProfile();
+            // 분석 시작 함수를 호출
+        });
+
+        const refreshBtn = document.getElementById('refreshBtn');
+        // 초기화 버튼 요소를 가져옴
+        refreshBtn.addEventListener('click', function () {
+            // 초기화 버튼 클릭 이벤트 리스너를 추가
+            // 캔버스 초기화
+            ["lineProfileChart"].forEach(id => {
+                // 차트 캔버스 ID 배열을 순회
+                const c = document.getElementById(id);
+                // 캔버스 요소를 가져옴
+                if (c) {
+                    // 캔버스 요소가 존재하는 경우
+                    const ctx = c.getContext("2d");
+                    // 2D 컨텍스트를 가져옴
+                    ctx.clearRect(0, 0, c.width, c.height);
+                    // 캔버스 전체 영역을 지움
+                    c.style.display = "none";
+                    // 캔버스를 숨김
+                }
+            });
+            // 그려진 엔티티 초기화
+            viewer.entities.removeAll();
+            // Cesium 뷰어의 모든 엔티티를 제거
+        });
+    </script>
+</body>
+
+</html>

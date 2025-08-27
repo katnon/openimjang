@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/icon-32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/icon-16.png" sizes="16x16">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  <!-- Cesium CSS -->
+  <link href="/js/cesium/Widgets/widgets.css" rel="stylesheet">
+  <!-- 기존 CSS -->
+  <link rel="stylesheet" href="/css/app.css" />
+
+  <script>
+    // Cesium UMD 번들의 에셋 경로를 알려줍니다.
+    window.CESIUM_BASE_URL = "/js/cesium/";
+
+    // Cesium Ion 토큰 완전 비활성화 (401 에러 방지)
+    window.CESIUM_ION_DEFAULT_ACCESS_TOKEN = undefined;
+  </script>
+  <!-- 순서 중요: Cesium 먼저, MapPrime 나중에 -->
+  <script src="/js/cesium/Cesium.js"></script>
+  <script src="/js/mapprime.cesium-controls.min.js" defer></script>
+  <!-- Kakao Maps SDK - 기존 하드코딩된 키 사용 -->
+  <script type="text/javascript"
+    src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=fbc4692a2a0ecec9836ef3ec5d8b4aa9&autoload=false">
+    </script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenImjang</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
