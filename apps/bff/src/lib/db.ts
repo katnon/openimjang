@@ -15,7 +15,7 @@ const dialect = new PostgresDialect({
     pool: new Pool({ connectionString: url }),
 });
 
-export const db = new Kysely<unknown>({
+export const db = new Kysely<any>({
     dialect,
 });
 

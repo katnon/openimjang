@@ -1,6 +1,9 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useWMSTileset } from "@/hooks/useWMSTileset";
 import WMSPanel from "./WMSPanel";
+import GeoPolygonOverlay from "./GeoPolygonOverlay";
+import { useGeoOverlay } from "@/hooks/useGeoOverlay";
+import GeoLayerPanel from "./GeoLayerPanel";
 
 type AptInfo = {
     id: number;
@@ -44,9 +47,13 @@ const MapContainer: React.FC<MapContainerProps> = ({
         fetchAvailableLayers,
         toggleLayer,
         hideAllLayers,
-        clearCanvas,
+        // clearCanvas,
         redrawAllLayers
     } = useWMSTileset(mapInstance.current);
+
+    // ✅ GeoJSON 레이어 훅
+    const { layers: geoLayers, toggleLayer: toggleGeo, hideAll: hideAllGeo } = useGeoOverlay(mapInstance.current);
+    const [showGeoPanel, setShowGeoPanel] = useState(false);
 
     const stableOnMapClick = useCallback((lat: number, lng: number) => {
         onMapClick?.(lat, lng);
@@ -175,17 +182,15 @@ const MapContainer: React.FC<MapContainerProps> = ({
             const imageOption = { offset: new window.kakao.maps.Point(24, 48) };
             const markerImage = new window.kakao.maps.MarkerImage("/icon-192.png", imageSize, imageOption);
 
-            if (!markerRef.current) {
-                markerRef.current = new window.kakao.maps.Marker({
-                    position: latlng,
-                    image: markerImage,
-                });
-                markerRef.current.setMap(map);
+            const existing = markerRef.current as kakao.maps.Marker | null;
+            if (!existing) {
+                const created = new window.kakao.maps.Marker({ position: latlng, image: markerImage });
+                created.setMap(map);
+                markerRef.current = created;
             } else {
-                const marker = markerRef.current;
-                marker.setPosition(latlng);
-                marker.setImage(markerImage);
-                marker.setMap(map);
+                existing.setPosition(latlng);
+                existing.setImage(markerImage);
+                existing.setMap(map);
             }
 
             if (!isCardExpanded) {
@@ -203,6 +208,16 @@ const MapContainer: React.FC<MapContainerProps> = ({
             {/* ✅ 지도 컨테이너에 클래스 추가 */}
             <div ref={mapRef} className="w-full h-full kakao-map" />
 
+            {/* 좌상단 Geo 레이어 토글 버튼 */}
+            <div className="absolute left-4 top-4 z-10 flex gap-2">
+                <button
+                    onClick={() => setShowGeoPanel(v => !v)}
+                    className="px-3 py-2 text-sm bg-white border rounded shadow hover:bg-gray-50"
+                >
+                    Geo 레이어
+                </button>
+            </div>
+
             {/* WMS 레이어 패널 */}
             {showLayerControl && (
                 <WMSPanel
@@ -215,6 +230,21 @@ const MapContainer: React.FC<MapContainerProps> = ({
                     onTestConnection={testConnection}
                     onRefreshLayers={handleRefreshLayers}
                 />
+            )}
+
+            {/* GeoJSON 레이어 패널 */}
+            {showGeoPanel && (
+                <GeoLayerPanel
+                    layers={geoLayers}
+                    onToggle={toggleGeo}
+                    onHideAll={hideAllGeo}
+                    onClose={() => setShowGeoPanel(false)}
+                />
+            )}
+
+            {/* GeoJSON 폴리곤 테스트 렌더 */}
+            {mapInstance.current && (
+                <GeoPolygonOverlay map={mapInstance.current} />
             )}
         </div>
     );
