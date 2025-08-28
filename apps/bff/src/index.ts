@@ -7,6 +7,7 @@ import { db } from './lib/db';
 import { searchRoute } from './routes/search';
 import { sql } from "kysely";
 import vworld from './routes/vworld'; // ✅ 추가
+import upisGeoRouter from './routes/geo/upis';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -25,14 +26,16 @@ app.use('*', cors({
 // 라우트 등록
 app.route('/api/search', searchRoute);
 app.route('/api/vworld', vworld); // ✅ 추가
+app.route('/api', upisGeoRouter);
 
 // 헬스체크 + DB 테스트
 app.get('/api/db/now', async (c) => {
     try {
         console.log('✅ DATABASE_URL:', process.env.DATABASE_URL);
         // 간단한 SQL 쿼리로 테스트
-        const result = await db.execute(sql`SELECT NOW() as now`);
-        return c.json({ now: result.rows[0]?.now });
+        const result = await sql<{ now: string }>`SELECT NOW() as now`.execute(db);
+        const now = (result.rows[0] as any)?.now;
+        return c.json({ now });
     } catch (e) {
         console.error('DB ERROR /api/db/now ->', e);
         return c.json({ ok: false, error: String(e) }, 500);

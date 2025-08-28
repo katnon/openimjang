@@ -139,25 +139,15 @@ vworld.get('/map', async (c) => {
             console.log(`🔄 BBOX 좌표 변환: [${bbox}] → [${finalBbox}]`);
         }
 
-        // ✅ 여러 레이어 조합 테스트
-        const testConfigs = [
-            { layers: 'lp_pa_cbnd_bonbun', styles: 'lp_pa_cbnd_bonbun_line', name: '지적도 본번' },
-            { layers: 'lt_c_ademd', styles: 'lt_c_ademd', name: '읍면동 경계' },
-            { layers: layers, styles: styles, name: '원본 요청' }
-        ];
-
-        const config = testConfigs[0]; // 일단 지적도 본번만 테스트
-
         const url = `https://api.vworld.kr/req/wms?` +
             `SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&` +
-            `LAYERS=${config.layers}&STYLES=${config.styles}&` +
+            `LAYERS=${layers}&STYLES=${styles}&` +
             `CRS=${crs}&BBOX=${finalBbox}&` +
             `WIDTH=${width}&HEIGHT=${height}&` +
             `FORMAT=${format}&TRANSPARENT=${transparent}&` +
             `KEY=${apiKey}&DOMAIN=${domain}`;
 
         console.log('🌐 VWorld 요청:', {
-            config: config.name,
             url: url.replace(apiKey, 'HIDDEN_KEY')
         });
 
@@ -174,7 +164,9 @@ vworld.get('/map', async (c) => {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ VWorld 오류:', errorText);
-            return c.json({ error: errorText }, response.status);
+            return c.json({ error: errorText }, {
+                status: response.status as any
+            });
         }
 
         const imageBuffer = await response.arrayBuffer();
@@ -185,7 +177,7 @@ vworld.get('/map', async (c) => {
             console.warn('⚠️ 의심스러운 이미지 크기:', {
                 size: imageSize,
                 likely: '1x1 투명 이미지 또는 빈 응답',
-                layers: config.layers,
+                layers,
                 bbox: finalBbox
             });
 
@@ -194,20 +186,15 @@ vworld.get('/map', async (c) => {
             console.log('🔍 이미지 데이터 (Base64 일부):', base64.substring(0, 100));
         }
 
-        console.log(`✅ GetMap 완료:`, {
-            layers: config.layers,
-            size: imageSize + ' bytes',
-            bbox: finalBbox,
-            success: imageSize >= 200
-        });
+        console.log(`✅ GetMap 완료:`, { layers, size: imageSize + ' bytes', bbox: finalBbox, success: imageSize >= 200 });
 
         return new Response(imageBuffer, {
             headers: {
                 'Content-Type': contentType || 'image/png',
                 'Access-Control-Allow-Origin': '*',
-                'Cache-Control': 'public, max-age=60',
+                'Cache-Control': 'public, max-age=300',
                 'X-Image-Size': imageSize.toString(),
-                'X-Layer-Name': config.layers,
+                'X-Layer-Name': layers,
                 'X-Bbox': finalBbox
             }
         });
@@ -222,3 +209,57 @@ vworld.get('/map', async (c) => {
 });
 
 export default vworld;
+
+// ✅ WMS GetFeatureInfo 프록시 (중심 좌표 등 질의)
+vworld.get('/featureinfo', async (c) => {
+    try {
+        const apiKey = process.env.VWORLD_KEY;
+        const domain = process.env.VWORLD_DOMAIN || 'localhost';
+
+        if (!apiKey) {
+            return c.json({ error: 'VWorld API key not configured' }, 500);
+        }
+
+        const layers = c.req.query('layers');
+        const styles = c.req.query('styles') || '';
+        const bbox = c.req.query('bbox');
+        const width = c.req.query('width') || '256';
+        const height = c.req.query('height') || '256';
+        const crs = c.req.query('crs') || 'EPSG:4326';
+        const i = c.req.query('i') || c.req.query('I') || String(Math.floor(Number(width) / 2));
+        const j = c.req.query('j') || c.req.query('J') || String(Math.floor(Number(height) / 2));
+
+        if (!layers || !bbox) {
+            return c.json({ error: 'layers and bbox are required' }, 400);
+        }
+
+        // EPSG:4326 → ymin,xmin,ymax,xmax
+        const coords = bbox.split(',').map(Number);
+        if (coords.length !== 4) {
+            return c.json({ error: 'Invalid bbox format' }, 400);
+        }
+        const [xmin, ymin, xmax, ymax] = coords;
+        const finalBbox = crs === 'EPSG:4326' ? `${ymin},${xmin},${ymax},${xmax}` : bbox;
+
+        const url = `https://api.vworld.kr/req/wms?` +
+            `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&` +
+            `LAYERS=${encodeURIComponent(layers)}&STYLES=${encodeURIComponent(styles)}&` +
+            `QUERY_LAYERS=${encodeURIComponent(layers)}&` +
+            `CRS=${crs}&BBOX=${finalBbox}&WIDTH=${width}&HEIGHT=${height}&` +
+            `I=${i}&J=${j}&INFO_FORMAT=application/json&` +
+            `EXCEPTIONS=application/json&` +
+            `KEY=${apiKey}&DOMAIN=${domain}`;
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            const text = await response.text();
+            return c.json({ error: text }, { status: response.status as any });
+        }
+
+        const json = await response.json();
+        return c.json(json);
+    } catch (error) {
+        console.error('❌ VWorld GetFeatureInfo 실패:', error);
+        return c.json({ error: 'Failed to fetch feature info' }, 500);
+    }
+});

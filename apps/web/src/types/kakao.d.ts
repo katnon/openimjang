@@ -32,6 +32,11 @@ declare global {
             setImage(image: any): void;
         }
 
+        class Polygon {
+            constructor(options: any);
+            setMap(map: Map | null): void;
+        }
+
         class MarkerImage {
             constructor(src: string, size: Size, options?: any);
         }

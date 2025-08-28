@@ -2,10 +2,18 @@ import { Hono } from "hono";
 import { db } from "../lib/db";
 import { sql } from "kysely";
 
+type AptInfoRow = {
+    id: number;
+    apt_nm: string;
+    jibun_address: string;
+    lat: number | null;
+    lon: number | null;
+};
+
 export const searchRoute = new Hono();
 
 // 🔍 자동완성 및 검색
-searchRoute.get("/search", async (c) => {
+searchRoute.get("/", async (c) => {
     const q = c.req.query("q") ?? "";
 
     if (!q || q.trim().length < 1) return c.json([]);
@@ -13,10 +21,10 @@ searchRoute.get("/search", async (c) => {
     try {
         console.log(`🔍 검색 요청: "${q}"`);
 
-        const results = await db
+        const results = await (db
             .selectFrom("oi.apt_info" as any)
-            .selectAll()
-            .where((eb) => eb.or([
+            .select(["id", "apt_nm", "jibun_address", "lat", "lon"]) as any)
+            .where((eb: any) => eb.or([
                 eb("apt_nm", "ilike", `%${q}%`),
                 eb("jibun_address", "ilike", `%${q}%`)
             ]))
@@ -33,7 +41,7 @@ searchRoute.get("/search", async (c) => {
 });
 
 // 📍 좌표 기반 가장 가까운 단지 찾기
-searchRoute.get("/search/nearest", async (c) => {
+searchRoute.get("/nearest", async (c) => {
     const lat = parseFloat(c.req.query("lat") ?? "");
     const lng = parseFloat(c.req.query("lng") ?? "");
 
@@ -44,7 +52,7 @@ searchRoute.get("/search/nearest", async (c) => {
     try {
         console.log(`📍 가장 가까운 아파트 검색: ${lat}, ${lng}`);
 
-        const result = await sql`
+        const result = await sql<any>`
             SELECT *, 
                    ST_Distance(
                        geography(ST_MakePoint(lon, lat)),
@@ -56,8 +64,8 @@ searchRoute.get("/search/nearest", async (c) => {
             LIMIT 1
         `.execute(db);
 
-        const row = result.rows[0] || null;
-        console.log(`📍 결과:`, row ? `${row.apt_nm} (거리: ${Math.round(row.dist)}m)` : "없음");
+        const row = (result.rows[0] as (AptInfoRow & { dist: number })) || null;
+        console.log(`📍 결과:`, row ? `${row.apt_nm} (거리: ${Math.round(Number(row.dist))}m)` : "없음");
 
         return c.json(row);
     } catch (err) {
@@ -67,7 +75,7 @@ searchRoute.get("/search/nearest", async (c) => {
 });
 
 // ✅ 전용면적 목록 조회 (apt_dong 제외한 조인)
-searchRoute.get("/search/areas/:aptId", async (c) => {
+searchRoute.get("/areas/:aptId", async (c) => {
     const aptId = parseInt(c.req.param("aptId"));
 
     if (isNaN(aptId)) {
@@ -78,9 +86,9 @@ searchRoute.get("/search/areas/:aptId", async (c) => {
         console.log(`📐 전용면적 목록 조회: aptId=${aptId}`);
 
         // ✅ 1단계: apt_info에서 조인 정보 가져오기 (apt_dong 제외)
-        const aptInfo = await db
+        const aptInfo = await (db
             .selectFrom("oi.apt_info" as any)
-            .select(["apt_nm", "jibun_address"])
+            .select(["apt_nm", "jibun_address"]) as any)
             .where("id", "=", aptId)
             .executeTakeFirst();
 
@@ -91,9 +99,9 @@ searchRoute.get("/search/areas/:aptId", async (c) => {
         console.log(`📐 조회할 아파트: ${aptInfo.apt_nm}, ${aptInfo.jibun_address}`);
 
         // ✅ 2단계: apt_deal_all에서 전용면적 목록 조회 (apt_nm, jibun_address만 사용)
-        const results = await db
+        const results = await (db
             .selectFrom("oi.apt_deal_all" as any)
-            .select("exclu_use_ar")
+            .select("exclu_use_ar") as any)
             .distinct()
             .where("apt_nm", "=", aptInfo.apt_nm)
             .where("jibun_address", "=", aptInfo.jibun_address)
@@ -101,7 +109,7 @@ searchRoute.get("/search/areas/:aptId", async (c) => {
             .orderBy("exclu_use_ar")
             .execute();
 
-        const areas = results.map(row => row.exclu_use_ar);
+        const areas = results.map((row: { exclu_use_ar: number }) => row.exclu_use_ar);
         console.log(`📐 전용면적 목록: ${areas.length}개 - ${areas}`);
 
         return c.json(areas);
@@ -112,7 +120,7 @@ searchRoute.get("/search/areas/:aptId", async (c) => {
 });
 
 // ✅ 실거래가 조회 (모든 제한 제거 + 정확한 1년간 필터링)
-searchRoute.get("/search/deals/:aptId", async (c) => {
+searchRoute.get("/deals/:aptId", async (c) => {
     const aptId = parseInt(c.req.param("aptId"));
     const dealType = c.req.query("dealType") || "";
     const area = c.req.query("area") || "";
@@ -125,9 +133,9 @@ searchRoute.get("/search/deals/:aptId", async (c) => {
         console.log(`💰 실거래가 조회: aptId=${aptId}, 거래유형=${dealType || '전체'}, 면적=${area || '전체'}`);
 
         // ✅ 1단계: apt_info에서 조인 정보 가져오기
-        const aptInfo = await db
+        const aptInfo = await (db
             .selectFrom("oi.apt_info" as any)
-            .select(["apt_nm", "jibun_address"])
+            .select(["apt_nm", "jibun_address"]) as any)
             .where("id", "=", aptId)
             .executeTakeFirst();
 
@@ -149,13 +157,13 @@ searchRoute.get("/search/deals/:aptId", async (c) => {
 
         console.log(`📅 조회 기간: ${lastYear}.${lastYearMonth} ~ ${currentYear}.${currentMonth}`);
 
-        let query = db
+        let query = (db
             .selectFrom("oi.apt_deal_all" as any)
             .select([
                 "deal_year", "deal_month", "deal_day",
                 "deal_amount", "deposit", "monthly_rent",
                 "exclu_use_ar", "floor"
-            ])
+            ]) as any)
             .where("apt_nm", "=", aptInfo.apt_nm)
             .where("jibun_address", "=", aptInfo.jibun_address);
 
@@ -168,7 +176,7 @@ searchRoute.get("/search/deals/:aptId", async (c) => {
                 .where("deal_month", "<=", currentMonth);
         } else {
             // 다른 해인 경우 (일반적)
-            query = query.where((eb) => eb.or([
+            query = query.where((eb: any) => eb.or([
                 // 작년 데이터: lastYearMonth 이후
                 eb.and([
                     eb("deal_year", "=", lastYear),
@@ -188,7 +196,7 @@ searchRoute.get("/search/deals/:aptId", async (c) => {
         } else if (dealType === "전세") {
             query = query
                 .where("deposit", "is not", null)
-                .where((eb) => eb.or([
+                .where((eb: any) => eb.or([
                     eb("monthly_rent", "=", 0),
                     eb("monthly_rent", "is", null)
                 ]));
