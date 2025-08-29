@@ -30,6 +30,9 @@ export function useGeoOverlay(map: kakao.maps.Map | null) {
 
     const polygonsRef = useRef<Record<string, kakao.maps.Polygon[]>>({})
     const fetchedRef = useRef<Set<string>>(new Set())
+    const globalCycleRef = useRef<number>(0)
+    const requestTokenRef = useRef<Record<string, number>>({})
+    const abortCtrlsRef = useRef<Record<string, AbortController | null>>({})
 
     const buildUrl = useCallback((table: string) => {
         if (!map) return '/api/geo/upis?table=' + encodeURIComponent(table)
@@ -53,18 +56,47 @@ export function useGeoOverlay(map: kakao.maps.Map | null) {
 
     const toggleLayer = useCallback(async (id: string) => {
         setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l))
+
+        // 끄는 즉시 화면에서 제거하고, 진행 중 요청은 중단
+        const arr = polygonsRef.current[id]
+        if (arr) arr.forEach(p => p.setMap(map)) // map 그대로 두고, 상태 효과에서 즉시 반영됨
+        const ctrl = abortCtrlsRef.current[id]
+        if (ctrl) {
+            try { ctrl.abort() } catch { }
+            abortCtrlsRef.current[id] = null
+        }
     }, [])
 
     const hideAll = useCallback(() => {
         setLayers(prev => prev.map(l => ({ ...l, visible: false })))
+        // 모든 진행 중 요청 취소 및 지도에서 제거
+        Object.keys(abortCtrlsRef.current).forEach(id => {
+            const ctrl = abortCtrlsRef.current[id]
+            if (ctrl) {
+                try { ctrl.abort() } catch { }
+                abortCtrlsRef.current[id] = null
+            }
+        })
+        Object.keys(polygonsRef.current).forEach(id => {
+            const arr = polygonsRef.current[id]
+            if (arr) arr.forEach(p => p.setMap(null))
+        })
     }, [])
 
-    // 실제 폴리곤 setMap 처리
+    // 실제 폴리곤 setMap 처리 (레이어 상태가 바뀔 때마다 즉시 반영)
     useEffect(() => {
         if (!map) return
         layers.forEach(layer => {
             const arr = polygonsRef.current[layer.id] || []
             arr.forEach(p => p.setMap(layer.visible ? map : null))
+            // 꺼졌으면 요청도 취소
+            if (!layer.visible) {
+                const ctrl = abortCtrlsRef.current[layer.id]
+                if (ctrl) {
+                    try { ctrl.abort() } catch { }
+                    abortCtrlsRef.current[layer.id] = null
+                }
+            }
         })
     }, [map, layers])
 
@@ -77,7 +109,13 @@ export function useGeoOverlay(map: kakao.maps.Map | null) {
 
             try {
                 const url = buildUrl(layer.table)
-                const res = await fetch(url)
+                // 요청 토큰/중단 컨트롤러 설정
+                const token = ++globalCycleRef.current
+                requestTokenRef.current[layer.id] = token
+                const ctrl = new AbortController()
+                abortCtrlsRef.current[layer.id] = ctrl
+
+                const res = await fetch(url, { signal: ctrl.signal })
                 if (!res.ok) return
                 const data = await res.json()
                 const feats = data.features || []
@@ -100,7 +138,11 @@ export function useGeoOverlay(map: kakao.maps.Map | null) {
                             fillColor: layer.color,
                             fillOpacity: layer.fillOpacity,
                         })
-                        poly.setMap(map)
+                        // 응답 도착 시점에 여전히 최신 토큰인지 확인 (사이클 가드)
+                        if (requestTokenRef.current[layer.id] !== token) {
+                            return
+                        }
+                        poly.setMap(layer.visible ? map : null)
                         // 간단한 hover 라벨: 주요 속성 present_sn 또는 dgm_nm 등
                         const props = f.properties || {}
                         const title = props.dgm_nm || props.present_sn || layer.name
@@ -118,10 +160,20 @@ export function useGeoOverlay(map: kakao.maps.Map | null) {
                     }
                 })
 
-                polygonsRef.current[layer.id] = created
-                fetchedRef.current.add(layer.id)
+                // 여전히 최신 토큰인지 확인 후 반영
+                if (requestTokenRef.current[layer.id] === token) {
+                    polygonsRef.current[layer.id] = created
+                    fetchedRef.current.add(layer.id)
+                } else {
+                    // 오래된 응답이면 지도에 올리지 않음
+                    created.forEach(p => p.setMap(null))
+                }
             } catch (_e) {
                 // noop
+            }
+            finally {
+                // 컨트롤러 정리
+                abortCtrlsRef.current[layer.id] = null
             }
         })
     }, [map, layers, buildUrl])
