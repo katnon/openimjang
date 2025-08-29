@@ -1,9 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useWMSTileset } from "@/hooks/useWMSTileset";
 import WMSPanel from "./WMSPanel";
-import GeoPolygonOverlay from "./GeoPolygonOverlay";
 import { useGeoOverlay } from "@/hooks/useGeoOverlay";
 import GeoLayerPanel from "./GeoLayerPanel";
+import { useEqbOverlay } from "@/hooks/useEQBOverlay";
 
 type AptInfo = {
     id: number;
@@ -54,6 +54,9 @@ const MapContainer: React.FC<MapContainerProps> = ({
     // ✅ GeoJSON 레이어 훅
     const { layers: geoLayers, toggleLayer: toggleGeo, hideAll: hideAllGeo } = useGeoOverlay(mapInstance.current);
     const [showGeoPanel, setShowGeoPanel] = useState(false);
+
+    // ✅ 건물군(아파트 단지 경계) 오버레이 훅
+    const { showForCenter: showEqb, clear: clearEqb } = useEqbOverlay(mapInstance.current);
 
     const stableOnMapClick = useCallback((lat: number, lng: number) => {
         onMapClick?.(lat, lng);
@@ -158,6 +161,8 @@ const MapContainer: React.FC<MapContainerProps> = ({
 
                     if (nearestApt) {
                         stableOnAptSelected(nearestApt);
+                        // 아파트 단지 경계 표시
+                        await showEqb(nearestApt.lat, nearestApt.lon);
                     }
                 } catch (error) {
                     console.error("❌ 아파트 검색 실패:", error);
@@ -196,12 +201,17 @@ const MapContainer: React.FC<MapContainerProps> = ({
             if (!isCardExpanded) {
                 map.panTo(latlng);
             }
+
+            // 선택된 아파트 중심좌표로 단지 경계 표시
+            showEqb(selectedApt.lat, selectedApt.lon);
         } else {
             if (markerRef.current) {
                 markerRef.current.setMap(null);
             }
+            // 선택 해제 시 단지 경계도 제거
+            clearEqb();
         }
-    }, [selectedApt, isCardExpanded]);
+    }, [selectedApt, isCardExpanded, showEqb, clearEqb]);
 
     return (
         <div className="w-full h-full relative">
@@ -242,10 +252,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
                 />
             )}
 
-            {/* GeoJSON 폴리곤 테스트 렌더 */}
-            {mapInstance.current && (
-                <GeoPolygonOverlay map={mapInstance.current} />
-            )}
+            {/* GeoJSON 테스트 오버레이 제거됨: useGeoOverlay 패널로만 관리 */}
         </div>
     );
 };

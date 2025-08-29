@@ -8,6 +8,7 @@ import { searchRoute } from './routes/search';
 import { sql } from "kysely";
 import vworld from './routes/vworld'; // ✅ 추가
 import upisGeoRouter from './routes/geo/upis';
+import buildings from './routes/geo/buildings';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -27,6 +28,7 @@ app.use('*', cors({
 app.route('/api/search', searchRoute);
 app.route('/api/vworld', vworld); // ✅ 추가
 app.route('/api', upisGeoRouter);
+app.route('/api', buildings);
 
 // 헬스체크 + DB 테스트
 app.get('/api/db/now', async (c) => {
