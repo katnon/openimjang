@@ -1,5 +1,3 @@
-export * from './useEqbOverlay'
-
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export function useEqbOverlay(map: kakao.maps.Map | null) {
@@ -17,7 +15,7 @@ export function useEqbOverlay(map: kakao.maps.Map | null) {
     const showForCenter = useCallback(async (lat: number, lon: number) => {
         if (!map) return
         try {
-            const res = await fetch(`/api/geo/eqb?lat=${lat}&lon=${lon}`)
+            const res = await fetch(`/api/eqb?lat=${lat}&lon=${lon}`)
             if (!res.ok) return clear()
             const data = await res.json()
             const feat = data?.features?.[0]
