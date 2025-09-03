@@ -21,9 +21,15 @@ export default function Home() {
     const [selectedApt, setSelectedApt] = useState<AptInfo | null>(null);
     const [isCardExpanded, setIsCardExpanded] = useState(false);
     const [hoveredPOI, setHoveredPOI] = useState<POIItem | null>(null);
+    const [isDistrictOverlayActive, setIsDistrictOverlayActive] = useState(false);
 
     // ✅ 지도 인스턴스 ref 추가
     const mapInstanceRef = useRef<kakao.maps.Map | null>(null);
+
+    // 지적편집도 토글 핸들러
+    const handleDistrictOverlayToggle = () => {
+        setIsDistrictOverlayActive(prev => !prev);
+    };
 
     return (
         <div className="relative w-screen h-screen overflow-hidden bg-neutral-100">
@@ -47,6 +53,9 @@ export default function Home() {
                         setSelectedApt(apt);
                         setPoint({ lat: apt.lat, lng: apt.lon });
                     }}
+                    onMapReady={(map) => {
+                        mapInstanceRef.current = map;
+                    }}
                     selectedApt={
                         selectedApt ? { lat: selectedApt.lat, lon: selectedApt.lon } : null
                     }
@@ -59,6 +68,8 @@ export default function Home() {
             {/* 지도 조작 UI */}
             <MapControls
                 map={mapInstanceRef.current}
+                isDistrictOverlayActive={isDistrictOverlayActive}
+                onToggleDistrictOverlay={handleDistrictOverlayToggle}
             />
 
             {/* 요약 카드 */}

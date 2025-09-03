@@ -11,7 +11,9 @@
       "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
       "Bash(curl:*)",
       "Bash(npm run dev:*)",
-      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)"
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "WebFetch(domain:apis.map.kakao.com)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

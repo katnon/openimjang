@@ -28,66 +28,132 @@ OpenImjang은 모던 웹 기술 스택을 활용한 **Monorepo + BFF(Backend for
 
 ```
 OpenImjang/
-├── apps/
-│   ├── web/                          # React SPA Frontend
+├── .claude/                         # Claude 설정
+│   └── settings.local.json
+├── .vscode/                         # VS Code 설정
+│   ├── extensions.json
+│   └── settings.json
+├── apps/                            # 애플리케이션
+│   ├── bff/                         # Backend for Frontend (Hono + Bun)
 │   │   ├── src/
-│   │   │   ├── components/
-│   │   │   │   ├── map/             # 지도 관련 컴포넌트
-│   │   │   │   │   ├── MapContainer.tsx      # 메인 지도 컨테이너
-│   │   │   │   │   ├── WMSLayerControl.tsx   # WMS 레이어 관리
-│   │   │   │   │   ├── WMSPanel.tsx          # 레이어 패널 UI
-│   │   │   │   │   └── MapControls.tsx       # 지도 컨트롤
-│   │   │   │   ├── layout/          # 레이아웃 컴포넌트
-│   │   │   │   │   ├── TopBar.tsx            # 상단 검색바
-│   │   │   │   │   └── LayerToggle.tsx       # 레이어 토글
-│   │   │   │   ├── card/            # 정보 카드
-│   │   │   │   │   ├── SummaryCard.tsx       # 요약 정보
-│   │   │   │   │   └── RealEstateDealsTable.tsx # 거래 테이블
-│   │   │   │   └── MapPrime3DViewer.tsx      # 3D 지도 뷰어
-│   │   │   ├── hooks/
-│   │   │   │   ├── useWMSOverlay.ts          # WMS 오버레이 훅
-│   │   │   │   └── useWMSTileset.ts          # WMS 타일셋 관리
+│   │   │   ├── index.ts             # BFF 메인 서버
 │   │   │   ├── lib/
-│   │   │   │   ├── api.ts                    # API 클라이언트
-│   │   │   │   └── loadKakao.ts              # 카카오맵 로더
-│   │   │   ├── types/
-│   │   │   │   ├── kakao.d.ts                # 카카오맵 타입
-│   │   │   │   └── wms.ts                    # WMS 타입 정의
-│   │   │   └── pages/
-│   │   │       └── Home.tsx                  # 메인 페이지
-│   │   └── public/
-│   │       ├── js/cesium/                    # Cesium 3D 라이브러리
-│   │       └── code-example/                 # 예제 코드
-│   └── bff/                          # Backend for Frontend
+│   │   │   │   └── db.ts            # Kysely DB 연결
+│   │   │   └── routes/
+│   │   │       ├── geo/
+│   │   │       │   ├── buildings.ts # 건물 정보 API
+│   │   │       │   └── upis.ts      # UPI(단일필지식별번호) API
+│   │   │       ├── poi.ts           # POI(Point of Interest) API
+│   │   │       └── search.ts        # 검색 API
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   └── web/                         # React SPA Frontend
+│       ├── public/
+│       │   ├── js/
+│       │   │   ├── cesium/          # Cesium 3D 지구본 라이브러리
+│       │   │   └── mapprime.cesium-controls.min.js  # 맵프라임 컨트롤
+│       │   └── code-example/        # 맵프라임 예제 코드
+│       │       ├── main.js          # 맵프라임 메인 예제
+│       │       ├── deleteEntity.html
+│       │       ├── drawAction.html
+│       │       ├── fog.html
+│       │       ├── frustum.html
+│       │       ├── line.html
+│       │       ├── myviewshed.html
+│       │       ├── point.html
+│       │       ├── polygon.html
+│       │       ├── rain.html
+│       │       ├── section.html
+│       │       ├── shade.html       # 그림자 분석
+│       │       ├── shp-upload.html
+│       │       ├── skyline.html
+│       │       ├── slope.html       # 경사도 분석
+│       │       ├── snow.html
+│       │       ├── sunlight.html    # 일조 분석
+│       │       ├── transformer.html
+│       │       ├── uplift.html
+│       │       ├── viewshed.html    # 가시권 분석
+│       │       ├── visibility.html
+│       │       └── wind.html
 │       ├── src/
-│       │   ├── index.ts                      # 메인 서버
-│       │   ├── lib/
-│       │   │   └── db.ts                     # Kysely DB 연결
-│       │   └── routes/
-│       │       ├── search.ts                 # 검색 API
-│       │       └── vworld.ts                 # VWorld 프록시
-│       └── package.json
+│       │   ├── components/
+│       │   │   ├── card/            # 정보 카드 컴포넌트
+│       │   │   │   ├── BuildingLandInfo.tsx      # 건물/토지 정보 카드
+│       │   │   │   ├── NearbyInfoPanel.tsx       # 주변 정보 패널
+│       │   │   │   ├── RealEstateDealsTable.tsx  # 부동산 거래 테이블
+│       │   │   │   └── SummaryCard.tsx           # 요약 정보 카드
+│       │   │   ├── layout/          # 레이아웃 컴포넌트
+│       │   │   │   ├── LayerToggle.tsx           # 레이어 토글
+│       │   │   │   └── TopBar.tsx                # 상단 검색바
+│       │   │   ├── map/             # 지도 관련 컴포넌트
+│       │   │   │   ├── GeoPolygonOverlay.tsx     # 지오메트리 폴리곤 오버레이
+│       │   │   │   ├── MapContainer.tsx          # 메인 지도 컨테이너 (Kakao Maps)
+│       │   │   │   └── MapControls.tsx           # 지도 컨트롤
+│       │   │   └── MapPrime3DViewer.tsx          # 3D 지도 뷰어 (Cesium + MapPrime)
+│       │   ├── hooks/               # 커스텀 훅
+│       │   │   ├── use3DEqbHighlight.ts          # 3D 연계정보 하이라이트 훅
+│       │   │   ├── useEqbOverlay.ts              # EQB 오버레이 훅
+│       │   │   ├── useFirstPersonLook.ts         # 1인칭 시점 훅 
+│       │   │   ├── useKakaoPOI.ts                # 카카오 POI 훅
+│       │   │   ├── useShadeAnalysis.ts           # 그림자 분석 훅
+│       │   │   ├── useWalkingMode.ts             # 워킹모드 훅
+│       │   │   └── useWindowView.ts              # 창문 뷰 훅
+│       │   ├── pages/
+│       │   │   ├── Home.tsx         # 메인 페이지
+│       │   │   └── old_Map3DPlay.tsx             # 구 3D 지도 페이지
+│       │   ├── auth/
+│       │   │   └── AuthProvider.tsx              # 인증 프로바이더
+│       │   ├── types/
+│       │   │   ├── kakao.d.ts       # 카카오맵 타입 정의
+│       │   │   └── poi.ts           # POI 타입 정의
+│       │   ├── App.tsx              # 메인 앱 컴포넌트
+│       │   ├── firebase.ts          # Firebase 설정
+│       │   ├── main.tsx             # 앱 엔트리포인트
+│       │   ├── router.tsx           # React Router 설정
+│       │   └── vite-env.d.ts        # Vite 환경 타입
+│       ├── eslint.config.js
+│       ├── index.html
+│       ├── package.json
+│       ├── postcss.config.js
+│       ├── README.md
+│       ├── tailwind.config.js
+│       ├── tsconfig.app.json
+│       ├── tsconfig.json
+│       ├── tsconfig.node.json
+│       └── vite.config.ts
 ├── packages/
-│   └── shared/                       # 공유 패키지
-│       └── src/
-│           ├── types.ts                      # 공통 타입
-│           └── constants.ts                  # 공통 상수
-├── db/
-│   ├── migrations/                   # DB 마이그레이션
-│   ├── scripts/
-│   │   ├── fetch/                   # 데이터 수집 스크립트
-│   │   │   ├── fetch_trade_raw.ts           # 거래 데이터 수집
-│   │   │   ├── fetch_rent_raw.ts            # 임대 데이터 수집
-│   │   │   └── populate_apt_*.ts            # 아파트 정보 가공
-│   │   └── setup/
-│   │       └── legal_dong_loader.ts         # 법정동 데이터 로더
-│   └── seeds/                       # 시드 데이터
-├── etl/                             # Extract, Transform, Load
-│   ├── configs/
-│   │   └── wfs-layers.json                  # WFS 레이어 설정
+│   └── shared/                      # 공유 패키지
+│       ├── src/
+│       │   ├── constants.ts         # 공통 상수
+│       │   ├── index.ts             # 패키지 엔트리포인트
+│       │   └── types.ts             # 공통 타입 정의
+│       ├── package.json
+│       └── tsconfig.json
+├── db/                              # 데이터베이스
 │   └── scripts/
-│       └── import_wfs.sh                    # WFS 데이터 가져오기
-└── data/                            # 정적 데이터
+│       ├── fetch/                   # 데이터 수집 스크립트
+│       │   ├── fetch_building_info.ts         # 건물 정보 수집
+│       │   ├── fetch_landuse_included.ts      # 토지이용계획 수집
+│       │   ├── fetch_rent_raw.ts              # 임대료 원시데이터 수집
+│       │   ├── fetch_trade_raw.ts             # 거래 원시데이터 수집
+│       │   ├── fill_apt_info_coordinates.ts   # 아파트 좌표 채우기
+│       │   ├── populate_apt_deal_all.ts       # 모든 아파트 거래 데이터 가공
+│       │   ├── populate_apt_info_from_rent_raw.ts    # 임대 데이터로 아파트 정보 가공
+│       │   ├── populate_apt_info_from_trade_raw.ts   # 거래 데이터로 아파트 정보 가공
+│       │   ├── old_populate_apt_info_from_rent_raw.ts    # 구버전 임대 가공
+│       │   └── old_populate_apt_info_from_trade_raw.ts   # 구버전 거래 가공
+│       ├── setup/
+│       │   └── legal_dong_loader.ts           # 법정동 코드 로더
+│       └── SQLquery/
+│           └── oi.query.sql         # OpenImjang SQL 쿼리
+├── etl/                             # Extract, Transform, Load
+│   └── configs/
+│       └── wfs-layers.json          # WFS 레이어 설정
+├── CLAUDE.md                        # Claude Code 가이드
+├── GEMINI.md                        # Gemini 가이드  
+├── README.md                        # 프로젝트 README
+├── package.json                     # 루트 패키지 설정
+└── tsconfig.base.json               # 공통 TypeScript 설정
 ```
 
 ## 🛠️ 기술 스택

@@ -61,8 +61,7 @@ export const POI_CATEGORIES: POIGroup[] = [
         name: '대중교통',
         icon: '🚇',
         categories: [
-            { id: 'SW8', name: '지하철역', icon: '🚇', color: '#10b981' },
-            { id: 'BUS_STOP', name: '버스정류장', icon: '🚌', color: '#3b82f6', keywords: ['버스정류장', '버스정류소', '버스', '정류장'] }
+            { id: 'SW8', name: '지하철역', icon: '🚇', color: '#10b981' }
         ]
     },
     {

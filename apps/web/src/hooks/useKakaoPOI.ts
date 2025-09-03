@@ -74,6 +74,7 @@ export function useKakaoPOI(): UsePOIReturn {
             // 키워드 검색 우선, 그 다음 카테고리 코드
             if (category.keywords && category.keywords.length > 0) {
                 searchParams.append('query', category.keywords[0]);
+                // 키워드 검색 시 카테고리 코드는 제외 (더 넓은 검색 결과)
             } else if (category.id && category.id !== 'BUS_STOP') {
                 searchParams.append('category_group_code', category.id);
             }

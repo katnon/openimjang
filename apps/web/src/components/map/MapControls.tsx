@@ -2,10 +2,14 @@ import { useCallback } from 'react';
 
 interface MapControlsProps {
     map: kakao.maps.Map | null;
+    isDistrictOverlayActive?: boolean;
+    onToggleDistrictOverlay?: () => void;
 }
 
 export default function MapControls({
-    map
+    map,
+    isDistrictOverlayActive = false,
+    onToggleDistrictOverlay
 }: MapControlsProps) {
 
     // 줌 인
@@ -26,6 +30,19 @@ export default function MapControls({
         }
     }, [map]);
 
+    // 지적편집도 토글
+    const handleDistrictOverlayToggle = useCallback(() => {
+        if (map && onToggleDistrictOverlay) {
+            if (isDistrictOverlayActive) {
+                map.removeOverlayMapTypeId(window.kakao.maps.MapTypeId.USE_DISTRICT);
+                console.log('🗺️ 지적편집도 비활성화');
+            } else {
+                map.addOverlayMapTypeId(window.kakao.maps.MapTypeId.USE_DISTRICT);
+                console.log('🗺️ 지적편집도 활성화');
+            }
+            onToggleDistrictOverlay();
+        }
+    }, [map, isDistrictOverlayActive, onToggleDistrictOverlay]);
 
     const btn = "w-10 h-10 rounded-xl border border-neutral-300 bg-white hover:border-indigo-500 shadow transition-all";
     const btnActive = "w-10 h-10 rounded-xl border border-indigo-500 bg-indigo-50 text-indigo-600 shadow transition-all";
@@ -46,6 +63,15 @@ export default function MapControls({
                 title="축소"
             >
                 －
+            </button>
+
+            <button
+                className={isDistrictOverlayActive ? btnActive : btn}
+                onClick={handleDistrictOverlayToggle}
+                title="지적편집도"
+                disabled={!map}
+            >
+                🗺️
             </button>
 
         </div>

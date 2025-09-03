@@ -296,6 +296,11 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
 
     // ✅ 카메라 이동 및 하이라이트 처리 (selectedLocation 변경 시)
     useEffect(() => {
+        // visible이 false일 때는 처리하지 않음 (POI 호버 시 불필요한 처리 방지)
+        if (!visible) {
+            return;
+        }
+        
         if (!viewerRef.current || isLoading || error) {
             console.log('⏳ 3D 뷰어 준비 대기 중...', {
                 hasViewer: !!viewerRef.current,
@@ -321,7 +326,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
             // 선택 해제 시 하이라이트 제거 (카메라는 그대로)
             clearHighlight();
         }
-    }, [selectedLocation, highlightApartment, clearHighlight, isLoading, error]);
+    }, [visible, selectedLocation, highlightApartment, clearHighlight, isLoading, error]);
 
     if (!visible) return null;
 

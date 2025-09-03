@@ -51,15 +51,14 @@ poi.get('/search', async (c) => {
             sort: 'distance' // 거리순 정렬
         });
 
-        // 카테고리 그룹 코드 또는 키워드 검색
-        if (categoryGroupCode) {
-            params.append('category_group_code', categoryGroupCode);
-        } 
-        
+        // 카테고리 그룹 코드 또는 키워드 검색 (둘 중 하나만 사용)
         if (query) {
-            // 키워드 검색의 경우 다른 엔드포인트 사용
+            // 키워드 검색의 경우 다른 엔드포인트 사용 (카테고리 코드 제외)
             url = `https://dapi.kakao.com/v2/local/search/keyword.json?`;
             params.append('query', query);
+        } else if (categoryGroupCode) {
+            // 카테고리 검색만 사용
+            params.append('category_group_code', categoryGroupCode);
         }
 
         url += params.toString();

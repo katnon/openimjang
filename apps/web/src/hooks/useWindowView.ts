@@ -116,6 +116,11 @@ export function useWindowView(viewer: any, isActive: boolean, onDeactivate: () =
 
     // 클릭 이벤트 등록/해제
     useEffect(() => {
+        // isActive가 false일 때는 검사하지 않음 (불필요한 로그 방지)
+        if (!isActive) {
+            return;
+        }
+        
         if (!viewer || !viewer.cesiumWidget || !window.Cesium) {
             console.warn('⚠️ 뷰어나 Cesium이 준비되지 않음');
             return;

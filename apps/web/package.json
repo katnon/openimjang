@@ -12,6 +12,7 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "axios": "^1.11.0",
+    "firebase": "^12.2.1",
     "ol": "^10.6.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

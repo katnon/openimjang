@@ -13,6 +13,7 @@ type AptInfo = {
 type MapContainerProps = {
     onMapClick?: (lat: number, lng: number) => void;
     onAptSelected?: (apt: AptInfo) => void;
+    onMapReady?: (map: kakao.maps.Map) => void; // 지도 인스턴스 전달 콜백
     selectedApt?: {
         lat: number;
         lon: number;
@@ -25,6 +26,7 @@ type MapContainerProps = {
 const MapContainer: React.FC<MapContainerProps> = ({
     onMapClick,
     onAptSelected,
+    onMapReady,
     selectedApt,
     isCardExpanded = false,
     cardWidth = 320,
@@ -99,6 +101,9 @@ const MapContainer: React.FC<MapContainerProps> = ({
             });
 
             mapInstance.current = map;
+
+            // 지도 인스턴스를 부모에게 전달
+            onMapReady?.(map);
 
             // 지도 클릭 이벤트
             window.kakao.maps.event.addListener(map, "click", async (mouseEvent: any) => {
