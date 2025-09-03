@@ -1,0 +1,213 @@
+건축물 정보 수집 실패/스킵 로그 - 2025. 9. 2. 오후 6:47:34
+==========================================================
+
+[SKIP] 이미 수집됨
+- aptId: 35231
+- 아파트명: 염리삼성래미안
+- 지번주소: 서울 염리동 520
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35231 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35232
+- 아파트명: 가우디캐슬
+- 지번주소: 서울 용두동 104-34
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35232 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35233
+- 아파트명: 동산
+- 지번주소: 서울 신당동 432-579
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35233 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35234
+- 아파트명: 미래
+- 지번주소: 서울 신림동 1563-85
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35234 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35235
+- 아파트명: 청구강변1
+- 지번주소: 서울 성수동2가 712
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35235 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35236
+- 아파트명: 상도동래미안1차
+- 지번주소: 서울 상도동 450
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35236 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35237
+- 아파트명: 에스엠해그린
+- 지번주소: 서울 암사동 472-18
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35237 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35238
+- 아파트명: 대동
+- 지번주소: 서울 자양동 784-1
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35238 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35239
+- 아파트명: 우성
+- 지번주소: 서울 하계동 270
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35239 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[SKIP] 이미 수집됨
+- aptId: 35240
+- 아파트명: 일성스카이빌
+- 지번주소: 서울 화곡동 914-3
+- 시간: 2025. 9. 2. 오후 6:47:34
+- 재실행 명령어: TARGET_APT_ID=35240 FORCE_REFETCH=true bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 35901
+- 아파트명: 청량리역한양수자인그라시엘
+- 지번주소: 서울 용두동 39-1
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 7:01:34
+- 재실행 명령어: TARGET_APT_ID=35901 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 38613
+- 아파트명: 롯데캐슬리버파크시그니쳐
+- 지번주소: 서울 자양동 863
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 7:57:23
+- 재실행 명령어: TARGET_APT_ID=38613 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 38877
+- 아파트명: 용산동아파트
+- 지번주소: 서울 이태원동 669
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:02:44
+- 재실행 명령어: TARGET_APT_ID=38877 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 39793
+- 아파트명: 하버라인4단지
+- 지번주소: 서울 항동 가-238
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:22:27
+- 재실행 명령어: TARGET_APT_ID=39793 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 40069
+- 아파트명: 고덕풍경채어바니티
+- 지번주소: 서울 고덕동 BL-3-1
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:28:00
+- 재실행 명령어: TARGET_APT_ID=40069 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 40102
+- 아파트명: 강동리엔파크9단지
+- 지번주소: 서울 강일동 산22-36
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:28:39
+- 재실행 명령어: TARGET_APT_ID=40102 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 40218
+- 아파트명: 하버라인9단지
+- 지번주소: 서울 항동 가-239
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:31:07
+- 재실행 명령어: TARGET_APT_ID=40218 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 40563
+- 아파트명: 북서울자이폴라리스(3단지)
+- 지번주소: 서울 미아동 1376
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:38:20
+- 재실행 명령어: TARGET_APT_ID=40563 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 40957
+- 아파트명: 북서울자이폴라리스(2단지)
+- 지번주소: 서울 미아동 1375
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:46:19
+- 재실행 명령어: TARGET_APT_ID=40957 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 40963
+- 아파트명: 고척아이파크(주상복합)
+- 지번주소: 서울 고척동 100-7
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:46:25
+- 재실행 명령어: TARGET_APT_ID=40963 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 40965
+- 아파트명: DMC파인시티자이
+- 지번주소: 서울 수색동 190
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:46:26
+- 재실행 명령어: TARGET_APT_ID=40965 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 41073
+- 아파트명: DMCSK뷰아이파크포레
+- 지번주소: 서울 수색동 191
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 2. 오후 8:48:39
+- 재실행 명령어: TARGET_APT_ID=41073 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 41789
+- 아파트명: 라체르보푸르지오써밋
+- 지번주소: 서울 행당동 128
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 3. 오전 9:04:26
+- 재실행 명령어: TARGET_APT_ID=41789 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 42063
+- 아파트명: 호반써밋개봉
+- 지번주소: 서울 개봉동 501
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 3. 오전 9:10:05
+- 재실행 명령어: TARGET_APT_ID=42063 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 42317
+- 아파트명: 북서울자이폴라리스(1단지)
+- 지번주소: 서울 미아동 1374
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 3. 오전 9:15:17
+- 재실행 명령어: TARGET_APT_ID=42317 bun run fetch_building_info.ts
+
+[FAILED] PNU 조회 실패
+- aptId: 42484
+- 아파트명: 디아크리온강남
+- 지번주소: 서울 자곡동 BL-
+- 실패 원인: 좌표로 PNU를 찾을 수 없음
+- 시간: 2025. 9. 3. 오전 9:18:40
+- 재실행 명령어: TARGET_APT_ID=42484 bun run fetch_building_info.ts
+
+==========================================================
+최종 실행 결과 - 2025. 9. 3. 오전 9:21:31
+==========================================================
+총 처리 대상: 7394개
+성공: 7368개
+스킵: 10개
+실패: 16개
+
+💡 재실행 방법:
+1. 전체 재실행 (강제): FORCE_REFETCH=true bun run fetch_building_info.ts
+2. 특정 아파트만: TARGET_APT_ID=[아파트ID] bun run fetch_building_info.ts
+3. 실패한 것만 재시도: 위의 개별 재실행 명령어들 참고

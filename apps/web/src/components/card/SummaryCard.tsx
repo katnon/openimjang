@@ -1,5 +1,13 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import RealEstateDealsTable from "./RealEstateDealsTable";
+import BuildingLandInfo from "./BuildingLandInfo";
+import NearbyInfoPanel from "./NearbyInfoPanel";
+import type { POIItem } from "@/types/poi";
+
+type PNUData = {
+    pnu: string | null;
+    error?: string;
+};
 
 type SummaryCardProps = {
     point?: { lat: number; lng: number } | null;
@@ -12,19 +20,54 @@ type SummaryCardProps = {
     } | null;
     onMore?: () => void;
     onExpandChange?: (isExpanded: boolean) => void; // ✅ 확장 상태 변경 콜백 추가
+    onPOIHover?: (poi: POIItem | null) => void; // POI 호버 콜백
 };
 
-export default function SummaryCard({ point, selectedApt, onMore, onExpandChange }: SummaryCardProps) {
+export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover }: SummaryCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("실거래가");
+    const [pnuData, setPnuData] = useState<PNUData | null>(null);
+    const [isPnuLoading, setIsPnuLoading] = useState(false);
 
     // ✅ 확장 상태 변경 시 부모에게 알림
     useEffect(() => {
         onExpandChange?.(isExpanded);
     }, [isExpanded, onExpandChange]);
 
+    // PNU 조회
+    useEffect(() => {
+        if (selectedApt?.id) {
+            const fetchPNU = async () => {
+                setIsPnuLoading(true);
+                try {
+                    console.log(`🏢 PNU 조회: aptId=${selectedApt.id}`);
+                    
+                    const res = await fetch(`/api/search/pnu/${selectedApt.id}`);
+                    const data = await res.json();
+                    
+                    if (res.ok) {
+                        setPnuData(data);
+                        console.log(`🏢 PNU 조회 결과:`, data);
+                    } else {
+                        setPnuData({ pnu: null, error: data.error || "PNU 조회 실패" });
+                    }
+                } catch (err) {
+                    console.error("❌ PNU 조회 오류:", err);
+                    setPnuData({ pnu: null, error: "네트워크 오류" });
+                }
+                setIsPnuLoading(false);
+            };
+
+            fetchPNU();
+        } else {
+            setPnuData(null);
+        }
+    }, [selectedApt?.id]);
+
     const tabs = [
-        { id: "실거래가", label: "실거래가", icon: "💰" }
+        { id: "실거래가", label: "실거래가", icon: "💰" },
+        { id: "건물/토지정보", label: "건물/토지정보", icon: "🏢" },
+        { id: "주변정보", label: "주변정보", icon: "🗺️" }
     ];
 
     const handleMoreClick = () => {
@@ -55,9 +98,16 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                     <h2 className="text-lg font-semibold text-gray-800 mb-1">
                                         {selectedApt.apt_nm || "아파트명 없음"}
                                     </h2>
-                                    <p className="text-sm text-gray-600 mb-2">
-                                        📍 {selectedApt.jibun_address || "주소 정보 없음"}
-                                    </p>
+                                    <div className="space-y-1 mb-2">
+                                        <p className="text-sm text-gray-600">
+                                            📍 {selectedApt.jibun_address || "주소 정보 없음"}
+                                        </p>
+                                        {isPnuLoading ? (
+                                            <p className="text-xs text-gray-500">PNU: 조회 중...</p>
+                                        ) : pnuData?.pnu ? (
+                                            <p className="text-xs text-gray-600">PNU: {pnuData.pnu}</p>
+                                        ) : null}
+                                    </div>
                                 </div>
                             </div>
 
@@ -74,7 +124,7 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 onClick={handleMoreClick}
                                 className="w-full mt-3 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
                             >
-                                실거래가 보기
+                                자세히 보기
                             </button>
                         </>
                     ) : point ? (
@@ -110,9 +160,16 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                             </button>
                         </div>
 
-                        <p className="text-sm text-gray-600 mb-4">
-                            📍 {selectedApt?.jibun_address}
-                        </p>
+                        <div className="space-y-1 mb-4">
+                            <p className="text-sm text-gray-600">
+                                📍 {selectedApt?.jibun_address}
+                            </p>
+                            {isPnuLoading ? (
+                                <p className="text-xs text-gray-500">PNU: 조회 중...</p>
+                            ) : pnuData?.pnu ? (
+                                <p className="text-xs text-gray-600">PNU: {pnuData.pnu}</p>
+                            ) : null}
+                        </div>
 
                         {/* ✅ 탭 네비게이션 */}
                         <div className="flex border-b border-gray-200">
@@ -140,6 +197,23 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 aptName={selectedApt.apt_nm}
                                 onClose={() => { }}
                                 isEmbedded={true}
+                            />
+                        )}
+                        {activeTab === "건물/토지정보" && selectedApt && (
+                            <BuildingLandInfo
+                                aptId={selectedApt.id}
+                                aptName={selectedApt.apt_nm}
+                                lat={selectedApt.lat}
+                                lon={selectedApt.lon}
+                                jibunAddress={selectedApt.jibun_address}
+                            />
+                        )}
+                        {activeTab === "주변정보" && selectedApt && (
+                            <NearbyInfoPanel
+                                lat={selectedApt.lat}
+                                lon={selectedApt.lon}
+                                aptName={selectedApt.apt_nm}
+                                onPOIHover={onPOIHover}
                             />
                         )}
                     </div>

@@ -231,3 +231,218 @@ searchRoute.get("/deals/:aptId", async (c) => {
         return c.json({ error: "조회 중 오류가 발생했습니다." }, 500);
     }
 });
+
+// 🏢 PNU (부동산고유번호) 조회
+searchRoute.get("/pnu/:aptId", async (c) => {
+    const aptId = parseInt(c.req.param("aptId"));
+
+    if (isNaN(aptId)) {
+        return c.json({ error: "Invalid apartment ID" }, 400);
+    }
+
+    try {
+        console.log(`🏢 PNU 조회: aptId=${aptId}`);
+
+        // 1단계: apt_info에서 좌표 정보 가져오기
+        const aptInfo = await (db
+            .selectFrom("oi.apt_info" as any)
+            .select(["apt_nm", "jibun_address", "lat", "lon"]) as any)
+            .where("id", "=", aptId)
+            .executeTakeFirst();
+
+        if (!aptInfo) {
+            return c.json({ error: "아파트를 찾을 수 없습니다." }, 404);
+        }
+
+        if (!aptInfo.lat || !aptInfo.lon) {
+            return c.json({ error: "아파트 좌표 정보가 없습니다." }, 400);
+        }
+
+        console.log(`🏢 조회할 아파트: ${aptInfo.apt_nm}, 좌표=(${aptInfo.lat}, ${aptInfo.lon})`);
+
+        // 2단계: 연속지적도에서 PNU 조회
+        // 좌표 변환: WGS84 (4326) → EPSG:5186
+        const pnuResult = await sql<any>`
+            SELECT a1 AS pnu
+            FROM public.al_d002_11_20250804
+            WHERE ST_Intersects(
+                geom,
+                ST_Transform(ST_SetSRID(ST_Point(${aptInfo.lon}, ${aptInfo.lat}), 4326), 5186)
+            )
+            LIMIT 1
+        `.execute(db);
+
+        const pnuRow = pnuResult.rows[0] || null;
+        const pnu = pnuRow ? pnuRow.pnu : null;
+
+        console.log(`🏢 PNU 조회 결과:`, pnu || "없음");
+
+        return c.json({ 
+            pnu,
+            apt_name: aptInfo.apt_nm,
+            jibun_address: aptInfo.jibun_address,
+            coordinates: { lat: aptInfo.lat, lon: aptInfo.lon }
+        });
+
+    } catch (err) {
+        console.error("❌ PNU 조회 오류:", err);
+        return c.json({ error: "PNU 조회 중 오류가 발생했습니다." }, 500);
+    }
+});
+
+// 🏛️ 토지이용계획 조회 (용도지역지구)
+searchRoute.get("/landuse/:aptId", async (c) => {
+    const aptId = parseInt(c.req.param("aptId"));
+
+    if (isNaN(aptId)) {
+        return c.json({ error: "Invalid apartment ID" }, 400);
+    }
+
+    try {
+        console.log(`🏛️ 토지이용계획 조회: aptId=${aptId}`);
+
+        // 1단계: apt_info에서 좌표 정보 가져오기
+        const aptInfo = await (db
+            .selectFrom("oi.apt_info" as any)
+            .select(["apt_nm", "jibun_address", "lat", "lon"]) as any)
+            .where("id", "=", aptId)
+            .executeTakeFirst();
+
+        if (!aptInfo) {
+            return c.json({ error: "아파트를 찾을 수 없습니다." }, 404);
+        }
+
+        if (!aptInfo.lat || !aptInfo.lon) {
+            return c.json({ error: "아파트 좌표 정보가 없습니다." }, 400);
+        }
+
+        console.log(`🏛️ 조회할 아파트: ${aptInfo.apt_nm}, 좌표=(${aptInfo.lat}, ${aptInfo.lon})`);
+
+        // 2단계: al_d154_11_20250830에서 토지이용계획 조회
+        // 좌표 변환: WGS84 (4326) → EPSG:5186
+        const landuseResult = await sql<any>`
+            SELECT a7, a9
+            FROM public.al_d154_11_20250830
+            WHERE ST_Intersects(
+                geom,
+                ST_Transform(ST_SetSRID(ST_Point(${aptInfo.lon}, ${aptInfo.lat}), 4326), 5186)
+            )
+            LIMIT 1
+        `.execute(db);
+
+        const landuseRow = landuseResult.rows[0] || null;
+        
+        if (!landuseRow || !landuseRow.a7) {
+            console.log(`🏛️ 토지이용계획 정보 없음`);
+            return c.json({ 
+                landuse_zones: [],
+                apt_name: aptInfo.apt_nm,
+                jibun_address: aptInfo.jibun_address,
+                coordinates: { lat: aptInfo.lat, lon: aptInfo.lon }
+            });
+        }
+
+        // 3단계: 코드와 상태 파싱
+        const codes = landuseRow.a7 ? landuseRow.a7.split(',').map((code: string) => code.trim()) : [];
+        const statuses = landuseRow.a9 ? landuseRow.a9.split(',').map((status: string) => parseInt(status.trim())) : [];
+
+        console.log(`🏛️ 코드 목록: ${codes}`);
+        console.log(`🏛️ 상태 목록: ${statuses}`);
+
+        // 4단계: landuse_code에서 코드별 이름 조회
+        const landuseZones = [];
+        
+        for (let i = 0; i < codes.length; i++) {
+            const code = codes[i];
+            const statusCode = statuses[i] || 1; // 기본값은 포함
+            
+            if (!code) continue;
+
+            // landuse_code 테이블에서 코드명 조회
+            const codeResult = await (db
+                .selectFrom("public.landuse_code" as any)
+                .select(["code", "name"]) as any)
+                .where("code", "=", code)
+                .executeTakeFirst();
+
+            const codeName = codeResult ? codeResult.name : code; // 이름이 없으면 코드 그대로 사용
+            
+            // 상태 텍스트 변환
+            const statusText = statusCode === 1 ? "포함" : 
+                              statusCode === 2 ? "저촉" : 
+                              statusCode === 3 ? "접함" : "포함";
+
+            landuseZones.push({
+                code: code,
+                name: codeName,
+                status: statusCode,
+                displayText: `${codeName}(${statusText})`
+            });
+        }
+
+        console.log(`🏛️ 토지이용계획 조회 결과: ${landuseZones.length}개`);
+
+        return c.json({ 
+            landuse_zones: landuseZones,
+            apt_name: aptInfo.apt_nm,
+            jibun_address: aptInfo.jibun_address,
+            coordinates: { lat: aptInfo.lat, lon: aptInfo.lon }
+        });
+
+    } catch (err) {
+        console.error("❌ 토지이용계획 조회 오류:", err);
+        return c.json({ error: "토지이용계획 조회 중 오류가 발생했습니다." }, 500);
+    }
+});
+
+// 🏗️ 건물 정보 조회 (총괄표제부 및 표제부)
+searchRoute.get("/building-info/:aptId", async (c) => {
+    const aptId = parseInt(c.req.param("aptId"));
+
+    if (isNaN(aptId)) {
+        return c.json({ error: "Invalid apartment ID" }, 400);
+    }
+
+    try {
+        console.log(`🏗️ 건물 정보 조회: aptId=${aptId}`);
+
+        // apt_building_info 테이블에서 해당 아파트의 건물 정보 조회
+        const buildingInfos = await (db
+            .selectFrom("oi.apt_building_info" as any)
+            .select([
+                "id", "type", "dongnm", "bldnm", "platplc", "platarea", "archarea", 
+                "totarea", "grndflrcnt", "ugrndflrcnt", "mainpurpscdnm", "strctcdnm", 
+                "roofcdnm", "hhldcnt", "mainbldcnt", "atchbldcnt", "totpkngcnt", 
+                "useaprday", "created_at"
+            ]) as any)
+            .where("apt_id", "=", aptId)
+            .orderBy("type", "desc") // recap이 먼저 오도록 (recap > title)
+            .orderBy("dongnm", "asc") // 동명으로 정렬
+            .execute();
+
+        if (!buildingInfos || buildingInfos.length === 0) {
+            console.log(`🏗️ 건물 정보 없음: aptId=${aptId}`);
+            return c.json({ 
+                recap_info: null,
+                title_infos: [],
+                total_count: 0
+            });
+        }
+
+        // type별로 분리
+        const recapInfo = buildingInfos.find((info: any) => info.type === 'recap') || null;
+        const titleInfos = buildingInfos.filter((info: any) => info.type === 'title');
+
+        console.log(`🏗️ 건물 정보 조회 결과: 총괄표제부=${recapInfo ? '1개' : '없음'}, 표제부=${titleInfos.length}개`);
+
+        return c.json({ 
+            recap_info: recapInfo,
+            title_infos: titleInfos,
+            total_count: buildingInfos.length
+        });
+
+    } catch (err) {
+        console.error("❌ 건물 정보 조회 오류:", err);
+        return c.json({ error: "건물 정보 조회 중 오류가 발생했습니다." }, 500);
+    }
+});

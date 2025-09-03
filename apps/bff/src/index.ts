@@ -6,9 +6,9 @@ import { cors } from 'hono/cors';
 import { db } from './lib/db';
 import { searchRoute } from './routes/search';
 import { sql } from "kysely";
-import vworld from './routes/vworld'; // ✅ 추가
 import upisGeoRouter from './routes/geo/upis';
 import buildings from './routes/geo/buildings';
+import poi from './routes/poi';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -19,14 +19,14 @@ app.use('*', logger());
 
 // CORS 설정
 app.use('*', cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
+    origin: ['http://localhost:5173', 'http://localhost:5175', 'http://localhost:3000'],
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
 // 라우트 등록
 app.route('/api/search', searchRoute);
-app.route('/api/vworld', vworld); // ✅ 추가
+app.route('/api/poi', poi);
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
 

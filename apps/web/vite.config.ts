@@ -13,7 +13,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8787', // BFF 서버 주소
+        target: 'http://localhost:8788', // BFF 서버 주소
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(C:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(C:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(C:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(C:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(C:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(C:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

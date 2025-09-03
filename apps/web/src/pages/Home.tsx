@@ -5,6 +5,7 @@ import MapContainer from "@/components/map/MapContainer";
 import MapControls from "@/components/map/MapControls";
 import SummaryCard from "@/components/card/SummaryCard";
 import MapPrime3DViewer from "@/components/MapPrime3DViewer";
+import type { POIItem } from "@/types/poi";
 
 type AptInfo = {
     id: number;
@@ -19,8 +20,7 @@ export default function Home() {
     const [show3D, setShow3D] = useState(false);
     const [selectedApt, setSelectedApt] = useState<AptInfo | null>(null);
     const [isCardExpanded, setIsCardExpanded] = useState(false);
-    // ✅ 레이어 컨트롤 표시 상태 추가
-    const [showLayerControl, setShowLayerControl] = useState(false);
+    const [hoveredPOI, setHoveredPOI] = useState<POIItem | null>(null);
 
     // ✅ 지도 인스턴스 ref 추가
     const mapInstanceRef = useRef<kakao.maps.Map | null>(null);
@@ -52,16 +52,13 @@ export default function Home() {
                     }
                     isCardExpanded={isCardExpanded}
                     cardWidth={isCardExpanded ? 464 : 320}
-                    // ✅ 레이어 컨트롤 상태 전달
-                    showLayerControl={showLayerControl}
-                    onLayerControlToggle={setShowLayerControl}
+                    tempMarker={hoveredPOI}
                 />
             </main>
 
-            {/* ✅ 개선된 지도 조작 UI */}
+            {/* 지도 조작 UI */}
             <MapControls
                 map={mapInstanceRef.current}
-                onToggleLayer={() => setShowLayerControl(!showLayerControl)}
             />
 
             {/* 요약 카드 */}
@@ -75,6 +72,7 @@ export default function Home() {
                     }
                 }}
                 onExpandChange={setIsCardExpanded}
+                onPOIHover={setHoveredPOI}
             />
 
             {/* 3D 팝업 */}

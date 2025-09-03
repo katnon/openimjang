@@ -1,9 +1,6 @@
-import { useEffect, useRef, useCallback, useState } from "react";
-import { useWMSTileset } from "@/hooks/useWMSTileset";
-import WMSPanel from "./WMSPanel";
-import { useGeoOverlay } from "@/hooks/useGeoOverlay";
-import GeoLayerPanel from "./GeoLayerPanel";
-import { useEqbOverlay } from "@/hooks/useEQBOverlay";
+import { useEffect, useRef, useCallback } from "react";
+import { useEqbOverlay } from "@/hooks/useEqbOverlay";
+import type { POIItem } from "@/types/poi";
 
 type AptInfo = {
     id: number;
@@ -22,8 +19,7 @@ type MapContainerProps = {
     } | null;
     isCardExpanded?: boolean;
     cardWidth?: number;
-    showLayerControl?: boolean;
-    onLayerControlToggle?: (show: boolean) => void;
+    tempMarker?: POIItem | null; // 임시 마커 (POI 호버용)
 };
 
 const MapContainer: React.FC<MapContainerProps> = ({
@@ -32,28 +28,14 @@ const MapContainer: React.FC<MapContainerProps> = ({
     selectedApt,
     isCardExpanded = false,
     cardWidth = 320,
-    showLayerControl = false,
-    onLayerControlToggle
+    tempMarker
 }) => {
     const mapRef = useRef<HTMLDivElement | null>(null);
     const mapInstance = useRef<kakao.maps.Map | null>(null);
     const markerRef = useRef<kakao.maps.Marker | null>(null);
+    const tempMarkerRef = useRef<kakao.maps.Marker | null>(null);
 
-    // ✅ WMS 관리 훅
-    const {
-        layers,
-        activeTilesets,
-        debugEnvironment,
-        fetchAvailableLayers,
-        toggleLayer,
-        hideAllLayers,
-        // clearCanvas,
-        redrawAllLayers
-    } = useWMSTileset(mapInstance.current);
 
-    // ✅ GeoJSON 레이어 훅
-    const { layers: geoLayers, toggleLayer: toggleGeo, hideAll: hideAllGeo } = useGeoOverlay(mapInstance.current);
-    const [showGeoPanel, setShowGeoPanel] = useState(false);
 
     // ✅ 건물군(아파트 단지 경계) 오버레이 훅
     const { showForCenter: showEqb, clear: clearEqb } = useEqbOverlay(mapInstance.current);
@@ -101,34 +83,6 @@ const MapContainer: React.FC<MapContainerProps> = ({
         }
     }, [selectedApt, isCardExpanded, cardWidth]);
 
-    // 테스트 함수들
-    const testEnvironment = useCallback(async () => {
-        try {
-            const envData = await debugEnvironment();
-            if (envData) {
-                alert(`🔐 BFF 환경변수:\nVWorld Key: ${envData.hasVWorldKey ? '✓' : '✗'}\nDomain: ${envData.vworldDomain}`);
-            }
-        } catch (error) {
-            alert(`❌ 환경변수 확인 실패:\n${error}`);
-        }
-    }, [debugEnvironment]);
-
-    const testConnection = useCallback(async () => {
-        try {
-            const layers = await fetchAvailableLayers();
-            if (layers && layers.length > 0) {
-                alert(`✅ VWorld 연결 성공!\n레이어 ${layers.length}개 사용 가능`);
-            }
-        } catch (error) {
-            alert(`❌ 연결 실패:\n${error}`);
-        }
-    }, [fetchAvailableLayers]);
-
-    // 수동 레이어 새로고침
-    const handleRefreshLayers = useCallback(() => {
-        console.log('🔄 WMS 레이어 새로고침');
-        redrawAllLayers();
-    }, [redrawAllLayers]);
 
     // 지도 초기화
     useEffect(() => {
@@ -137,7 +91,6 @@ const MapContainer: React.FC<MapContainerProps> = ({
         window.kakao.maps.load(() => {
             if (!mapRef.current || mapInstance.current) return;
 
-            console.log("🗺️ 지도 초기화");
 
             const center = new window.kakao.maps.LatLng(37.5665, 126.978);
             const map = new window.kakao.maps.Map(mapRef.current, {
@@ -165,7 +118,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
                         await showEqb(nearestApt.lat, nearestApt.lon);
                     }
                 } catch (error) {
-                    console.error("❌ 아파트 검색 실패:", error);
+                    // 조용히 무시
                 }
             });
         });
@@ -174,6 +127,39 @@ const MapContainer: React.FC<MapContainerProps> = ({
     useEffect(() => {
         adjustMapCenter();
     }, [adjustMapCenter]);
+
+    // ✅ 임시 마커 업데이트 (POI 호버)
+    useEffect(() => {
+        if (!mapInstance.current) return;
+
+        const map = mapInstance.current;
+
+        // 기존 임시 마커 제거
+        if (tempMarkerRef.current) {
+            tempMarkerRef.current.setMap(null);
+            tempMarkerRef.current = null;
+        }
+
+        // 새 임시 마커 생성
+        if (tempMarker) {
+            const lat = parseFloat(tempMarker.y);
+            const lng = parseFloat(tempMarker.x);
+            
+            if (!isNaN(lat) && !isNaN(lng)) {
+                const latlng = new window.kakao.maps.LatLng(lat, lng);
+                
+                // 기본 카카오 마커 사용 (빨간색)
+                const marker = new window.kakao.maps.Marker({
+                    position: latlng,
+                    title: tempMarker.place_name
+                });
+
+                marker.setMap(map);
+                tempMarkerRef.current = marker;
+                
+            }
+        }
+    }, [tempMarker]);
 
     // ✅ 마커 업데이트 - null 체크 강화
     useEffect(() => {
@@ -218,41 +204,8 @@ const MapContainer: React.FC<MapContainerProps> = ({
             {/* ✅ 지도 컨테이너에 클래스 추가 */}
             <div ref={mapRef} className="w-full h-full kakao-map" />
 
-            {/* 좌상단 Geo 레이어 토글 버튼 */}
-            <div className="absolute left-4 top-4 z-10 flex gap-2">
-                <button
-                    onClick={() => setShowGeoPanel(v => !v)}
-                    className="px-3 py-2 text-sm bg-white border rounded shadow hover:bg-gray-50"
-                >
-                    Geo 레이어
-                </button>
-            </div>
 
-            {/* WMS 레이어 패널 */}
-            {showLayerControl && (
-                <WMSPanel
-                    layers={layers}
-                    activeTilesets={activeTilesets}
-                    onToggleLayer={toggleLayer}
-                    onHideAll={hideAllLayers}
-                    onClose={() => onLayerControlToggle?.(false)}
-                    onTestEnvironment={testEnvironment}
-                    onTestConnection={testConnection}
-                    onRefreshLayers={handleRefreshLayers}
-                />
-            )}
 
-            {/* GeoJSON 레이어 패널 */}
-            {showGeoPanel && (
-                <GeoLayerPanel
-                    layers={geoLayers}
-                    onToggle={toggleGeo}
-                    onHideAll={hideAllGeo}
-                    onClose={() => setShowGeoPanel(false)}
-                />
-            )}
-
-            {/* GeoJSON 테스트 오버레이 제거됨: useGeoOverlay 패널로만 관리 */}
         </div>
     );
 };
