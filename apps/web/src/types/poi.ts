@@ -71,7 +71,8 @@ export const POI_CATEGORIES: POIGroup[] = [
         categories: [
             { id: 'PS3', name: '어린이집/유치원', icon: '🧸', color: '#f59e0b' },
             { id: 'SC4', name: '초중고등학교', icon: '🏫', color: '#8b5cf6' },
-            { id: 'AC5', name: '학원/대학교', icon: '🎓', color: '#6366f1' }
+            { keywords: ['대학교'], name: '대학교', icon: '🏛️', color: '#6366f1' },
+            { id: 'AC5', name: '학원', icon: '📚', color: '#8b5cf6' }
         ]
     },
     {

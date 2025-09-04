@@ -1,6 +1,9 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useEqbOverlay } from "@/hooks/useEqbOverlay";
 import type { POIItem } from "@/types/poi";
+import { useAuth } from "@/auth/AuthProvider";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/firebase";
 
 type AptInfo = {
     id: number;
@@ -13,7 +16,7 @@ type AptInfo = {
 type MapContainerProps = {
     onMapClick?: (lat: number, lng: number) => void;
     onAptSelected?: (apt: AptInfo) => void;
-    onMapReady?: (map: kakao.maps.Map) => void; // 지도 인스턴스 전달 콜백
+    onMapReady?: (map: kakao.maps.Map, refreshFavorites: () => void) => void; // 지도 인스턴스와 새로고침 함수 전달
     selectedApt?: {
         lat: number;
         lon: number;
@@ -21,6 +24,7 @@ type MapContainerProps = {
     isCardExpanded?: boolean;
     cardWidth?: number;
     tempMarker?: POIItem | null; // 임시 마커 (POI 호버용)
+    showFavoritePins?: boolean; // 즐겨찾기 핀 표시 여부
 };
 
 const MapContainer: React.FC<MapContainerProps> = ({
@@ -30,12 +34,15 @@ const MapContainer: React.FC<MapContainerProps> = ({
     selectedApt,
     isCardExpanded = false,
     cardWidth = 320,
-    tempMarker
+    tempMarker,
+    showFavoritePins = true
 }) => {
+    const { user } = useAuth();
     const mapRef = useRef<HTMLDivElement | null>(null);
     const mapInstance = useRef<kakao.maps.Map | null>(null);
     const markerRef = useRef<kakao.maps.Marker | null>(null);
     const tempMarkerRef = useRef<kakao.maps.Marker | null>(null);
+    const favoriteMarkersRef = useRef<kakao.maps.Marker[]>([]);
 
 
 
@@ -49,6 +56,78 @@ const MapContainer: React.FC<MapContainerProps> = ({
     const stableOnAptSelected = useCallback((apt: AptInfo) => {
         onAptSelected?.(apt);
     }, [onAptSelected]);
+
+    // 즐겨찾기 마커들 로드
+    const loadFavoriteMarkers = useCallback(async () => {
+        if (!mapInstance.current || !user) return;
+
+        const map = mapInstance.current;
+
+        // 기존 즐겨찾기 마커들 제거
+        favoriteMarkersRef.current.forEach(marker => marker.setMap(null));
+        favoriteMarkersRef.current = [];
+
+        try {
+            // Firestore에서 사용자 즐겨찾기 가져오기
+            const favoritesRef = collection(db, 'users', user.uid, 'favorites');
+            const snapshot = await getDocs(favoritesRef);
+            
+            const favorites = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            for (const favorite of favorites) {
+                try {
+                    if (favorite.aptName && favorite.lat && favorite.lon) {
+                        const apt = {
+                            id: favorite.aptId,
+                            apt_nm: favorite.aptName,
+                            jibun_address: favorite.aptAddress || '',
+                            lat: favorite.lat,
+                            lon: favorite.lon
+                        };
+                        
+                        if (apt.lat && apt.lon) {
+                            // 즐겨찾기 마커 생성 (하트 아이콘)
+                            const latlng = new window.kakao.maps.LatLng(apt.lat, apt.lon);
+                            const imageSize = new window.kakao.maps.Size(32, 32);
+                            const imageOption = { offset: new window.kakao.maps.Point(16, 32) };
+                            
+                            // 별표 아이콘 생성 (SVG를 data URL로 변환)
+                            const starIcon = `data:image/svg+xml;base64,${btoa(`
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="12" cy="12" r="12" fill="#FCD34D"/>
+                                    <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" fill="white"/>
+                                </svg>
+                            `)}`;
+                            
+                            const markerImage = new window.kakao.maps.MarkerImage(starIcon, imageSize, imageOption);
+                            
+                            const marker = new window.kakao.maps.Marker({
+                                position: latlng,
+                                image: markerImage,
+                                title: `💕 ${apt.apt_nm} (즐겨찾기)`
+                            });
+
+                            // 마커 클릭 이벤트
+                            window.kakao.maps.event.addListener(marker, 'click', () => {
+                                stableOnAptSelected(apt);
+                                showEqb(apt.lat, apt.lon);
+                            });
+
+                            marker.setMap(showFavoritePins ? map : null);
+                            favoriteMarkersRef.current.push(marker);
+                        }
+                    }
+                } catch (error) {
+                    console.error(`아파트 ${favorite.aptId} 마커 생성 실패:`, error);
+                }
+            }
+        } catch (error) {
+            console.error('즐겨찾기 마커 로드 실패:', error);
+        }
+    }, [user, stableOnAptSelected, showEqb]);
 
     // 지도 중심 조정
     const adjustMapCenter = useCallback(() => {
@@ -85,14 +164,12 @@ const MapContainer: React.FC<MapContainerProps> = ({
         }
     }, [selectedApt, isCardExpanded, cardWidth]);
 
-
     // 지도 초기화
     useEffect(() => {
         if (typeof window === "undefined" || typeof window.kakao === "undefined") return;
 
         window.kakao.maps.load(() => {
             if (!mapRef.current || mapInstance.current) return;
-
 
             const center = new window.kakao.maps.LatLng(37.5665, 126.978);
             const map = new window.kakao.maps.Map(mapRef.current, {
@@ -102,8 +179,11 @@ const MapContainer: React.FC<MapContainerProps> = ({
 
             mapInstance.current = map;
 
-            // 지도 인스턴스를 부모에게 전달
-            onMapReady?.(map);
+            // 지도 인스턴스와 새로고침 함수를 부모에게 전달
+            onMapReady?.(map, loadFavoriteMarkers);
+
+            // 즐겨찾기 마커 로드
+            setTimeout(() => loadFavoriteMarkers(), 1000);
 
             // 지도 클릭 이벤트
             window.kakao.maps.event.addListener(map, "click", async (mouseEvent: any) => {
@@ -127,7 +207,21 @@ const MapContainer: React.FC<MapContainerProps> = ({
                 }
             });
         });
-    }, [stableOnMapClick, stableOnAptSelected]);
+    }, [stableOnMapClick, stableOnAptSelected, loadFavoriteMarkers]);
+
+    // 사용자 변경 시 즐겨찾기 마커 다시 로드
+    useEffect(() => {
+        if (mapInstance.current && user) {
+            loadFavoriteMarkers();
+        }
+    }, [user, loadFavoriteMarkers]);
+
+    // 즐겨찾기 핀 표시/숨김 토글
+    useEffect(() => {
+        favoriteMarkersRef.current.forEach(marker => {
+            marker.setMap(showFavoritePins ? mapInstance.current : null);
+        });
+    }, [showFavoritePins]);
 
     useEffect(() => {
         adjustMapCenter();
@@ -208,9 +302,6 @@ const MapContainer: React.FC<MapContainerProps> = ({
         <div className="w-full h-full relative">
             {/* ✅ 지도 컨테이너에 클래스 추가 */}
             <div ref={mapRef} className="w-full h-full kakao-map" />
-
-
-
         </div>
     );
 };

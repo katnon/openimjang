@@ -395,6 +395,43 @@ searchRoute.get("/landuse/:aptId", async (c) => {
     }
 });
 
+// 📍 주변 정보 조회 (POI)
+searchRoute.get("/nearby", async (c) => {
+    const lat = parseFloat(c.req.query("lat") ?? "");
+    const lon = parseFloat(c.req.query("lon") ?? "");
+    const radius = parseInt(c.req.query("radius") ?? "1000");
+
+    if (isNaN(lat) || isNaN(lon)) {
+        return c.json({ error: "Invalid coordinates" }, 400);
+    }
+
+    try {
+        console.log(`📍 주변 정보 조회: 중심=(${lat}, ${lon}), 반경=${radius}m`);
+
+        // 임시 주변 정보 데이터 (실제로는 POI 데이터베이스나 외부 API 사용)
+        const mockPOIs = [
+            { id: 1, category: "교육", name: "○○초등학교", distance: 350, x: lon + 0.003, y: lat + 0.002, place_name: "○○초등학교" },
+            { id: 2, category: "교통", name: "○○역", distance: 800, x: lon - 0.007, y: lat + 0.005, place_name: "○○역" },
+            { id: 3, category: "생활", name: "이마트", distance: 1200, x: lon + 0.01, y: lat - 0.008, place_name: "이마트" },
+            { id: 4, category: "의료", name: "○○병원", distance: 600, x: lon - 0.005, y: lat - 0.004, place_name: "○○병원" }
+        ];
+
+        const nearbyPOIs = mockPOIs.filter(poi => poi.distance <= radius);
+
+        console.log(`📍 주변 정보 결과: ${nearbyPOIs.length}개`);
+
+        return c.json({
+            center: { lat, lon },
+            radius,
+            pois: nearbyPOIs,
+            total: nearbyPOIs.length
+        });
+    } catch (err) {
+        console.error("❌ 주변 정보 조회 오류:", err);
+        return c.json({ error: "주변 정보 조회 중 오류가 발생했습니다." }, 500);
+    }
+});
+
 // 🏗️ 건물 정보 조회 (총괄표제부 및 표제부)
 searchRoute.get("/building-info/:aptId", async (c) => {
     const aptId = parseInt(c.req.param("aptId"));

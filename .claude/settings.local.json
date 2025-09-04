@@ -13,7 +13,15 @@
       "Bash(npm run dev:*)",
       "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
       "WebFetch(domain:apis.map.kakao.com)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Bash(bun add:*)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)",
+      "Read(c:\\Users\\gunho\\Pictures\\Screenshots/**)"
     ],
     "deny": [],
     "ask": []

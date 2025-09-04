@@ -21,6 +21,7 @@ declare global {
             getLevel(): number;
             setLevel(level: number): void;
             setCenter(latlng: LatLng): void;
+            setMapTypeId(mapTypeId: string): void;
             addOverlayMapTypeId?(id: any): void; // optional
             removeOverlayMapTypeId?(id: any): void; // optional
         }
@@ -67,6 +68,8 @@ declare global {
             const ROADMAP: string;
             const SKYVIEW: string;
             const HYBRID: string;
+            const SATELLITE: string;
+            const USE_DISTRICT: string;
         }
 
         namespace event {

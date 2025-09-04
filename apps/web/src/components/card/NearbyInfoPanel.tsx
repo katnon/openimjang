@@ -73,11 +73,11 @@ function CategorySection({ group, categoryData, onToggle, isExpanded, expandedCa
                             )}
 
                             <div className="space-y-2">
-                                {/* 상위 5개 또는 전체 표시 */}
+                                {/* 상위 10개 또는 전체 표시 */}
                                 {(
                                     expandedCategories.has(categoryItem.categoryId) 
                                         ? categoryItem.items 
-                                        : categoryItem.items.slice(0, 5)
+                                        : categoryItem.items.slice(0, 10)
                                 ).map((poi: any, index: number) => (
                                     <div 
                                         key={poi.id || index} 
@@ -99,14 +99,14 @@ function CategorySection({ group, categoryData, onToggle, isExpanded, expandedCa
                                 ))}
                                 
                                 {/* 확장/축소 버튼 */}
-                                {categoryItem.items.length > 5 && (
+                                {categoryItem.items.length > 10 && (
                                     <button
                                         onClick={() => onToggleCategory(categoryItem.categoryId)}
                                         className="w-full text-xs text-blue-600 text-center py-2 hover:bg-blue-50 rounded transition-colors"
                                     >
                                         {expandedCategories.has(categoryItem.categoryId) 
                                             ? '접기' 
-                                            : `+${categoryItem.items.length - 5}개 더 보기`
+                                            : `+${categoryItem.items.length - 10}개 더 보기`
                                         }
                                     </button>
                                 )}

@@ -54,7 +54,7 @@ export function useKakaoPOI(): UsePOIReturn {
         setPOIData(allCategories);
     }, []);
 
-    // 단일 카테고리 검색
+    // 단일 카테고리 검색 (모든 결과 가져오기)
     const searchSingleCategory = useCallback(async (
         category: POICategory,
         params: POISearchParams,
@@ -63,35 +63,59 @@ export function useKakaoPOI(): UsePOIReturn {
         const { x, y, radius = 1000 } = params;
         
         try {
-            let url = `/api/poi/search?`;
-            const searchParams = new URLSearchParams({
-                x: x.toString(),
-                y: y.toString(),
-                radius: radius.toString(),
-                size: '15'
-            });
+            let allItems: POIItem[] = [];
+            let page = 1;
+            let hasMore = true;
+            const pageSize = 15; // 카카오 API 최대 페이지 크기
+            
+            while (hasMore && !signal?.aborted) {
+                let url = `/api/poi/search?`;
+                const searchParams = new URLSearchParams({
+                    x: x.toString(),
+                    y: y.toString(),
+                    radius: radius.toString(),
+                    size: pageSize.toString(),
+                    page: page.toString()
+                });
 
-            // 키워드 검색 우선, 그 다음 카테고리 코드
-            if (category.keywords && category.keywords.length > 0) {
-                searchParams.append('query', category.keywords[0]);
-                // 키워드 검색 시 카테고리 코드는 제외 (더 넓은 검색 결과)
-            } else if (category.id && category.id !== 'BUS_STOP') {
-                searchParams.append('category_group_code', category.id);
+                // 키워드 검색 우선, 그 다음 카테고리 코드
+                if (category.keywords && category.keywords.length > 0) {
+                    searchParams.append('query', category.keywords[0]);
+                    // 키워드 검색 시 카테고리 코드는 제외 (더 넓은 검색 결과)
+                } else if (category.id && category.id !== 'BUS_STOP') {
+                    searchParams.append('category_group_code', category.id);
+                }
+
+                url += searchParams.toString();
+
+                const response = await fetch(url, { signal });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${category.name}: ${response.status}`);
+                }
+
+                const data: POISearchResponse = await response.json();
+                
+                if (data.documents && data.documents.length > 0) {
+                    // 대학교 키워드 검색의 경우 필터링 적용
+                    let filteredDocuments = data.documents;
+                    if (category.keywords && category.keywords.includes('대학교')) {
+                        filteredDocuments = data.documents.filter(poi => {
+                            // "XX대학교" 패턴에서 대학교 뒤에 추가 텍스트가 없는 경우만 포함
+                            const regex = /^[가-힣\s]+대학교$/;
+                            return regex.test(poi.place_name);
+                        });
+                    }
+                    
+                    allItems = [...allItems, ...filteredDocuments];
+                    hasMore = !data.meta.is_end && data.documents.length === pageSize;
+                    page++;
+                } else {
+                    hasMore = false;
+                }
             }
-
-            url += searchParams.toString();
-
-
-            const response = await fetch(url, { signal });
             
-            if (!response.ok) {
-                throw new Error(`Failed to fetch ${category.name}: ${response.status}`);
-            }
-
-            const data: POISearchResponse = await response.json();
-            
-            
-            return data.documents || [];
+            return allItems;
 
         } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {

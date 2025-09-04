@@ -1,10 +1,17 @@
 // apps/web/src/pages/Home.tsx
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import TopBar from "@/components/layout/TopBar";
 import MapContainer from "@/components/map/MapContainer";
 import MapControls from "@/components/map/MapControls";
 import SummaryCard from "@/components/card/SummaryCard";
 import MapPrime3DViewer from "@/components/MapPrime3DViewer";
+import AuthPage from "@/components/auth/AuthPage";
+import MemoCreateModal from "@/components/memo/MemoCreateModal";
+import FavoriteConfirmPopup from "@/components/memo/FavoriteConfirmPopup";
+import MyImjangModal from "@/components/memo/MyImjangModal";
+import { useAuth } from "@/auth/AuthProvider";
+import { doc, setDoc, deleteDoc, getDoc, collection, getDocs } from "firebase/firestore";
+import { db } from "@/firebase";
 import type { POIItem } from "@/types/poi";
 
 type AptInfo = {
@@ -16,19 +23,119 @@ type AptInfo = {
 };
 
 export default function Home() {
+    const { user } = useAuth();
     const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
     const [show3D, setShow3D] = useState(false);
     const [selectedApt, setSelectedApt] = useState<AptInfo | null>(null);
     const [isCardExpanded, setIsCardExpanded] = useState(false);
     const [hoveredPOI, setHoveredPOI] = useState<POIItem | null>(null);
     const [isDistrictOverlayActive, setIsDistrictOverlayActive] = useState(false);
+    const [showAuth, setShowAuth] = useState(false);
+    const [showMemoModal, setShowMemoModal] = useState(false);
+    const [currentMapType, setCurrentMapType] = useState<'ROADMAP' | 'SATELLITE'>('ROADMAP');
+    const [favorites, setFavorites] = useState<Set<number>>(new Set());
+    const [showFavoritePopup, setShowFavoritePopup] = useState(false);
+    const [favoriteAptName, setFavoriteAptName] = useState('');
+    const [showMyImjang, setShowMyImjang] = useState(false);
+    const [editingMemo, setEditingMemo] = useState<{
+        id: string;
+        title: string;
+        body: string;
+        photoUrl?: string;
+    } | null>(null);
+    const [showFavoritePins, setShowFavoritePins] = useState(true);
 
     // ✅ 지도 인스턴스 ref 추가
     const mapInstanceRef = useRef<kakao.maps.Map | null>(null);
+    const refreshFavoritesRef = useRef<(() => void) | null>(null);
+
+    // 즐겨찾기 로드
+    const loadFavorites = async () => {
+        if (!user) return;
+
+        try {
+            const favoritesRef = collection(db, 'users', user.uid, 'favorites');
+            const snapshot = await getDocs(favoritesRef);
+            
+            const favoriteIds = new Set(
+                snapshot.docs.map(doc => parseInt(doc.id))
+            );
+            
+            setFavorites(favoriteIds);
+        } catch (error) {
+            console.error('즐겨찾기 로드 실패:', error);
+        }
+    };
+
+    // 사용자 로그인 시 즐겨찾기 로드
+    useEffect(() => {
+        if (user) {
+            loadFavorites();
+        } else {
+            setFavorites(new Set());
+        }
+    }, [user]);
 
     // 지적편집도 토글 핸들러
     const handleDistrictOverlayToggle = () => {
         setIsDistrictOverlayActive(prev => !prev);
+    };
+
+    // 지도 타입 변경 핸들러
+    const handleMapTypeChange = (mapType: 'ROADMAP' | 'SATELLITE') => {
+        if (!mapInstanceRef.current || !window.kakao?.maps?.MapTypeId) return;
+
+        const map = mapInstanceRef.current;
+        const kakaoMapType = mapType === 'SATELLITE' 
+            ? window.kakao.maps.MapTypeId.SKYVIEW  // SATELLITE 대신 SKYVIEW 사용
+            : window.kakao.maps.MapTypeId.ROADMAP;
+
+        try {
+            map.setMapTypeId(kakaoMapType);
+            setCurrentMapType(mapType);
+            console.log(`🗺️ 지도 타입 변경: ${mapType}`);
+        } catch (error) {
+            console.error('❌ 지도 타입 변경 오류:', error);
+        }
+    };
+
+    // 즐겨찾기 토글 핸들러
+    const handleFavoriteToggle = async (apt: AptInfo) => {
+        if (!user) return;
+
+        try {
+            const favoriteRef = doc(db, 'users', user.uid, 'favorites', apt.id.toString());
+            const isFavorited = favorites.has(apt.id);
+
+            if (isFavorited) {
+                // 즐겨찾기 제거
+                await deleteDoc(favoriteRef);
+                setFavorites(prev => {
+                    const newFavorites = new Set(prev);
+                    newFavorites.delete(apt.id);
+                    return newFavorites;
+                });
+                // 지도 마커 새로고침
+                refreshFavoritesRef.current?.();
+            } else {
+                // 즐겨찾기 추가
+                await setDoc(favoriteRef, {
+                    aptId: apt.id,
+                    aptName: apt.apt_nm,
+                    aptAddress: apt.jibun_address,
+                    lat: apt.lat,
+                    lon: apt.lon,
+                    createdAt: new Date()
+                });
+                setFavorites(prev => new Set([...prev, apt.id]));
+                setFavoriteAptName(apt.apt_nm);
+                setShowFavoritePopup(true);
+                // 지도 마커 새로고침
+                refreshFavoritesRef.current?.();
+            }
+        } catch (error) {
+            console.error('❌ 즐겨찾기 토글 오류:', error);
+        }
     };
 
     return (
@@ -42,6 +149,8 @@ export default function Home() {
                         setPoint({ lat: results[0].lat, lng: results[0].lon });
                     }
                 }}
+                onOpenAuth={() => setShowAuth(true)}
+                onOpenMyImjang={() => setShowMyImjang(true)}
             />
 
             {/* 지도 */}
@@ -49,12 +158,12 @@ export default function Home() {
                 <MapContainer
                     onMapClick={(lat, lon) => setPoint({ lat, lng: lon })}
                     onAptSelected={(apt) => {
-                        console.log("🏠 Home에서 아파트 선택됨:", apt);
                         setSelectedApt(apt);
                         setPoint({ lat: apt.lat, lng: apt.lon });
                     }}
-                    onMapReady={(map) => {
+                    onMapReady={(map, refreshFavorites) => {
                         mapInstanceRef.current = map;
+                        refreshFavoritesRef.current = refreshFavorites;
                     }}
                     selectedApt={
                         selectedApt ? { lat: selectedApt.lat, lon: selectedApt.lon } : null
@@ -62,6 +171,7 @@ export default function Home() {
                     isCardExpanded={isCardExpanded}
                     cardWidth={isCardExpanded ? 464 : 320}
                     tempMarker={hoveredPOI}
+                    showFavoritePins={showFavoritePins}
                 />
             </main>
 
@@ -70,6 +180,10 @@ export default function Home() {
                 map={mapInstanceRef.current}
                 isDistrictOverlayActive={isDistrictOverlayActive}
                 onToggleDistrictOverlay={handleDistrictOverlayToggle}
+                onMapTypeChange={handleMapTypeChange}
+                currentMapType={currentMapType}
+                showFavoritePins={showFavoritePins}
+                onToggleFavoritePins={() => setShowFavoritePins(!showFavoritePins)}
             />
 
             {/* 요약 카드 */}
@@ -84,6 +198,8 @@ export default function Home() {
                 }}
                 onExpandChange={setIsCardExpanded}
                 onPOIHover={setHoveredPOI}
+                onFavoriteToggle={handleFavoriteToggle}
+                isFavorited={selectedApt ? favorites.has(selectedApt.id) : false}
             />
 
             {/* 3D 팝업 */}
@@ -98,6 +214,75 @@ export default function Home() {
                             : null
                 }
                 selectedApt={selectedApt}
+            />
+
+            {/* 임장 하기 버튼 (로그인 + 아파트 선택 시에만 표시) */}
+            {user && selectedApt && (
+                <button
+                    onClick={() => setShowMemoModal(true)}
+                    className="fixed bottom-6 right-6 bg-[#14e3dc] hover:bg-[#12d4cc] text-white px-4 py-3 rounded-lg shadow-lg transition-colors z-40 flex items-center gap-2"
+                    title="임장 메모 작성"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span className="font-medium">임장 하기</span>
+                </button>
+            )}
+
+            {/* 메모 작성/수정 모달 */}
+            <MemoCreateModal
+                isOpen={showMemoModal}
+                onClose={() => {
+                    setShowMemoModal(false);
+                    setEditingMemo(null);
+                }}
+                selectedApt={selectedApt ? {
+                    id: selectedApt.id.toString(),
+                    apt_nm: selectedApt.apt_nm,
+                    jibun_address: selectedApt.jibun_address,
+                    lat: selectedApt.lat,
+                    lon: selectedApt.lon
+                } : null}
+                editMemo={editingMemo}
+                onMemoUpdated={() => {
+                    // 메모 수정 후 즐겨찾기 마커 새로고침
+                    refreshFavoritesRef.current?.();
+                    setEditingMemo(null);
+                }}
+            />
+
+            {/* 즐겨찾기 확인 팝업 */}
+            <FavoriteConfirmPopup
+                isOpen={showFavoritePopup}
+                onClose={() => setShowFavoritePopup(false)}
+                onWriteMemo={() => setShowMemoModal(true)}
+                aptName={favoriteAptName}
+            />
+
+            {/* 내 임장 모달 */}
+            <MyImjangModal
+                isOpen={showMyImjang}
+                onClose={() => setShowMyImjang(false)}
+                onEditMemo={(memo) => {
+                    setEditingMemo({
+                        id: memo.id,
+                        title: memo.title,
+                        body: memo.body,
+                        photoUrl: memo.photoUrl
+                    });
+                    setShowMemoModal(true);
+                }}
+                onMemoDeleted={() => {
+                    // 메모 삭제 후 즐겨찾기 마커 새로고침
+                    refreshFavoritesRef.current?.();
+                }}
+            />
+
+            {/* 인증 모달 */}
+            <AuthPage
+                isOpen={showAuth}
+                onClose={() => setShowAuth(false)}
             />
         </div>
     );

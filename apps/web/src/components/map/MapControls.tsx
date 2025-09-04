@@ -4,12 +4,20 @@ interface MapControlsProps {
     map: kakao.maps.Map | null;
     isDistrictOverlayActive?: boolean;
     onToggleDistrictOverlay?: () => void;
+    onMapTypeChange?: (mapType: 'ROADMAP' | 'SATELLITE') => void;
+    currentMapType?: 'ROADMAP' | 'SATELLITE';
+    showFavoritePins?: boolean;
+    onToggleFavoritePins?: () => void;
 }
 
 export default function MapControls({
     map,
     isDistrictOverlayActive = false,
-    onToggleDistrictOverlay
+    onToggleDistrictOverlay,
+    onMapTypeChange,
+    currentMapType = 'ROADMAP',
+    showFavoritePins = true,
+    onToggleFavoritePins
 }: MapControlsProps) {
 
     // 줌 인
@@ -44,8 +52,16 @@ export default function MapControls({
         }
     }, [map, isDistrictOverlayActive, onToggleDistrictOverlay]);
 
-    const btn = "w-10 h-10 rounded-xl border border-neutral-300 bg-white hover:border-indigo-500 shadow transition-all";
-    const btnActive = "w-10 h-10 rounded-xl border border-indigo-500 bg-indigo-50 text-indigo-600 shadow transition-all";
+    // 위성지도 토글
+    const handleMapTypeToggle = useCallback(() => {
+        if (onMapTypeChange) {
+            const newMapType = currentMapType === 'ROADMAP' ? 'SATELLITE' : 'ROADMAP';
+            onMapTypeChange(newMapType);
+        }
+    }, [currentMapType, onMapTypeChange]);
+
+    const btn = "w-10 h-10 rounded-xl border border-neutral-300 bg-white hover:border-[#14e3dc] shadow transition-all";
+    const btnActive = "w-10 h-10 rounded-xl border border-[#14e3dc] bg-[#14e3dc] text-white shadow transition-all";
 
     return (
         <div className="absolute right-4 top-20 z-20 flex flex-col gap-2">
@@ -72,6 +88,23 @@ export default function MapControls({
                 disabled={!map}
             >
                 🗺️
+            </button>
+
+            <button
+                className={currentMapType === 'SATELLITE' ? btnActive : btn}
+                onClick={handleMapTypeToggle}
+                title={currentMapType === 'ROADMAP' ? '위성지도' : '일반지도'}
+                disabled={!map}
+            >
+                {currentMapType === 'ROADMAP' ? '🛰️' : '🌍'}
+            </button>
+
+            <button
+                className={showFavoritePins ? btnActive : btn}
+                onClick={onToggleFavoritePins}
+                title={showFavoritePins ? '즐겨찾기 핀 숨기기' : '즐겨찾기 핀 보기'}
+            >
+                ⭐
             </button>
 
         </div>

@@ -1,646 +1,561 @@
-# OpenImjang (오픈임장)
+# OpenImjang (오픈임장) 🏠
 
-실시간 부동산 위험도 분석 및 공간정보 시각화 플랫폼
+**AI 기반 부동산 종합 분석 및 공간정보 시각화 플랫폼**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.1-61dafb)](https://reactjs.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.0-black)](https://bun.sh/)
+[![Firebase](https://img.shields.io/badge/Firebase-10.8-orange)](https://firebase.google.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-green)](https://openai.com/)
 
-## 🏗️ 아키텍처 개요
+## 🌟 주요 특징
 
-OpenImjang은 모던 웹 기술 스택을 활용한 **Monorepo + BFF(Backend for Frontend)** 아키텍처로 구성된 부동산 분석 플랫폼입니다.
+- **🤖 AI 임장 도우미**: OpenAI GPT-4를 활용한 종합 부동산 분석
+- **📱 현대적 UI/UX**: React 19 + TailwindCSS로 구성된 반응형 웹앱
+- **🗺️ 다차원 지도 시각화**: 2D(Kakao Maps) + 3D(Cesium) 통합 지도
+- **🔍 실시간 부동산 데이터**: 국토부 RTMS API 연동 실거래가 정보
+- **📊 공간 데이터 분석**: PostGIS 기반 지리공간 쿼리
+- **🔐 안전한 사용자 관리**: Firebase Authentication 통합
+- **☁️ 클라우드 저장소**: Firebase Firestore + Storage 활용
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React SPA     │────│   Hono BFF      │────│   PostGIS DB    │
-│  (Kakao Maps)   │    │  (API Proxy)    │    │ (Spatial Data)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       │                       │
-    ┌────────────┐         ┌──────────────┐      ┌─────────────────┐
-    │ VWorld WMS │         │ 국토부 RTMS  │      │ 법정동/지적 데이터│
-    │   레이어    │         │    API       │      │   (WFS/GeoJSON) │
-    └────────────┘         └──────────────┘      └─────────────────┘
+## 🏗️ 시스템 아키텍처
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        A[React SPA<br/>Vite + TypeScript] --> B[Kakao Maps 2D]
+        A --> C[Cesium 3D Viewer]
+        A --> D[Firebase Auth/Storage]
+    end
+    
+    subgraph "Backend Layer" 
+        E[Hono BFF<br/>Bun Runtime] --> F[Kysely ORM]
+        E --> G[OpenAI API]
+        E --> H[Firebase Admin SDK]
+    end
+    
+    subgraph "Data Layer"
+        I[PostGIS<br/>Spatial Database] --> J[부동산 실거래 데이터]
+        I --> K[건물/토지 정보]
+        I --> L[지적편집도 데이터]
+    end
+    
+    subgraph "External APIs"
+        M[국토부 RTMS API] --> E
+        N[VWorld WMS/WFS] --> E
+        O[카카오맵 API] --> A
+        P[건축물대장 API] --> E
+    end
+    
+    A <--> E
+    E <--> I
+    
+    style A fill:#61dafb
+    style E fill:#000000
+    style I fill:#336791
+    style G fill:#10a37f
 ```
 
 ## 📂 프로젝트 구조
 
 ```
 OpenImjang/
-├── .claude/                         # Claude 설정
-│   └── settings.local.json
-├── .vscode/                         # VS Code 설정
-│   ├── extensions.json
-│   └── settings.json
 ├── apps/                            # 애플리케이션
 │   ├── bff/                         # Backend for Frontend (Hono + Bun)
 │   │   ├── src/
 │   │   │   ├── index.ts             # BFF 메인 서버
 │   │   │   ├── lib/
-│   │   │   │   └── db.ts            # Kysely DB 연결
+│   │   │   │   └── db.ts            # Kysely PostGIS 연결
+│   │   │   ├── middleware/
+│   │   │   │   └── auth.ts          # Firebase 인증 미들웨어
 │   │   │   └── routes/
-│   │   │       ├── geo/
-│   │   │       │   ├── buildings.ts # 건물 정보 API
-│   │   │       │   └── upis.ts      # UPI(단일필지식별번호) API
-│   │   │       ├── poi.ts           # POI(Point of Interest) API
-│   │   │       └── search.ts        # 검색 API
-│   │   ├── package.json
-│   │   └── tsconfig.json
+│   │   │       ├── ai.ts            # 🆕 OpenAI API 라우트
+│   │   │       ├── search.ts        # 부동산 검색 API
+│   │   │       ├── poi.ts           # POI(관심지점) API
+│   │   │       └── geo/
+│   │   │           ├── buildings.ts # 건물 정보 API
+│   │   │           └── upis.ts      # 지적 정보 API
+│   │   └── package.json
 │   └── web/                         # React SPA Frontend
-│       ├── public/
-│       │   ├── js/
-│       │   │   ├── cesium/          # Cesium 3D 지구본 라이브러리
-│       │   │   └── mapprime.cesium-controls.min.js  # 맵프라임 컨트롤
-│       │   └── code-example/        # 맵프라임 예제 코드
-│       │       ├── main.js          # 맵프라임 메인 예제
-│       │       ├── deleteEntity.html
-│       │       ├── drawAction.html
-│       │       ├── fog.html
-│       │       ├── frustum.html
-│       │       ├── line.html
-│       │       ├── myviewshed.html
-│       │       ├── point.html
-│       │       ├── polygon.html
-│       │       ├── rain.html
-│       │       ├── section.html
-│       │       ├── shade.html       # 그림자 분석
-│       │       ├── shp-upload.html
-│       │       ├── skyline.html
-│       │       ├── slope.html       # 경사도 분석
-│       │       ├── snow.html
-│       │       ├── sunlight.html    # 일조 분석
-│       │       ├── transformer.html
-│       │       ├── uplift.html
-│       │       ├── viewshed.html    # 가시권 분석
-│       │       ├── visibility.html
-│       │       └── wind.html
 │       ├── src/
-│       │   ├── components/
-│       │   │   ├── card/            # 정보 카드 컴포넌트
-│       │   │   │   ├── BuildingLandInfo.tsx      # 건물/토지 정보 카드
-│       │   │   │   ├── NearbyInfoPanel.tsx       # 주변 정보 패널
-│       │   │   │   ├── RealEstateDealsTable.tsx  # 부동산 거래 테이블
-│       │   │   │   └── SummaryCard.tsx           # 요약 정보 카드
-│       │   │   ├── layout/          # 레이아웃 컴포넌트
-│       │   │   │   ├── LayerToggle.tsx           # 레이어 토글
-│       │   │   │   └── TopBar.tsx                # 상단 검색바
-│       │   │   ├── map/             # 지도 관련 컴포넌트
-│       │   │   │   ├── GeoPolygonOverlay.tsx     # 지오메트리 폴리곤 오버레이
-│       │   │   │   ├── MapContainer.tsx          # 메인 지도 컨테이너 (Kakao Maps)
-│       │   │   │   └── MapControls.tsx           # 지도 컨트롤
-│       │   │   └── MapPrime3DViewer.tsx          # 3D 지도 뷰어 (Cesium + MapPrime)
-│       │   ├── hooks/               # 커스텀 훅
-│       │   │   ├── use3DEqbHighlight.ts          # 3D 연계정보 하이라이트 훅
-│       │   │   ├── useEqbOverlay.ts              # EQB 오버레이 훅
-│       │   │   ├── useFirstPersonLook.ts         # 1인칭 시점 훅 
-│       │   │   ├── useKakaoPOI.ts                # 카카오 POI 훅
-│       │   │   ├── useShadeAnalysis.ts           # 그림자 분석 훅
-│       │   │   ├── useWalkingMode.ts             # 워킹모드 훅
-│       │   │   └── useWindowView.ts              # 창문 뷰 훅
-│       │   ├── pages/
-│       │   │   ├── Home.tsx         # 메인 페이지
-│       │   │   └── old_Map3DPlay.tsx             # 구 3D 지도 페이지
 │       │   ├── auth/
-│       │   │   └── AuthProvider.tsx              # 인증 프로바이더
-│       │   ├── types/
-│       │   │   ├── kakao.d.ts       # 카카오맵 타입 정의
-│       │   │   └── poi.ts           # POI 타입 정의
-│       │   ├── App.tsx              # 메인 앱 컴포넌트
-│       │   ├── firebase.ts          # Firebase 설정
-│       │   ├── main.tsx             # 앱 엔트리포인트
-│       │   ├── router.tsx           # React Router 설정
-│       │   └── vite-env.d.ts        # Vite 환경 타입
-│       ├── eslint.config.js
-│       ├── index.html
-│       ├── package.json
-│       ├── postcss.config.js
-│       ├── README.md
-│       ├── tailwind.config.js
-│       ├── tsconfig.app.json
-│       ├── tsconfig.json
-│       ├── tsconfig.node.json
-│       └── vite.config.ts
-├── packages/
-│   └── shared/                      # 공유 패키지
-│       ├── src/
-│       │   ├── constants.ts         # 공통 상수
-│       │   ├── index.ts             # 패키지 엔트리포인트
-│       │   └── types.ts             # 공통 타입 정의
-│       ├── package.json
-│       └── tsconfig.json
-├── db/                              # 데이터베이스
+│       │   │   └── AuthProvider.tsx # 🆕 Firebase 인증 프로바이더
+│       │   ├── components/
+│       │   │   ├── ai/              # 🆕 AI 관련 컴포넌트
+│       │   │   │   ├── AIAnalysisModal.tsx
+│       │   │   │   └── AIChatbot.tsx
+│       │   │   ├── auth/            # 🆕 인증 컴포넌트
+│       │   │   │   └── AuthPage.tsx
+│       │   │   ├── card/
+│       │   │   │   ├── AiSummaryPanel.tsx    # 🆕 AI 종합 분석 패널
+│       │   │   │   ├── SummaryCard.tsx       # 업데이트: 4개 탭 구조
+│       │   │   │   ├── RealEstateDealsTable.tsx # 실거래가 테이블
+│       │   │   │   ├── BuildingLandInfo.tsx  # 건물/토지 정보
+│       │   │   │   └── NearbyInfoPanel.tsx   # 주변 정보
+│       │   │   ├── layout/
+│       │   │   │   └── TopBar.tsx            # 업데이트: 통합 브랜드 색상
+│       │   │   ├── map/
+│       │   │   │   ├── MapContainer.tsx      # 업데이트: 즐겨찾기 마커
+│       │   │   │   └── MapControls.tsx       # 업데이트: 즐겨찾기 토글
+│       │   │   ├── memo/            # 🆕 임장 메모 시스템
+│       │   │   │   ├── MemoCreateModal.tsx   # 메모 작성/수정
+│       │   │   │   ├── MyImjangModal.tsx     # 내 임장 목록
+│       │   │   │   └── FavoriteConfirmPopup.tsx # 즐겨찾기 확인
+│       │   │   └── MapPrime3DViewer.tsx      # 3D 지도 뷰어
+│       │   ├── firebase.ts          # 🆕 Firebase 설정
+│       │   └── hooks/
+│       │       ├── use3DEqbHighlight.ts      # 3D 연계정보 하이라이트
+│       │       ├── useEqbOverlay.ts          # EQB 오버레이
+│       │       ├── useFirstPersonLook.ts     # 🆕 1인칭 시점
+│       │       ├── useShadeAnalysis.ts       # 🆕 그림자 분석
+│       │       ├── useWalkingMode.ts         # 🆕 워킹 모드
+│       │       └── useWindowView.ts          # 🆕 창문 뷰
+│       └── public/
+│           ├── js/cesium/            # Cesium 3D 라이브러리
+│           └── code-example/         # MapPrime 예제 코드
+├── db/                              # 데이터베이스 & ETL
 │   └── scripts/
-│       ├── fetch/                   # 데이터 수집 스크립트
-│       │   ├── fetch_building_info.ts         # 건물 정보 수집
-│       │   ├── fetch_landuse_included.ts      # 토지이용계획 수집
-│       │   ├── fetch_rent_raw.ts              # 임대료 원시데이터 수집
-│       │   ├── fetch_trade_raw.ts             # 거래 원시데이터 수집
-│       │   ├── fill_apt_info_coordinates.ts   # 아파트 좌표 채우기
-│       │   ├── populate_apt_deal_all.ts       # 모든 아파트 거래 데이터 가공
-│       │   ├── populate_apt_info_from_rent_raw.ts    # 임대 데이터로 아파트 정보 가공
-│       │   ├── populate_apt_info_from_trade_raw.ts   # 거래 데이터로 아파트 정보 가공
-│       │   ├── old_populate_apt_info_from_rent_raw.ts    # 구버전 임대 가공
-│       │   └── old_populate_apt_info_from_trade_raw.ts   # 구버전 거래 가공
+│       ├── fetch/                   # 🆕 데이터 수집 스크립트
+│       │   ├── fetch_building_info.ts        # 건축물대장 API 수집
+│       │   ├── fetch_landuse_included.ts     # 토지이용계획 수집
+│       │   ├── fetch_rent_raw.ts             # 전월세 데이터 수집
+│       │   ├── fetch_trade_raw.ts            # 매매 데이터 수집
+│       │   ├── populate_apt_deal_all.ts      # 통합 거래 데이터 가공
+│       │   └── fill_apt_info_coordinates.ts  # 좌표 정보 보완
 │       ├── setup/
-│       │   └── legal_dong_loader.ts           # 법정동 코드 로더
+│       │   └── legal_dong_loader.ts          # 법정동 코드 로더
 │       └── SQLquery/
-│           └── oi.query.sql         # OpenImjang SQL 쿼리
-├── etl/                             # Extract, Transform, Load
-│   └── configs/
-│       └── wfs-layers.json          # WFS 레이어 설정
-├── CLAUDE.md                        # Claude Code 가이드
-├── GEMINI.md                        # Gemini 가이드  
-├── README.md                        # 프로젝트 README
-├── package.json                     # 루트 패키지 설정
-└── tsconfig.base.json               # 공통 TypeScript 설정
+│           └── oi.query.sql          # 🆕 OpenImjang 스키마 정의
+└── CLAUDE.md                        # Claude Code 개발 가이드
 ```
 
 ## 🛠️ 기술 스택
 
 ### Frontend Stack
-- **React 19.1** - 최신 React with Concurrent Features
-- **Vite 7.1** - 차세대 빌드 툴 
-- **TypeScript 5.8** - 타입 안전성
-- **TailwindCSS 3.4** - 유틸리티 기반 CSS
-- **React Router DOM 7.8** - 클라이언트 사이드 라우팅
-- **OpenLayers 10.6** - 고급 웹 매핑
-- **Kakao Maps API** - 한국 지도 서비스
+- **React 19.1** - Concurrent Features를 활용한 최신 React
+- **Vite 7.1** - 차세대 빌드 툴 및 개발 서버
+- **TypeScript 5.8** - 타입 안전성 확보
+- **TailwindCSS 3.4** - 유틸리티 기반 CSS 프레임워크
+- **Firebase SDK 10.8** - 인증 및 실시간 데이터베이스
+- **Kakao Maps API** - 한국 최적화 지도 서비스
 - **Cesium + MapPrime3D** - 3D 지구본 및 공간 시각화
+- **Axios** - HTTP 클라이언트 (인터셉터 포함)
 
 ### Backend Stack
-- **Bun** - 고성능 JavaScript 런타임
-- **Hono 4.4** - 경량 웹 프레임워크
+- **Bun 1.0** - 고성능 JavaScript 런타임 (Node.js 대비 3-4배 빠름)
+- **Hono 4.4** - 경량 고성능 웹 프레임워크
 - **Kysely 0.28** - 타입 안전 SQL 쿼리 빌더
+- **Firebase Admin SDK** - 서버사이드 Firebase 인증
+- **OpenAI API** - GPT-4o-mini 모델 활용
+
+### Database & Infrastructure
 - **PostgreSQL 14+** - 관계형 데이터베이스
-- **PostGIS** - 공간 데이터 확장
-- **Zod 3.23** - 스키마 검증
+- **PostGIS 3.3+** - 공간 데이터 확장
+- **Firebase Firestore** - NoSQL 문서 데이터베이스 (임장 메모)
+- **Firebase Storage** - 파일 저장소 (사진 업로드)
+- **Firebase Authentication** - 사용자 인증 (구글 OAuth 지원)
 
 ### External APIs & Services
-- **국토부 RTMS API** - 부동산 거래 데이터
-- **VWorld WFS/WMS** - 공간정보 서비스
-- **Kakao Maps API** - 지도 및 지오코딩 서비스
+- **국토부 RTMS API** - 부동산 실거래가 데이터
+- **건축물대장 API** - 건축물 정보 (총괄표제부/표제부)
+- **VWorld WFS/WMS** - 국가공간정보 서비스
+- **Kakao Maps/Local API** - 지도 서비스 및 POI 검색
 
 ## 🚀 설치 및 실행
 
 ### 필수 요구사항
 - **Node.js 18+** 또는 **Bun 1.0+**
-- **PostgreSQL 14+** with **PostGIS** extension
-- **Git**
+- **PostgreSQL 14+** with **PostGIS 3.3+**
+- **Firebase 프로젝트** (Authentication, Firestore, Storage 활성화)
 
-### 1. 저장소 클론
+### 1. 저장소 클론 및 의존성 설치
 ```bash
 git clone https://github.com/your-username/OpenImjang.git
 cd OpenImjang
-```
 
-### 2. 의존성 설치
-```bash
 # Bun 권장 (더 빠름)
 bun install
-
-# 또는 npm
-npm install
 ```
 
-### 3. 환경 변수 설정
+### 2. 환경 변수 설정
 
 #### Frontend (.env.local)
 ```bash
 # apps/web/.env.local
-VITE_KAKAO_JS_KEY=your_kakao_javascript_key
-VITE_VWORLD_KEY=your_vworld_api_key
-VITE_VWORLD_DOMAIN=localhost
+VITE_KAKAO_MAP_APP_KEY=your_kakao_javascript_key
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
+VITE_FIREBASE_APP_ID=1:123456789:web:abcdef
 ```
 
 #### Backend (.env)
 ```bash
 # apps/bff/.env
 DATABASE_URL=postgresql://username:password@localhost:5432/openimjang
-VWORLD_KEY=your_vworld_api_key
-VWORLD_DOMAIN=localhost
-KAKAO_REST_KEY=your_kakao_rest_api_key
+OPENAI_API_KEY=your_openai_api_key
 RTMS_API_KEY=your_molit_rtms_api_key
+KAKAO_REST_KEY=your_kakao_rest_api_key
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
 ```
 
-### 4. 데이터베이스 설정
-
-#### PostGIS 설치 및 DB 생성
+### 3. 데이터베이스 설정
 ```bash
-# PostgreSQL 설치 (macOS)
-brew install postgresql postgis
-
-# 또는 Ubuntu
+# PostgreSQL + PostGIS 설치 (Ubuntu)
 sudo apt-get install postgresql postgresql-contrib postgis
 
 # 데이터베이스 생성
 createdb openimjang
 psql -d openimjang -c "CREATE EXTENSION postgis;"
+
+# 스키마 생성
+psql -d openimjang -f db/scripts/SQLquery/oi.query.sql
 ```
 
-#### 스키마 생성
+### 4. 개발 서버 실행
 ```bash
-cd db
-# 마이그레이션 실행 (향후 추가 예정)
-psql -U postgres -d openimjang -f migrations/init.sql
-```
-
-### 5. 개발 서버 실행
-
-#### 개별 실행
-```bash
-# BFF 서버 (포트 3000)
+# BFF 서버 실행 (포트 3000)
 cd apps/bff && bun run dev
 
-# 프론트엔드 서버 (포트 5173)
-cd apps/web && bun run dev
+# 프론트엔드 서버 실행 (포트 5173)
+cd apps/web && npm run dev
 ```
 
-#### 동시 실행 (권장)
-```bash
-# 루트에서 모든 서비스 실행
-npm run dev
-```
+## 📊 데이터베이스 스키마
 
-### 6. 초기 데이터 로드
-
-```bash
-# 법정동 코드 로드
-npm run load-legal-dong
-
-# 아파트 거래 데이터 수집 (선택사항)
-cd db/scripts/fetch
-bun run fetch_trade_raw.ts
-```
-
-## 📚 주요 기능 및 모듈
-
-### 🗺️ 지도 시스템
-
-#### Kakao Maps Integration
-- **MapContainer.tsx**: 메인 지도 컨테이너
-  - 카카오맵 API 초기화 및 관리
-  - 마커 및 오버레이 처리
-  - 지도 이벤트 핸들링
-
-```typescript
-// 예시: 지도 초기화
-const map = new kakao.maps.Map(container, {
-    center: new kakao.maps.LatLng(37.5665, 126.9780),
-    level: 3
-});
-```
-
-#### WMS Layer System
-- **useWMSOverlay.ts**: WMS 레이어 관리 훅
-- **useWMSTileset.ts**: 타일셋 관리 및 캐싱
-- **WMSLayerControl.tsx**: 레이어 제어 UI
-
-**지원 레이어:**
-- `연속지적도` (lp_pa_cbnd_bonbun, lp_pa_cbnd_bubun)
-- `도시지역` (lt_c_uq111) - 주거/상업/공업지역
-- `읍면동 경계` (lt_c_ademd) - 행정구역
-
-```typescript
-// WMS 레이어 토글 예시
-const toggleLayer = (layerId: string) => {
-    const layer = layers.find(l => l.id === layerId);
-    if (layer) {
-        layer.visible = !layer.visible;
-        updateOverlay(layer);
-    }
-};
-```
-
-#### 3D Visualization
-- **MapPrime3DViewer.tsx**: Cesium 기반 3D 지도
-  - 3D 건물 모델링
-  - 지형 데이터 렌더링
-  - 카메라 조작 및 애니메이션
-
-### 🔍 검색 시스템
-
-#### BFF Search API
-```typescript
-// 아파트 검색
-GET /api/search/search?q=아파트명
-
-// 좌표 기반 최근접 검색  
-GET /api/search/nearest?lat=37.5665&lng=126.9780
-
-// 지역별 거래 현황
-GET /api/search/deals?pnu=1234567890
-```
-
-#### Kysely ORM 활용
-```typescript
-// apps/bff/src/routes/search.ts
-const results = await db
-    .selectFrom("oi.apt_info" as any)
-    .selectAll()
-    .where((eb) => eb.or([
-        eb("apt_nm", "ilike", `%${q}%`),
-        eb("jibun_address", "ilike", `%${q}%`)
-    ]))
-    .orderBy("apt_nm")
-    .limit(10)
-    .execute();
-```
-
-### 🛡️ 공간 데이터 처리
-
-#### PostGIS Spatial Queries
-```sql
--- 반경 내 아파트 검색
-SELECT *, ST_Distance(
-    geography(ST_MakePoint(lon, lat)),
-    geography(ST_MakePoint($1, $2))
-) as distance 
-FROM oi.apt_info 
-WHERE ST_DWithin(
-    geography(ST_MakePoint(lon, lat)),
-    geography(ST_MakePoint($1, $2)), 
-    1000
-)
-ORDER BY distance LIMIT 10;
-```
-
-#### 좌표계 및 투영법
-- **기본 SRID**: 4326 (WGS84)
-- **공간 인덱스**: GIST 인덱스 적용
-- **GeoJSON 출력**: `ST_AsGeoJSON()` 활용
-
-### 📊 데이터 ETL 파이프라인
-
-#### 국토부 RTMS API 연동
-```typescript
-// db/scripts/fetch/fetch_trade_raw.ts
-const API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
-
-// XML/JSON 파싱 및 DB 저장
-async function parseRtmsResponse(decoded: string) {
-    // 중복 방지 및 에러 처리
-    // 배치 처리 및 재시도 로직
-}
-```
-
-#### VWorld WFS 데이터 처리
-```json
-// etl/configs/wfs-layers.json
-{
-    "layers": {
-        "zoning": {
-            "name": "용도지역",
-            "type": "POLYGON", 
-            "srid": 4326,
-            "fields": ["zoning_type", "zoning_name", "geometry"]
-        }
-    }
-}
-```
-
-### 🔄 API 프록시 & 캐싱
-
-#### VWorld API 프록시
-```typescript
-// apps/bff/src/routes/vworld.ts
-vworld.get('/capabilities', async (c) => {
-    const url = `https://api.vworld.kr/req/wms?SERVICE=WMS&REQUEST=GetCapabilities&KEY=${apiKey}&DOMAIN=${domain}`;
-    
-    // 캐싱 및 에러 처리
-    const response = await fetch(url);
-    return c.json(await response.text());
-});
-```
-
-## 🏛️ 데이터베이스 스키마
-
-### 주요 테이블
+### 부동산 데이터 테이블
 
 #### `oi.apt_info` - 아파트 기본 정보
 ```sql
 CREATE TABLE oi.apt_info (
     id SERIAL PRIMARY KEY,
-    apt_nm VARCHAR(200),           -- 아파트명
-    jibun_address TEXT,            -- 지번주소  
-    road_address TEXT,             -- 도로명주소
-    lat DOUBLE PRECISION,          -- 위도
-    lon DOUBLE PRECISION,          -- 경도
-    geom GEOMETRY(POINT, 4326),    -- PostGIS 포인트
-    created_at TIMESTAMP DEFAULT NOW()
+    apt_nm VARCHAR(200),                 -- 아파트명
+    jibun_address TEXT,                  -- 지번주소  
+    road_address TEXT,                   -- 도로명주소
+    lat DOUBLE PRECISION,                -- 위도 (WGS84)
+    lon DOUBLE PRECISION,                -- 경도 (WGS84)
+    geom GEOMETRY(POINT, 4326),          -- PostGIS 포인트
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- 공간 인덱스
 CREATE INDEX idx_apt_info_geom ON oi.apt_info USING GIST(geom);
+CREATE INDEX idx_apt_info_name ON oi.apt_info (apt_nm);
 ```
 
-#### `oi.trade_raw` - 거래 원시 데이터
+#### `oi.apt_deal_all` - 통합 거래 데이터
 ```sql
-CREATE TABLE oi.trade_raw (
+CREATE TABLE oi.apt_deal_all (
     id SERIAL PRIMARY KEY,
-    deal_amount BIGINT,            -- 거래금액 (만원)
-    deal_year INTEGER,             -- 거래년도
-    deal_month INTEGER,            -- 거래월
-    deal_day INTEGER,              -- 거래일
-    apt_nm VARCHAR(200),           -- 아파트명
-    exclusive_area DOUBLE PRECISION, -- 전용면적
-    jibun VARCHAR(50),             -- 지번
-    legal_dong_code VARCHAR(10),   -- 법정동코드
+    apt_nm VARCHAR(100),                 -- 아파트명
+    jibun_address TEXT,                  -- 지번주소
+    exclu_use_ar NUMERIC(10, 4),         -- 전용면적(㎡)
+    deal_year INTEGER,                   -- 거래년도
+    deal_month INTEGER,                  -- 거래월
+    deal_day INTEGER,                    -- 거래일
+    deal_amount BIGINT,                  -- 매매가격(만원)
+    deposit BIGINT,                      -- 보증금(만원) 
+    monthly_rent INTEGER,                -- 월세(만원)
+    floor INTEGER,                       -- 층
+    build_year INTEGER,                  -- 건축년도
+    deal_type VARCHAR(10),               -- 거래유형 (매매/전세/월세)
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_apt_deal_all_apt_nm ON oi.apt_deal_all (apt_nm);
+CREATE INDEX idx_apt_deal_all_date ON oi.apt_deal_all (deal_year, deal_month);
+```
+
+#### `oi.apt_building_info` - 건축물 정보
+```sql
+CREATE TABLE oi.apt_building_info (
+    id SERIAL PRIMARY KEY,
+    apt_id INTEGER REFERENCES oi.apt_info(id),
+    type VARCHAR(10),                    -- 'recap'(총괄표제부) / 'title'(표제부)
+    dongnm VARCHAR(100),                 -- 동명
+    platarea NUMERIC(12, 2),             -- 대지면적(㎡)
+    archarea NUMERIC(12, 2),             -- 건축면적(㎡)
+    totarea NUMERIC(12, 2),              -- 연면적(㎡)
+    grndflrcnt INTEGER,                  -- 지상층수
+    ugrndflrcnt INTEGER,                 -- 지하층수
+    mainpurpscdnm VARCHAR(100),          -- 주용도명
+    strctcdnm VARCHAR(100),              -- 구조명 
+    hhldcnt INTEGER,                     -- 세대수
+    totpkngcnt INTEGER,                  -- 총주차대수
+    useaprday DATE,                      -- 사용승인일
     created_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
-## 🔧 개발 가이드
+### 공간 데이터 테이블
 
-### 코딩 컨벤션 [[memory:5413884]]
+#### `public.al_d002_11_20250804` - 연속지적도
+```sql
+-- 국가공간정보포털 연속지적도 데이터
+CREATE TABLE public.al_d002_11_20250804 (
+    objectid INTEGER PRIMARY KEY,
+    a1 VARCHAR(19),                      -- PNU (부동산고유번호)
+    a2 VARCHAR(10),                      -- 법정동코드
+    a3 VARCHAR(10),                      -- 지목코드
+    geom GEOMETRY(POLYGON, 5186)         -- 지적경계 (EPSG:5186)
+);
 
-#### TypeScript 설정
-```json
-// tsconfig.json
-{
-    "compilerOptions": {
-        "strict": true,
-        "moduleResolution": "bundler",
-        "target": "ES2022",
-        "lib": ["ES2023", "DOM", "DOM.Iterable"]
-    }
-}
+CREATE INDEX idx_al_d002_geom ON public.al_d002_11_20250804 USING GIST(geom);
+CREATE INDEX idx_al_d002_pnu ON public.al_d002_11_20250804 (a1);
 ```
 
-#### ESLint + Prettier 설정
+#### `public.al_d154_11_20250830` - 토지이용계획
+```sql
+-- 용도지역지구 정보
+CREATE TABLE public.al_d154_11_20250830 (
+    objectid INTEGER PRIMARY KEY,
+    a7 TEXT,                             -- 용도지역코드 (쉼표 구분)
+    a9 TEXT,                             -- 포함상태코드 (쉼표 구분)
+    geom GEOMETRY(POLYGON, 5186)         -- 용도지역 경계
+);
+
+CREATE TABLE public.landuse_code (
+    code VARCHAR(10) PRIMARY KEY,
+    name VARCHAR(100),                   -- 용도지역명
+    category VARCHAR(50)                 -- 상위분류
+);
+```
+
+### 사용자 데이터 (Firebase Firestore)
+
+#### `users/{uid}/favorites` - 즐겨찾기
 ```javascript
-// eslint.config.js
-export default [
-    ...tseslint.configs.recommended,
-    ...reactHooks.configs.recommended,
-    {
-        rules: {
-            '@typescript-eslint/no-unused-vars': 'warn',
-            'react-refresh/only-export-components': 'warn'
-        }
-    }
-];
-```
-
-### 환경별 설정 [[memory:7352142]]
-
-#### Development
-- **Frontend**: `apps/web/.env.local`
-- **Backend**: `apps/bff/.env`
-- Hot reload 및 디버깅 모드
-
-#### Production
-- **빌드**: `bun run build`
-- **환경변수**: `.env.production`
-- **최적화**: Vite 번들 최적화
-
-### API 설계 원칙
-
-#### RESTful Routes
-```
-GET    /api/search/search           # 검색
-GET    /api/search/nearest          # 최근접 검색
-GET    /api/vworld/capabilities     # WMS 역량 조회
-GET    /api/vworld/map              # WMS 맵 타일
-```
-
-#### Error Handling
-```typescript
-// 표준 에러 응답
 {
-    "error": "검색 중 오류가 발생했습니다.",
-    "code": "SEARCH_ERROR", 
-    "timestamp": "2024-01-15T10:30:00Z"
+  aptId: 12345,                    // 아파트 ID (참조)
+  aptName: "래미안강남힐스",         // 아파트명
+  aptAddress: "서울 강남구...",      // 주소
+  lat: 37.4979,                    // 위도
+  lon: 127.0276,                   // 경도  
+  createdAt: Timestamp             // 생성일시
 }
+```
+
+#### `users/{uid}/memos` - 임장 메모
+```javascript
+{
+  aptId: "12345",                  // 아파트 ID
+  title: "강남 래미안 방문 후기",   // 제목
+  body: "교통이 편리하고...",       // 내용
+  photoUrl: "gs://bucket/...",     // 사진 URL (선택)
+  createdAt: Timestamp,            // 생성일시
+  updatedAt: Timestamp             // 수정일시
+}
+```
+
+## 🔍 주요 API 엔드포인트
+
+### 부동산 검색 API
+```typescript
+// 아파트 검색
+GET /api/search?q={아파트명 또는 주소}
+
+// 좌표 기반 최근접 검색
+GET /api/search/nearest?lat={위도}&lng={경도}
+
+// 실거래가 조회
+GET /api/search/deals/{aptId}?dealType={매매|전세|월세}&area={면적}
+
+// 전용면적 목록
+GET /api/search/areas/{aptId}
+
+// 건물 정보 조회  
+GET /api/search/building-info/{aptId}
+
+// PNU(부동산고유번호) 조회
+GET /api/search/pnu/{aptId}
+
+// 토지이용계획 조회
+GET /api/search/landuse/{aptId}
+
+// 주변 정보 조회
+GET /api/search/nearby?lat={위도}&lon={경도}&radius={반경}
+```
+
+### AI 분석 API
+```typescript
+// AI 종합 분석 (로그인 필요)
+POST /api/ai/analyze
+{
+  "type": "apartment_summary",
+  "data": {
+    "aptInfo": { "name": "...", "address": "...", "lat": 37.5, "lon": 127.0 },
+    "deals": [...],      // 실거래가 데이터
+    "building": {...},   // 건물 정보  
+    "nearby": {...}      // 주변 정보
+  },
+  "prompt": "종합 분석 요청 프롬프트"
+}
+
+// AI 채팅봇 (로그인 필요)
+POST /api/ai/chat  
+{
+  "message": "이 아파트 투자 가치는?",
+  "aptId": 12345,
+  "chatHistory": [...]
+}
+```
+
+## 🎯 핵심 기능
+
+### 🤖 AI 임장 도우미
+- **종합 분석**: 실거래가, 건물정보, 주변환경을 AI가 통합 분석
+- **투자 점수**: 10점 만점 투자 매력도 평가
+- **채팅봇**: 부동산 관련 질의응답 (컨텍스트 유지)
+- **개인화**: 사용자의 임장 메모와 선호도 반영
+
+### 🗺️ 인터랙티브 지도
+- **2D/3D 통합**: 카카오맵 + Cesium 3D 지구본
+- **다층 시각화**: 지적편집도, 용도지역, 건물군 오버레이
+- **실시간 마커**: 즐겨찾기, 검색 결과, 임시 마커
+- **공간 분석**: 반경 검색, 최근접 아파트 찾기
+
+### 📊 부동산 데이터 분석
+- **실거래가 조회**: 최근 1년 거래 내역 (무제한)
+- **거래 유형별 필터**: 매매/전세/월세 분류
+- **면적별 분석**: 전용면적별 가격 동향
+- **건물 정보**: 건축물대장 기반 상세 정보
+- **주변 환경**: 교통, 교육, 편의시설 정보
+
+### 👤 개인화 서비스
+- **Firebase 인증**: 구글 OAuth 간편 로그인
+- **임장 메모**: 현장 방문 후기 작성 (사진 포함)
+- **즐겨찾기**: 관심 아파트 북마크 및 지도 표시
+- **클라우드 동기화**: 모든 데이터 자동 백업
+
+### 🎨 모던 UI/UX
+- **반응형 디자인**: 모바일/태블릿/데스크톱 최적화
+- **다크 모드 지원**: 사용자 선호도 반영 (향후 추가)
+- **직관적 네비게이션**: 탭 기반 정보 구조
+- **실시간 피드백**: 로딩 상태, 에러 처리
+- **통합 브랜드 컬러**: #14e3dc 민트 그린 테마
+
+## ⚡ 성능 최적화
+
+### Frontend 최적화
+```typescript
+// React 19 Concurrent Features 활용
+import { startTransition } from 'react';
+
+// 무거운 작업을 백그라운드로 이동
+startTransition(() => {
+  setSearchResults(filteredResults);
+});
+
+// 컴포넌트 메모이제이션
+const MapControls = memo(({ map, isActive }) => {
+  return useMemo(() => (
+    <div>{/* 지도 컨트롤 */}</div>
+  ), [map, isActive]);
+});
+```
+
+### Backend 최적화
+```typescript
+// Bun 고성능 런타임 활용
+import { Hono } from 'hono';
+const app = new Hono();
+
+// 타입 안전 쿼리 (Kysely)
+const results = await db
+  .selectFrom('oi.apt_info')
+  .selectAll()
+  .where('lat', '>', lat - 0.01)
+  .where('lat', '<', lat + 0.01) 
+  .execute();
+
+// 응답 캐싱
+app.use('/api/search/*', async (c, next) => {
+  c.header('Cache-Control', 'public, max-age=300'); // 5분 캐시
+  await next();
+});
+```
+
+### Database 최적화
+```sql
+-- 공간 인덱스로 지리 쿼리 가속화
+CREATE INDEX CONCURRENTLY idx_apt_info_geom 
+ON oi.apt_info USING GIST(geom);
+
+-- 부분 인덱스로 자주 조회되는 데이터만 인덱싱
+CREATE INDEX idx_apt_deal_recent 
+ON oi.apt_deal_all (deal_year, deal_month) 
+WHERE deal_year >= 2023;
+
+-- 쿼리 최적화 확인
+EXPLAIN (ANALYZE, BUFFERS) 
+SELECT * FROM oi.apt_info 
+WHERE ST_DWithin(geom, ST_Point(127.0, 37.5), 1000);
 ```
 
 ## 🔒 보안 고려사항
 
-### API 키 관리
-- **Client-side**: `VITE_*` 접두사로 공개 키만 노출
-- **Server-side**: `.env` 파일로 민감한 키 보호
-- **Production**: 환경변수로 키 주입
+### 인증 및 권한
+- **Firebase Authentication**: 구글 OAuth 2.0 인증
+- **JWT 토큰**: 자동 갱신 및 만료 처리
+- **API 미들웨어**: 모든 민감한 API에 인증 필수
+- **CORS 설정**: 허용된 도메인만 접근 가능
 
-### CORS 설정
-```typescript
-// BFF CORS 설정
-app.use('*', cors({
-    origin: ['http://localhost:5173', 'https://your-domain.com'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-}));
-```
-
-### SQL Injection 방지
-- **Kysely ORM** 사용으로 타입 안전 쿼리
-- **파라미터 바인딩** 강제 적용
-
-## 📈 성능 최적화
-
-### Frontend 최적화
-- **React 19 Concurrent Features** 활용
-- **Code Splitting**: 라우트별 분할
-- **WMS 타일 캐싱**: 브라우저 캐시 활용
-- **Virtual Scrolling**: 대용량 리스트 처리
-
-### Backend 최적화  
-- **Bun 런타임**: Node.js 대비 3-4배 빠른 성능
-- **Kysely 컴파일된 쿼리**: 런타임 쿼리 최적화
-- **Connection Pooling**: PostgreSQL 연결 관리
-- **API 응답 캐싱**: 5-30분 캐시 정책
-
-### Database 최적화
-- **공간 인덱스**: GIST 인덱스로 지리 쿼리 가속
-- **부분 인덱스**: 자주 조회되는 데이터만 인덱싱
-- **쿼리 최적화**: EXPLAIN ANALYZE 활용
+### 데이터 보호
+- **환경 변수 관리**: 민감한 키는 서버사이드만 저장
+- **SQL Injection 방지**: Kysely ORM 파라미터 바인딩
+- **XSS 방지**: React 기본 이스케이프 + 추가 검증
+- **HTTPS 강제**: Production 환경에서 SSL/TLS 필수
 
 ## 🧪 테스트 전략
 
-### Unit Tests
+### API 테스트
 ```bash
-# 컴포넌트 테스트
-bun test src/components/**/*.test.tsx
-
-# API 테스트  
-bun test src/lib/**/*.test.ts
-```
-
-### Integration Tests
-```bash
-# BFF API 테스트
+# BFF API 통합 테스트
 bun test apps/bff/src/**/*.test.ts
 
-# DB 연결 테스트
+# 데이터베이스 연결 테스트  
 bun test apps/bff/src/lib/db.test.ts
 ```
 
-## 🚀 배포 가이드
+### E2E 테스트 (계획)
+```bash
+# Playwright 기반 브라우저 테스트
+npm run test:e2e
 
-### Docker 구성
-```dockerfile
-# Frontend
-FROM node:18-alpine AS web
-WORKDIR /app
-COPY apps/web/ .
-RUN npm install && npm run build
-
-# BFF
-FROM oven/bun:1 AS bff  
-WORKDIR /app
-COPY apps/bff/ .
-RUN bun install
-CMD ["bun", "start"]
+# 지도 인터랙션 테스트
+npm run test:map
 ```
 
-### 환경별 배포
-- **개발**: `localhost` 환경
-- **스테이징**: Docker Compose
-- **프로덕션**: Kubernetes 또는 클라우드 서비스
+## 📈 로드맵
 
-## 🤝 기여하기
+### ✅ 완료된 기능
+- **기본 지도 시스템**: 카카오맵 + 3D Cesium 통합
+- **부동산 검색**: 실시간 아파트 검색 및 필터링
+- **실거래가 조회**: 국토부 데이터 연동
+- **Firebase 인증**: 구글 로그인 시스템
+- **임장 메모 시스템**: 사진 포함 메모 작성
+- **AI 분석 도우미**: OpenAI 기반 종합 분석
+- **즐겨찾기 시스템**: 클라우드 동기화 북마크
 
-### 개발 환경 설정
-1. 저장소 Fork
-2. Feature 브랜치 생성: `git checkout -b feature/new-feature`
-3. 변경사항 커밋: `git commit -m 'Add new feature'`
-4. 브랜치 푸시: `git push origin feature/new-feature`  
-5. Pull Request 생성
+### 🚧 개발 중
+- **모바일 최적화**: PWA 지원 및 모바일 UX 개선
+- **고급 필터링**: 가격대, 면적, 건축연도 다중 필터
+- **가격 알림**: 실시간 시세 변동 알림 서비스
 
-### 코드 리뷰 가이드라인
-- **타입 안전성** 확인
-- **성능 영향도** 검토
-- **보안 취약점** 점검
-- **테스트 커버리지** 유지
+### 📋 계획된 기능
+- **소셜 기능**: 임장 후기 공유 및 커뮤니티
+- **포트폴리오**: 투자 아파트 관리 도구  
+- **머신러닝 예측**: 가격 동향 예측 모델
+- **오픈 API**: 외부 개발자용 API 제공
 
-## 📋 로드맵
 
-### Phase 1 (현재)
-- ✅ 기본 지도 시스템
-- ✅ WMS 레이어 지원
-- ✅ 아파트 검색 기능
-- ✅ 3D 지도 뷰어
 
-### Phase 2 (계획)
-- [ ] 부동산 위험도 스코어링
-- [ ] 실시간 시세 알림
-- [ ] 투자 포트폴리오 관리
-- [ ] 머신러닝 가격 예측
 
-### Phase 3 (장기)
-- [ ] 모바일 앱 (React Native)
-- [ ] 소셜 기능 (커뮤니티)
-- [ ] 전문가 분석 리포트
-- [ ] 오픈 API 제공
 
-## 📄 라이선스
-
-MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
-
-## 📞 문의사항
-
-- **이슈 등록**: [GitHub Issues](https://github.com/your-username/OpenImjang/issues)
-- **토론**: [GitHub Discussions](https://github.com/your-username/OpenImjang/discussions)
-
----
-
-**OpenImjang**은 오픈소스 부동산 분석 플랫폼으로, 투명하고 접근 가능한 부동산 정보를 제공하는 것을 목표로 합니다.
+**OpenImjang**은 AI 기술을 활용하여 부동산 투자 의사결정을 돕는 오픈소스 플랫폼입니다. 
+투명하고 접근 가능한 부동산 정보 제공을 통해 더 나은 투자 환경을 만들어갑니다. 🏠✨

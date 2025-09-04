@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import RealEstateDealsTable from "./RealEstateDealsTable";
 import BuildingLandInfo from "./BuildingLandInfo";
 import NearbyInfoPanel from "./NearbyInfoPanel";
+import AiSummaryPanel from "./AiSummaryPanel";
 import type { POIItem } from "@/types/poi";
 
 type PNUData = {
@@ -21,9 +22,11 @@ type SummaryCardProps = {
     onMore?: () => void;
     onExpandChange?: (isExpanded: boolean) => void; // ✅ 확장 상태 변경 콜백 추가
     onPOIHover?: (poi: POIItem | null) => void; // POI 호버 콜백
+    onFavoriteToggle?: (apt: { id: number; apt_nm: string; jibun_address: string; lat: number; lon: number }) => void; // 즐겨찾기 토글 콜백
+    isFavorited?: boolean; // 즐겨찾기 상태
 };
 
-export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover }: SummaryCardProps) {
+export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited }: SummaryCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("실거래가");
     const [pnuData, setPnuData] = useState<PNUData | null>(null);
@@ -40,14 +43,11 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
             const fetchPNU = async () => {
                 setIsPnuLoading(true);
                 try {
-                    console.log(`🏢 PNU 조회: aptId=${selectedApt.id}`);
-                    
                     const res = await fetch(`/api/search/pnu/${selectedApt.id}`);
                     const data = await res.json();
                     
                     if (res.ok) {
                         setPnuData(data);
-                        console.log(`🏢 PNU 조회 결과:`, data);
                     } else {
                         setPnuData({ pnu: null, error: data.error || "PNU 조회 실패" });
                     }
@@ -65,9 +65,10 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
     }, [selectedApt?.id]);
 
     const tabs = [
-        { id: "실거래가", label: "실거래가", icon: "💰" },
-        { id: "건물/토지정보", label: "건물/토지정보", icon: "🏢" },
-        { id: "주변정보", label: "주변정보", icon: "🗺️" }
+        { id: "실거래가", label: "실거래가" },
+        { id: "건물/토지정보", label: "건물/토지정보" },
+        { id: "주변정보", label: "주변정보" },
+        { id: "AI스마트요약", label: "AI 스마트 요약" }
     ];
 
     const handleMoreClick = () => {
@@ -83,6 +84,12 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
         setIsExpanded(false);
     };
 
+    const handleFavoriteClick = () => {
+        if (selectedApt && onFavoriteToggle) {
+            onFavoriteToggle(selectedApt);
+        }
+    };
+
     return (
         <div className={`absolute left-4 z-50 bg-white shadow-xl rounded-xl border border-gray-200 transition-all duration-300 ${isExpanded
                 ? 'w-[29rem] h-[calc(100vh-8rem)] top-20' // ✅ 폭 20% 감소 (36rem→29rem), TopBar 아래 여유공간 확보 (top-4→top-20)
@@ -95,9 +102,20 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                         <>
                             <div className="flex items-start justify-between mb-2">
                                 <div className="flex-1">
-                                    <h2 className="text-lg font-semibold text-gray-800 mb-1">
-                                        {selectedApt.apt_nm || "아파트명 없음"}
-                                    </h2>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h2 className="text-lg font-semibold text-gray-800">
+                                            {selectedApt.apt_nm || "아파트명 없음"}
+                                        </h2>
+                                        <button
+                                            onClick={handleFavoriteClick}
+                                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                            title={isFavorited ? "즐겨찾기 해제" : "즐겨찾기 등록"}
+                                        >
+                                            <svg className="w-5 h-5" fill={isFavorited ? "#FCD34D" : "none"} stroke={isFavorited ? "#FCD34D" : "#6B7280"} viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                            </svg>
+                                        </button>
+                                    </div>
                                     <div className="space-y-1 mb-2">
                                         <p className="text-sm text-gray-600">
                                             📍 {selectedApt.jibun_address || "주소 정보 없음"}
@@ -122,7 +140,7 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
 
                             <button
                                 onClick={handleMoreClick}
-                                className="w-full mt-3 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                                className="w-full mt-3 px-4 py-2 bg-[#14e3dc] text-white text-sm font-medium rounded-lg hover:bg-[#12d4cc] transition-colors"
                             >
                                 자세히 보기
                             </button>
@@ -149,9 +167,20 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                     {/* 헤더 */}
                     <div className="p-4 border-b border-gray-200 flex-shrink-0">
                         <div className="flex items-center justify-between mb-3">
-                            <h2 className="text-xl font-bold text-gray-800">
-                                {selectedApt?.apt_nm}
-                            </h2>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-xl font-bold text-gray-800">
+                                    {selectedApt?.apt_nm}
+                                </h2>
+                                <button
+                                    onClick={handleFavoriteClick}
+                                    className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                    title={isFavorited ? "즐겨찾기 해제" : "즐겨찾기 등록"}
+                                >
+                                    <svg className="w-5 h-5" fill={isFavorited ? "#FCD34D" : "none"} stroke={isFavorited ? "#FCD34D" : "#6B7280"} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                    </svg>
+                                </button>
+                            </div>
                             <button
                                 onClick={handleCloseExpanded}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -177,12 +206,11 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === tab.id
-                                            ? 'text-blue-600 border-b-2 border-blue-600'
-                                            : 'text-gray-600 hover:text-gray-800'
+                                    className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === tab.id
+                                            ? 'text-white bg-[#14e3dc] rounded-t-lg border-b-2 border-[#14e3dc]'
+                                            : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-t-lg'
                                         }`}
                                 >
-                                    <span>{tab.icon}</span>
                                     {tab.label}
                                 </button>
                             ))}
@@ -214,6 +242,15 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 lon={selectedApt.lon}
                                 aptName={selectedApt.apt_nm}
                                 onPOIHover={onPOIHover}
+                            />
+                        )}
+                        {activeTab === "AI스마트요약" && selectedApt && (
+                            <AiSummaryPanel
+                                aptId={selectedApt.id}
+                                aptName={selectedApt.apt_nm}
+                                lat={selectedApt.lat}
+                                lon={selectedApt.lon}
+                                jibunAddress={selectedApt.jibun_address}
                             />
                         )}
                     </div>

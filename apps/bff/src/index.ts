@@ -9,6 +9,7 @@ import { sql } from "kysely";
 import upisGeoRouter from './routes/geo/upis';
 import buildings from './routes/geo/buildings';
 import poi from './routes/poi';
+import { aiRoute } from './routes/ai';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -27,6 +28,7 @@ app.use('*', cors({
 // 라우트 등록
 app.route('/api/search', searchRoute);
 app.route('/api/poi', poi);
+app.route('/api/ai', aiRoute);
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
 
