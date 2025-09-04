@@ -112,8 +112,8 @@ OpenImjang/
 │       │       ├── useWalkingMode.ts         # 🆕 워킹 모드
 │       │       └── useWindowView.ts          # 🆕 창문 뷰
 │       └── public/
-│           ├── js/cesium/            # Cesium 3D 라이브러리
-│           └── code-example/         # MapPrime 예제 코드
+│           └── js/cesium/            # Cesium 3D 라이브러리
+
 ├── db/                              # 데이터베이스 & ETL
 │   └── scripts/
 │       ├── fetch/                   # 🆕 데이터 수집 스크립트
@@ -409,7 +409,6 @@ POST /api/ai/chat
 
 ### 🤖 AI 임장 도우미
 - **종합 분석**: 실거래가, 건물정보, 주변환경을 AI가 통합 분석
-- **투자 점수**: 10점 만점 투자 매력도 평가
 - **채팅봇**: 부동산 관련 질의응답 (컨텍스트 유지)
 - **개인화**: 사용자의 임장 메모와 선호도 반영
 
@@ -439,63 +438,7 @@ POST /api/ai/chat
 - **실시간 피드백**: 로딩 상태, 에러 처리
 - **통합 브랜드 컬러**: #14e3dc 민트 그린 테마
 
-## ⚡ 성능 최적화
 
-### Frontend 최적화
-```typescript
-// React 19 Concurrent Features 활용
-import { startTransition } from 'react';
-
-// 무거운 작업을 백그라운드로 이동
-startTransition(() => {
-  setSearchResults(filteredResults);
-});
-
-// 컴포넌트 메모이제이션
-const MapControls = memo(({ map, isActive }) => {
-  return useMemo(() => (
-    <div>{/* 지도 컨트롤 */}</div>
-  ), [map, isActive]);
-});
-```
-
-### Backend 최적화
-```typescript
-// Bun 고성능 런타임 활용
-import { Hono } from 'hono';
-const app = new Hono();
-
-// 타입 안전 쿼리 (Kysely)
-const results = await db
-  .selectFrom('oi.apt_info')
-  .selectAll()
-  .where('lat', '>', lat - 0.01)
-  .where('lat', '<', lat + 0.01) 
-  .execute();
-
-// 응답 캐싱
-app.use('/api/search/*', async (c, next) => {
-  c.header('Cache-Control', 'public, max-age=300'); // 5분 캐시
-  await next();
-});
-```
-
-### Database 최적화
-```sql
--- 공간 인덱스로 지리 쿼리 가속화
-CREATE INDEX CONCURRENTLY idx_apt_info_geom 
-ON oi.apt_info USING GIST(geom);
-
--- 부분 인덱스로 자주 조회되는 데이터만 인덱싱
-CREATE INDEX idx_apt_deal_recent 
-ON oi.apt_deal_all (deal_year, deal_month) 
-WHERE deal_year >= 2023;
-
--- 쿼리 최적화 확인
-EXPLAIN (ANALYZE, BUFFERS) 
-SELECT * FROM oi.apt_info 
-WHERE ST_DWithin(geom, ST_Point(127.0, 37.5), 1000);
-```
 
 ## 🔒 보안 고려사항
 
