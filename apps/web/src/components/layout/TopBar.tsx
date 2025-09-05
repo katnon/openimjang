@@ -142,7 +142,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                                 if (fallback) fallback.style.display = 'flex';
                             }}
                         />
-                        <div className="w-8 h-8 bg-teal-500 rounded-lg items-center justify-center hidden">
+                        <div className="w-8 h-8 bg-primary-500 rounded-lg items-center justify-center hidden">
                             <span className="text-white font-bold text-sm">OI</span>
                         </div>
                         <span className="font-bold text-xl text-gray-800">OpenImjang</span>
@@ -153,7 +153,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                         <input
                             type="text"
                             placeholder="주소나 아파트 이름을 입력하세요"
-                            className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#14e3dc] focus:border-[#14e3dc]"
+                            className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -162,7 +162,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                         />
                         <button
                             onClick={handleSubmit}
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#14e3dc]"
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-primary-500"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -191,7 +191,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                 <div className="flex items-center gap-2">
                     <button
                         onClick={onOpen3D}
-                        className="px-4 py-2 text-sm font-medium border border-[#14e3dc] text-[#14e3dc] hover:bg-[#14e3dc] hover:text-white rounded-lg transition-colors"
+                        className="px-4 py-2 text-sm font-medium border border-primary-500 text-primary-600 hover:bg-primary-500 hover:text-white rounded-lg transition-colors"
                     >
                         3D지도 보기
                     </button>
@@ -199,7 +199,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                     {user && onOpenMyImjang && (
                         <button
                             onClick={onOpenMyImjang}
-                            className="px-4 py-2 text-sm font-medium border border-[#14e3dc] text-[#14e3dc] hover:bg-[#14e3dc] hover:text-white rounded-lg transition-colors"
+                            className="px-4 py-2 text-sm font-medium border border-secondary-500 text-secondary-600 hover:bg-secondary-500 hover:text-white rounded-lg transition-colors"
                         >
                             내 임장
                         </button>
@@ -208,9 +208,9 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                     {user && onOpenChatbot && (
                         <button
                             onClick={onOpenChatbot}
-                            className="px-4 py-2 text-sm font-medium bg-[#14e3dc] text-white hover:bg-[#12d4cc] rounded-lg transition-colors flex items-center gap-2"
+                            className="px-4 py-2 text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 rounded-lg transition-colors flex items-center gap-2"
                         >
-                            🤖 AI 챗봇
+                            🏠 임장봇
                         </button>
                     )}
                     
@@ -236,7 +236,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                                     />
                                 ) : null}
                                 <div 
-                                    className="w-6 h-6 bg-[#14e3dc] rounded-full flex items-center justify-center"
+                                    className="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center"
                                     style={{ display: user.photoURL ? 'none' : 'flex' }}
                                 >
                                     <span className="text-white text-xs font-bold">
@@ -299,7 +299,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                         /* 로그인되지 않은 상태 */
                         <button
                             onClick={onOpenAuth}
-                            className="px-4 py-2 text-sm font-medium border border-[#14e3dc] text-[#14e3dc] hover:bg-[#14e3dc] hover:text-white rounded-lg transition-colors"
+                            className="px-4 py-2 text-sm font-medium border border-primary-500 text-primary-600 hover:bg-primary-500 hover:text-white rounded-lg transition-colors"
                         >
                             로그인
                         </button>

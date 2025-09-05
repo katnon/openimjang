@@ -13,8 +13,8 @@ const SERVICE_KEY = process.env.RTMS_API_KEY!;
 const DATABASE_URL = process.env.DATABASE_URL!;
 
 const RETRY_ONLY = new Set([
-  // 실패했던 코드/연월 → "법정동코드_연월" 형식으로 명시
-  '11230_202503',
+  // 특정 항목만 재시도할 경우 여기에 추가 (예: '11230_202503')
+  // 전체 수집을 위해 빈 배열로 설정
 ]);
 
 const sql = postgres(DATABASE_URL, {
@@ -108,6 +108,12 @@ async function fetchAptTradeRaw(code5: string, ym: string) {
 
     let inserted = 0;
     for (const d of rows) {
+      // ✅ 해제 거래 필터링: cdealType 또는 cdealDay 값이 존재하면 스킵
+      const cancelType = d.cdealType ?? d.cancelDealType;
+      const cancelDay = d.cdealDay ?? d.cancelDealDay;
+      if (cancelType && String(cancelType).trim() !== '') continue;
+      if (cancelDay && String(cancelDay).trim() !== '') continue;
+
       try {
         await sql`
           INSERT INTO oi.apt_deal_trade_raw (
@@ -164,7 +170,7 @@ async function run() {
 
   const ymList: string[] = [];
   for (
-    let d = dayjs('2025-01-01');
+    let d = dayjs('2020-01-01');
     d.isSame(dayjs(), 'month') || d.isBefore(dayjs(), 'month');
     d = d.add(1, 'month')
   ) {

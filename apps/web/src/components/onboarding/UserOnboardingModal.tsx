@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/firebase";
+import { RangeSlider } from "@/components/shared/RangeSlider";
 
 type UserProfile = {
     purpose: string[]; // 매매/전세/월세/투자 (다중선택 가능)
     workLocation?: string; // 직장 또는 원하는 지하철역
     commutingRadius: number; // 통근 반경 (분)
-    budgetRange: string; // 예상 자금 범위
+    budgetRange: [number, number]; // 전월세 보증금 및 매매 자금 범위 [최소, 최대] (원 단위)
+    monthlyRent: [number, number]; // 월세 금액 [최소, 최대] (원 단위)
     preferredBuildingAge: string; // 선호 건물 연식
     familyType: string; // 가족 구성
     priorities: string[]; // 우선순위 (다중선택)
@@ -29,10 +31,168 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
     const [profile, setProfile] = useState<Partial<UserProfile>>({
         purpose: [],
         commutingRadius: 30,
+        budgetRange: [0, 1000000000], // [최소: 0원, 최대: 10억원]
+        monthlyRent: [0, 5000000], // [최소: 0원, 최대: 500만원]
         priorities: []
     });
 
     if (!isOpen || !user) return null;
+
+    // 선형 슬라이더를 위한 값 변환 함수들
+    const getBudgetValueFromLinear = (linearValue: number): number => {
+        let rawValue;
+        // linearValue는 0-100 범위의 값
+        if (linearValue <= 20) {
+            // 0-20%: 0원 ~ 1천만원 (100만원 단위)
+            rawValue = (linearValue / 20) * 10000000;
+            return Math.round(rawValue / 1000000) * 1000000; // 100만원 단위로 반올림
+        } else if (linearValue <= 35) {
+            // 20-35%: 1천만원 ~ 5천만원 (500만원 단위)
+            const ratio = (linearValue - 20) / 15;
+            rawValue = 10000000 + ratio * 40000000;
+            return Math.round(rawValue / 5000000) * 5000000; // 500만원 단위로 반올림
+        } else if (linearValue <= 60) {
+            // 35-60%: 5천만원 ~ 5억원 (1천만원 단위)
+            const ratio = (linearValue - 35) / 25;
+            rawValue = 50000000 + ratio * 450000000;
+            return Math.round(rawValue / 10000000) * 10000000; // 1천만원 단위로 반올림
+        } else if (linearValue <= 75) {
+            // 60-75%: 5억원 ~ 10억원 (5천만원 단위)
+            const ratio = (linearValue - 60) / 15;
+            rawValue = 500000000 + ratio * 500000000;
+            return Math.round(rawValue / 50000000) * 50000000; // 5천만원 단위로 반올림
+        } else if (linearValue <= 90) {
+            // 75-90%: 10억원 ~ 20억원 (1억 단위)
+            const ratio = (linearValue - 75) / 15;
+            rawValue = 1000000000 + ratio * 1000000000;
+            return Math.round(rawValue / 100000000) * 100000000; // 1억 단위로 반올림
+        } else if (linearValue <= 99) {
+            // 90-99%: 20억원 ~ 50억원 (5억 단위)
+            const ratio = (linearValue - 90) / 9;
+            rawValue = 2000000000 + ratio * 3000000000;
+            return Math.round(rawValue / 500000000) * 500000000; // 5억 단위로 반올림
+        } else {
+            // 100%: 50억원 이상
+            return 5000000001;
+        }
+    };
+
+    const getLinearFromBudgetValue = (value: number): number => {
+        if (value <= 10000000) {
+            // 0원 ~ 1천만원
+            return (value / 10000000) * 20;
+        } else if (value <= 50000000) {
+            // 1천만원 ~ 5천만원
+            return 20 + ((value - 10000000) / 40000000) * 15;
+        } else if (value <= 500000000) {
+            // 5천만원 ~ 5억원
+            return 35 + ((value - 50000000) / 450000000) * 25;
+        } else if (value <= 1000000000) {
+            // 5억원 ~ 10억원
+            return 60 + ((value - 500000000) / 500000000) * 15;
+        } else if (value <= 2000000000) {
+            // 10억원 ~ 20억원
+            return 75 + ((value - 1000000000) / 1000000000) * 15;
+        } else if (value <= 5000000000) {
+            // 20억원 ~ 50억원
+            return 90 + ((value - 2000000000) / 3000000000) * 9;
+        } else {
+            // 50억원 이상
+            return 100;
+        }
+    };
+
+    const getMonthlyRentValueFromLinear = (linearValue: number): number => {
+        let rawValue;
+        // linearValue는 0-100 범위의 값
+        if (linearValue <= 40) {
+            // 0-40%: 0원 ~ 100만원 (5만원 단위)
+            rawValue = (linearValue / 40) * 1000000;
+            return Math.round(rawValue / 50000) * 50000; // 5만원 단위로 반올림
+        } else if (linearValue <= 70) {
+            // 40-70%: 100만원 ~ 300만원 (10만원 단위)
+            const ratio = (linearValue - 40) / 30;
+            rawValue = 1000000 + ratio * 2000000;
+            return Math.round(rawValue / 100000) * 100000; // 10만원 단위로 반올림
+        } else if (linearValue <= 85) {
+            // 70-85%: 300만원 ~ 500만원 (10만원 단위)
+            const ratio = (linearValue - 70) / 15;
+            rawValue = 3000000 + ratio * 2000000;
+            return Math.round(rawValue / 100000) * 100000; // 10만원 단위로 반올림
+        } else {
+            // 85-100%: 500만원 ~ 1000만원 (20만원 단위)
+            const ratio = (linearValue - 85) / 15;
+            rawValue = 5000000 + ratio * 5000000;
+            return Math.round(rawValue / 200000) * 200000; // 20만원 단위로 반올림
+        }
+    };
+
+    const getLinearFromMonthlyRentValue = (value: number): number => {
+        if (value <= 1000000) {
+            // 0원 ~ 100만원
+            return (value / 1000000) * 40;
+        } else if (value <= 3000000) {
+            // 100만원 ~ 300만원
+            return 40 + ((value - 1000000) / 2000000) * 30;
+        } else if (value <= 5000000) {
+            // 300만원 ~ 500만원
+            return 70 + ((value - 3000000) / 2000000) * 15;
+        } else {
+            // 500만원 ~ 1000만원
+            return 85 + ((value - 5000000) / 5000000) * 15;
+        }
+    };
+
+
+    const formatBudgetAmount = (amount: number): string => {
+        if (amount === 0) return '0원';
+        if (amount >= 5000000001) return '50억원 이상';
+        
+        // 1억(100000000) 이상인 경우 억+만원 단위로 표시
+        if (amount >= 100000000) {
+            const eok = Math.floor(amount / 100000000); // 억 단위
+            const remainder = amount % 100000000; // 억 단위를 뺀 나머지
+            const man = Math.floor(remainder / 10000); // 만원 단위
+            
+            if (man === 0) {
+                return `${eok}억원`;
+            } else {
+                return `${eok}억 ${man}만원`;
+            }
+        }
+        
+        // 1억 미만은 만원 단위로만 표시
+        if (amount >= 10000) {
+            const man = Math.floor(amount / 10000);
+            return `${man}만원`;
+        }
+        
+        return `${amount.toLocaleString()}원`;
+    };
+
+    const formatMonthlyRent = (amount: number): string => {
+        if (amount === 0) return '0원';
+        if (amount >= 10000000) return '1천만원 이상';
+        if (amount >= 1000000) {
+            return `${(amount / 10000).toFixed(0)}만원`;
+        }
+        if (amount >= 10000) {
+            return `${(amount / 10000).toFixed(0)}만원`;
+        }
+        return `${amount.toLocaleString()}원`;
+    };
+
+    // Range 슬라이더 헬퍼 함수들
+    const formatBudgetRange = (range: [number, number]): string => {
+        const [min, max] = range;
+        return `${formatBudgetAmount(min)} ~ ${formatBudgetAmount(max)}`;
+    };
+
+    const formatMonthlyRentRange = (range: [number, number]): string => {
+        const [min, max] = range;
+        return `${formatMonthlyRent(min)} ~ ${formatMonthlyRent(max)}`;
+    };
+
 
     const handleSaveProfile = async () => {
         if (!user) {
@@ -112,7 +272,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                                     }))}
                                     className={`p-4 rounded-lg border-2 transition-colors ${
                                         profile.purpose?.includes(option)
-                                            ? 'border-[#14e3dc] bg-[#14e3dc] bg-opacity-10 text-[#14e3dc]'
+                                            ? 'border-primary-500 bg-primary-100 text-primary-700'
                                             : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                                     }`}
                                 >
@@ -149,7 +309,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                                     onClick={() => setProfile(prev => ({ ...prev, familyType: option }))}
                                     className={`p-4 rounded-lg border-2 transition-colors text-left ${
                                         profile.familyType === option
-                                            ? 'border-[#14e3dc] bg-[#14e3dc] bg-opacity-10 text-[#14e3dc]'
+                                            ? 'border-secondary-500 bg-secondary-100 text-secondary-700'
                                             : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                                     }`}
                                 >
@@ -182,7 +342,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                                     placeholder="예: 강남역, 여의도, 판교 등"
                                     value={profile.workLocation || ''}
                                     onChange={(e) => setProfile(prev => ({ ...prev, workLocation: e.target.value }))}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#14e3dc] focus:border-transparent"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                                 />
                             </div>
                             
@@ -215,34 +375,56 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                     <div className="space-y-6">
                         <div className="text-center">
                             <h3 className="text-xl font-bold text-gray-800 mb-2">
-                                예상 자금 범위를 선택해주세요
+                                자금 범위를 설정해주세요
                             </h3>
                             <p className="text-sm text-gray-600">
-                                적절한 매물 추천을 위해 필요합니다
+                                매매, 전세, 월세 목적에 맞는 정보를 제공해드립니다
                             </p>
                         </div>
                         
-                        <div className="grid grid-cols-1 gap-3">
-                            {[
-                                '5억원 미만',
-                                '5억원 ~ 10억원',
-                                '10억원 ~ 15억원',
-                                '15억원 ~ 20억원',
-                                '20억원 ~ 30억원',
-                                '30억원 이상'
-                            ].map(option => (
-                                <button
-                                    key={option}
-                                    onClick={() => setProfile(prev => ({ ...prev, budgetRange: option }))}
-                                    className={`p-4 rounded-lg border-2 transition-colors text-left ${
-                                        profile.budgetRange === option
-                                            ? 'border-[#14e3dc] bg-[#14e3dc] bg-opacity-10 text-[#14e3dc]'
-                                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                                    }`}
-                                >
-                                    <div className="font-semibold">{option}</div>
-                                </button>
-                            ))}
+                        <div className="space-y-8">
+                            {/* 전월세 보증금 또는 매매 자금 범위 슬라이더 */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
+                                    전월세 보증금 또는 매매 자금
+                                </label>
+                                <RangeSlider
+                                    min={0}
+                                    max={5000000001}
+                                    step={1000000}
+                                    value={profile.budgetRange || [0, 1000000000]}
+                                    onChange={(newValue) => setProfile(prev => ({ ...prev, budgetRange: newValue }))}
+                                    valueToLinear={getLinearFromBudgetValue}
+                                    linearToValue={getBudgetValueFromLinear}
+                                    formatValue={formatBudgetAmount} // 억 단위 포맷팅 함수 추가
+                                    showInputControls={true}
+                                    inputUnit="만원"
+                                    inputStep={100} // 100만원 단위로 조정
+                                    valueToInputUnit={(value) => Math.round(value / 10000)} // 원 -> 만원
+                                    inputUnitToValue={(inputValue) => inputValue * 10000} // 만원 -> 원
+                                />
+                            </div>
+
+                            {/* 월세 슬라이더 */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
+                                    월세
+                                </label>
+                                <RangeSlider
+                                    min={0}
+                                    max={10000000}
+                                    step={10000}
+                                    value={profile.monthlyRent || [0, 5000000]}
+                                    onChange={(newValue) => setProfile(prev => ({ ...prev, monthlyRent: newValue }))}
+                                    valueToLinear={getLinearFromMonthlyRentValue}
+                                    linearToValue={getMonthlyRentValueFromLinear}
+                                    showInputControls={true}
+                                    inputUnit="만원"
+                                    inputStep={10} // 10만원 단위로 조정
+                                    valueToInputUnit={(value) => Math.round(value / 10000)} // 원 -> 만원
+                                    inputUnitToValue={(inputValue) => inputValue * 10000} // 만원 -> 원
+                                />
+                            </div>
                         </div>
                     </div>
                 );
@@ -269,7 +451,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                                     onClick={() => setProfile(prev => ({ ...prev, preferredBuildingAge: option }))}
                                     className={`p-4 rounded-lg border-2 transition-colors text-left ${
                                         profile.preferredBuildingAge === option
-                                            ? 'border-[#14e3dc] bg-[#14e3dc] bg-opacity-10 text-[#14e3dc]'
+                                            ? 'border-primary-500 bg-primary-100 text-primary-700'
                                             : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                                     }`}
                                 >
@@ -311,7 +493,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                                     }))}
                                     className={`p-3 rounded-lg border-2 transition-colors text-sm ${
                                         profile.priorities?.includes(option)
-                                            ? 'border-[#14e3dc] bg-[#14e3dc] bg-opacity-10 text-[#14e3dc]'
+                                            ? 'border-secondary-500 bg-secondary-100 text-secondary-700'
                                             : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                                     }`}
                                 >
@@ -332,7 +514,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
             case 1: return profile.purpose && profile.purpose.length > 0;
             case 2: return profile.familyType;
             case 3: return true; // 통근시간과 위치는 선택사항
-            case 4: return profile.budgetRange;
+            case 4: return true; // 자금 범위는 기본값 0으로 시작하므로 항상 완료
             case 5: return profile.preferredBuildingAge;
             case 6: return profile.priorities && profile.priorities.length > 0;
             default: return false;
@@ -371,7 +553,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                     {/* 진행률 바 */}
                     <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
                         <div 
-                            className="bg-[#14e3dc] h-2 rounded-full transition-all duration-300"
+                            className="bg-primary-500 h-2 rounded-full transition-all duration-300"
                             style={{ width: `${(step / 6) * 100}%` }}
                         ></div>
                     </div>
@@ -399,7 +581,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                             disabled={!isStepComplete()}
                             className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
                                 isStepComplete()
-                                    ? 'bg-[#14e3dc] text-white hover:bg-[#12d4cc]'
+                                    ? 'bg-primary-500 text-white hover:bg-primary-600'
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
                         >
@@ -411,7 +593,7 @@ export default function UserOnboardingModal({ isOpen, onComplete, onSkip }: Onbo
                             disabled={!isStepComplete() || isLoading}
                             className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
                                 isStepComplete() && !isLoading
-                                    ? 'bg-[#14e3dc] text-white hover:bg-[#12d4cc]'
+                                    ? 'bg-primary-500 text-white hover:bg-primary-600'
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
                         >

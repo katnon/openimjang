@@ -14,10 +14,10 @@ const API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataS
 const SERVICE_KEY = process.env.RTMS_API_KEY!;
 const DATABASE_URL = process.env.DATABASE_URL!;
 
-// ✅ 실패한 항목만 다시 시도할 수 있도록 세트로 정의
+// ✅ 특정 항목만 재시도할 경우 여기에 추가 (전체 수집을 위해 빈 배열로 설정)
 const RETRY_ONLY = new Set([
-    '11620_202507',
-    '11620_202508',
+    // 특정 항목만 재시도할 경우 여기에 추가 (예: '11620_202507')
+    // 전체 수집을 위해 빈 배열로 설정
 ]);
 
 if (!SERVICE_KEY || !DATABASE_URL) {
@@ -117,6 +117,12 @@ async function fetchAptRentRaw(code5: string, ym: string) {
 
         let inserted = 0;
         for (const d of rows) {
+            // ✅ 해제 거래 필터링
+            const cancelType = d.cdealType ?? d.cancelDealType;
+            const cancelDay = d.cdealDay ?? d.cancelDealDay;
+            if (cancelType && String(cancelType).trim() !== '') continue;
+            if (cancelDay && String(cancelDay).trim() !== '') continue;
+
             try {
                 await sql`
           INSERT INTO oi.apt_deal_rent_raw (
@@ -162,7 +168,7 @@ async function run() {
     const lawdList: string[] = codes.map((r: any) => r.lawd);
 
     const ymList: string[] = [];
-    for (let d = dayjs('2025-01-01'); d.isSame(dayjs(), 'month') || d.isBefore(dayjs(), 'month'); d = d.add(1, 'month')) {
+    for (let d = dayjs('2020-01-01'); d.isSame(dayjs(), 'month') || d.isBefore(dayjs(), 'month'); d = d.add(1, 'month')) {
         ymList.push(d.format('YYYYMM'));
     }
 

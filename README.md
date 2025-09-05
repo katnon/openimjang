@@ -87,6 +87,8 @@ OpenImjang/
 │       │   │   │   └── AIChatbot.tsx
 │       │   │   ├── auth/            # 🆕 인증 컴포넌트
 │       │   │   │   └── AuthPage.tsx
+│       │   │   ├── onboarding/      # 🆕 온보딩 시스템
+│       │   │   │   └── UserOnboardingModal.tsx # 사용자 맞춤 설정
 │       │   │   ├── card/
 │       │   │   │   ├── AiSummaryPanel.tsx    # 🆕 AI 종합 분석 패널
 │       │   │   │   ├── SummaryCard.tsx       # 업데이트: 4개 탭 구조
@@ -245,31 +247,100 @@ CREATE TABLE oi.apt_info (
 );
 
 CREATE INDEX idx_apt_info_geom ON oi.apt_info USING GIST(geom);
-CREATE INDEX idx_apt_info_name ON oi.apt_info (apt_nm);
 ```
 
-#### `oi.apt_deal_all` - 통합 거래 데이터
+#### `oi.apt_deal_trade_raw` - 매매 실거래 원시 데이터
+공공데이터포털 RTMS API에서 수집한 아파트 매매 실거래 원시 데이터
+```sql
+CREATE TABLE oi.apt_deal_trade_raw (
+    id SERIAL PRIMARY KEY,
+    sggCd VARCHAR(5),                        -- 시군구코드
+    umdCd VARCHAR(5),                        -- 읍면동코드  
+    landCd VARCHAR(1),                       -- 토지구분코드
+    bonbun VARCHAR(4),                       -- 본번
+    bubun VARCHAR(4),                        -- 부번
+    aptNm VARCHAR(40),                       -- 아파트명
+    jibun VARCHAR(10),                       -- 지번
+    excluUseAr DOUBLE PRECISION,             -- 전용면적(㎡)
+    dealYear INTEGER,                        -- 계약년도
+    dealMonth INTEGER,                       -- 계약월
+    dealDay INTEGER,                         -- 계약일
+    dealAmount INTEGER,                      -- 거래금액(만원)
+    floor INTEGER,                           -- 층수
+    buildYear INTEGER,                       -- 건축년도
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### `oi.apt_deal_rent_raw` - 전월세 실거래 원시 데이터
+공공데이터포털 RTMS API에서 수집한 아파트 전월세 실거래 원시 데이터
+```sql
+CREATE TABLE oi.apt_deal_rent_raw (
+    id SERIAL PRIMARY KEY,
+    sggCd VARCHAR(5),                        -- 시군구코드
+    umdNm VARCHAR(20),                       -- 읍면동명
+    aptNm VARCHAR(40),                       -- 아파트명
+    jibun VARCHAR(10),                       -- 지번
+    excluUseAr DOUBLE PRECISION,             -- 전용면적(㎡)
+    dealYear INTEGER,                        -- 계약년도
+    dealMonth INTEGER,                       -- 계약월
+    dealDay INTEGER,                         -- 계약일
+    deposit INTEGER,                         -- 보증금(만원)
+    monthlyRent INTEGER,                     -- 월세(만원)
+    floor INTEGER,                           -- 층수
+    buildYear INTEGER,                       -- 건축년도
+    contractTerm VARCHAR(10),                -- 계약기간
+    contractType VARCHAR(10),                -- 계약구분
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### `oi.apt_deal_all` - 통합 실거래 분석 테이블
+매매/전월세 데이터를 통합하여 분석에 최적화된 형태로 정규화한 테이블
 ```sql
 CREATE TABLE oi.apt_deal_all (
     id SERIAL PRIMARY KEY,
-    apt_nm VARCHAR(100),                 -- 아파트명
-    jibun_address TEXT,                  -- 지번주소
-    exclu_use_ar NUMERIC(10, 4),         -- 전용면적(㎡)
-    deal_year INTEGER,                   -- 거래년도
-    deal_month INTEGER,                  -- 거래월
-    deal_day INTEGER,                    -- 거래일
-    deal_amount BIGINT,                  -- 매매가격(만원)
-    deposit BIGINT,                      -- 보증금(만원) 
-    monthly_rent INTEGER,                -- 월세(만원)
-    floor INTEGER,                       -- 층
-    build_year INTEGER,                  -- 건축년도
-    deal_type VARCHAR(10),               -- 거래유형 (매매/전세/월세)
-    created_at TIMESTAMP DEFAULT NOW()
+    apt_nm VARCHAR(40),                      -- 아파트명
+    jibun_address VARCHAR(50),               -- 지번주소 (매핑용)
+    deal_year INTEGER,                       -- 계약년도
+    deal_month INTEGER,                      -- 계약월  
+    deal_day INTEGER,                        -- 계약일
+    deal_amount INTEGER,                     -- 매매가(만원) - 매매거래시만
+    deposit INTEGER,                         -- 보증금(만원) - 전월세거래시
+    monthly_rent INTEGER,                    -- 월세(만원) - 월세거래시
+    exclu_use_ar DOUBLE PRECISION,           -- 전용면적(㎡)
+    floor INTEGER,                           -- 층수
+    build_year INTEGER,                      -- 건축년도
+    deal_type VARCHAR(10),                   -- 거래유형(매매/전세/월세)
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_apt_deal_all_apt_nm ON oi.apt_deal_all (apt_nm);
-CREATE INDEX idx_apt_deal_all_date ON oi.apt_deal_all (deal_year, deal_month);
+-- 성능 최적화 인덱스
+CREATE INDEX idx_apt_deal_all_name_addr ON oi.apt_deal_all(apt_nm, jibun_address);
+CREATE INDEX idx_apt_deal_all_date ON oi.apt_deal_all(deal_year DESC, deal_month DESC, deal_day DESC);
+CREATE INDEX idx_apt_deal_all_type ON oi.apt_deal_all(deal_type);
 ```
+
+### 데이터 수집 및 처리 플로우
+
+#### 1. 원시 데이터 수집
+- `fetch_trade_raw.ts` - 매매 실거래 데이터 수집 → `oi.apt_deal_trade_raw`
+- `fetch_rent_raw.ts` - 전월세 실거래 데이터 수집 → `oi.apt_deal_rent_raw`
+
+#### 2. 데이터 통합 및 정규화  
+- ETL 스크립트를 통해 raw 테이블들을 `oi.apt_deal_all`로 통합
+- 거래 유형 분류 및 데이터 품질 향상
+- 성능 최적화를 위한 인덱스 생성
+
+#### 3. AI 분석 활용
+- 챗봇 Function Calling에서 `oi.apt_deal_all` 테이블 조회
+- 거래 유형별(매매/전세/월세) 필터링
+- 면적별, 기간별 실거래가 분석
+
+### 건축물 정보 테이블
 
 #### `oi.apt_building_info` - 건축물 정보
 ```sql
@@ -344,6 +415,21 @@ CREATE INDEX idx_ai_summary_created_at ON oi.ai_smart_summary(created_at);
 ```
 
 ### 사용자 데이터 (Firebase Firestore)
+
+#### `users/{uid}/profile/basic` - 사용자 프로필 (온보딩 결과)
+```javascript
+{
+  purpose: ["매매", "전세"],       // 부동산 이용 목적 (다중선택)
+  familyType: "신혼부부 (자녀 없음)",  // 가족 구성
+  workLocation: "강남역",          // 직장/주요 목적지 (선택)
+  commutingRadius: 30,             // 희망 통근시간(분)
+  budgetRange: 300000000,          // 전월세 보증금/매매 자금 (원 단위)
+  monthlyRent: 1500000,            // 월세 금액 (원 단위)
+  preferredBuildingAge: "10년 이내", // 선호 건물 연식
+  priorities: ["교통 접근성", "생활 편의시설"], // 우선순위 (다중선택)
+  completedAt: Timestamp           // 온보딩 완료일시
+}
+```
 
 #### `users/{uid}/favorites` - 즐겨찾기
 ```javascript
@@ -444,6 +530,15 @@ POST /api/ai/chat
 
 ### 👤 개인화 서비스
 - **Firebase 인증**: 구글 OAuth 간편 로그인
+- **스마트 온보딩**: 6단계 맞춤 설정 프로세스
+  - 부동산 이용 목적 (매매/전세/월세/투자)
+  - 가족 구성 및 라이프스타일 설정
+  - 통근 시간 및 교통 접근성 고려사항
+  - **자금 범위 설정**: 단계별 슬라이더 UI
+    - 전월세 보증금/매매 자금: 0원~50억원 (가변 단위)
+    - 월세 금액: 0원~1000만원 (세밀한 단위 조절)
+  - 건물 연식 및 시설 선호도
+  - 우선순위 (교통/학군/편의시설/투자가치 등)
 - **임장 메모**: 현장 방문 후기 작성 (사진 포함)
 - **즐겨찾기**: 관심 아파트 북마크 및 지도 표시
 - **클라우드 동기화**: 모든 데이터 자동 백업
@@ -498,6 +593,9 @@ npm run test:map
 - **부동산 검색**: 실시간 아파트 검색 및 필터링
 - **실거래가 조회**: 국토부 데이터 연동
 - **Firebase 인증**: 구글 로그인 시스템
+- **스마트 온보딩**: 6단계 사용자 맞춤 설정
+  - 단계별 자금 범위 슬라이더 (가변 단위 지원)
+  - 매매/전세/월세 목적별 세분화
 - **임장 메모 시스템**: 사진 포함 메모 작성
 - **AI 분석 도우미**: OpenAI 기반 종합 분석
 - **즐겨찾기 시스템**: 클라우드 동기화 북마크

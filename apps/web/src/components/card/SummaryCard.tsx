@@ -153,17 +153,17 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                             <div className="flex gap-2 mt-3">
                                 <button
                                     onClick={handleMoreClick}
-                                    className="flex-1 px-4 py-2 bg-[#14e3dc] text-white text-sm font-medium rounded-lg hover:bg-[#12d4cc] transition-colors"
+                                    className="flex-1 px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600 transition-colors"
                                 >
                                     자세히 보기
                                 </button>
                                 {onOpenChatbot && (
                                     <button
                                         onClick={handleChatbotClick}
-                                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors flex items-center justify-center"
-                                        title="AI 챗봇으로 질문하기"
+                                        className="px-3 py-2 bg-secondary-100 hover:bg-secondary-200 text-secondary-700 text-sm font-medium rounded-lg transition-colors flex items-center justify-center"
+                                        title="임장봇으로 질문하기"
                                     >
-                                        🤖
+                                        🏠
                                     </button>
                                 )}
                             </div>
@@ -208,10 +208,10 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 {onOpenChatbot && (
                                     <button
                                         onClick={handleChatbotClick}
-                                        className="px-3 py-1.5 bg-[#14e3dc] hover:bg-[#12d4cc] text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
-                                        title="AI 챗봇으로 질문하기"
+                                        className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                                        title="임장봇으로 질문하기"
                                     >
-                                        🤖 AI 챗봇
+                                        🏠 임장봇
                                     </button>
                                 )}
                                 <button
@@ -241,8 +241,8 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === tab.id
-                                            ? 'text-white bg-[#14e3dc] rounded-t-lg border-b-2 border-[#14e3dc]'
-                                            : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-t-lg'
+                                            ? 'text-white bg-primary-500 rounded-t-lg border-b-2 border-primary-500'
+                                            : 'text-gray-600 hover:text-gray-800 hover:bg-primary-50 rounded-t-lg'
                                         }`}
                                 >
                                     {tab.label}

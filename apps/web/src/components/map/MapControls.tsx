@@ -60,8 +60,8 @@ export default function MapControls({
         }
     }, [currentMapType, onMapTypeChange]);
 
-    const btn = "w-10 h-10 rounded-xl border border-neutral-300 bg-white hover:border-[#14e3dc] shadow transition-all";
-    const btnActive = "w-10 h-10 rounded-xl border border-[#14e3dc] bg-[#14e3dc] text-white shadow transition-all";
+    const btn = "w-10 h-10 rounded-xl border border-neutral-300 bg-white hover:border-primary-500 shadow transition-all";
+    const btnActive = "w-10 h-10 rounded-xl border border-primary-500 bg-primary-500 text-white shadow transition-all";
 
     return (
         <div className="absolute right-4 top-20 z-20 flex flex-col gap-2">

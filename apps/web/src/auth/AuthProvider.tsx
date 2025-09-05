@@ -63,18 +63,35 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     // ① Firebase 로그인 상태 변화를 감지합니다.
     useEffect(() => {
+        console.log('🔥 AuthProvider useEffect 시작 - Firebase 인증 상태 리스너 등록');
+        
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            console.log('🔥 Firebase onAuthStateChanged 호출됨:', {
+                currentUser: currentUser ? {
+                    uid: currentUser.uid,
+                    email: currentUser.email,
+                    displayName: currentUser.displayName
+                } : null
+            });
+            
             setUser(currentUser);
             
             if (currentUser) {
+                console.log('✅ 사용자 로그인 상태 확인됨, 온보딩 체크 시작');
                 await checkOnboardingStatus(currentUser);
             } else {
+                console.log('❌ 사용자가 로그아웃 상태');
                 setNeedsOnboarding(false);
             }
             
             setLoading(false);
+            console.log('🔥 AuthProvider 상태 업데이트 완료:', { hasUser: !!currentUser, loading: false });
         });
-        return () => unsubscribe();
+        
+        return () => {
+            console.log('🔥 AuthProvider cleanup - 인증 리스너 해제');
+            unsubscribe();
+        };
     }, []);
 
     const markOnboardingComplete = () => {
@@ -84,16 +101,33 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     // ② Axios 요청에 Firebase ID 토큰을 자동으로 붙입니다.
     useEffect(() => {
+        console.log('🔥 Axios 인터셉터 등록');
+        
         const interceptor = axios.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
             const current = auth.currentUser;
+            console.log('🔥 Axios 요청 인터셉터 실행:', { 
+                url: config.url, 
+                hasCurrentUser: !!current,
+                currentUser: current ? { uid: current.uid, email: current.email } : null
+            });
+            
             if (current) {
-                const token = await current.getIdToken();
-                // headers.set 메서드를 사용하여 안전하게 설정
-                config.headers.set('Authorization', `Bearer ${token}`);
+                try {
+                    const token = await current.getIdToken();
+                    console.log('✅ Firebase 토큰 획득 성공:', token.substring(0, 50) + '...');
+                    // headers.set 메서드를 사용하여 안전하게 설정
+                    config.headers.set('Authorization', `Bearer ${token}`);
+                } catch (error) {
+                    console.error('❌ Firebase 토큰 획득 실패:', error);
+                }
+            } else {
+                console.log('⚠️ auth.currentUser가 null이므로 토큰을 설정하지 않음');
             }
             return config;
         });
+        
         return () => {
+            console.log('🔥 Axios 인터셉터 해제');
             axios.interceptors.request.eject(interceptor);
         };
     }, []);

@@ -44,7 +44,7 @@ async function run() {
           ${toInt(d.dealyear)}, ${toInt(d.dealmonth)}, ${toInt(d.dealday)},
           ${toInt(d.dealamount)}
         )
-        --ON CONFLICT DO NOTHING
+        ON CONFLICT DO NOTHING
       `;
             inserted++;
         } catch (e) {
@@ -70,7 +70,7 @@ async function run() {
           ${toInt(d.dealyear)}, ${toInt(d.dealmonth)}, ${toInt(d.dealday)},
           ${toInt(d.deposit)}, ${toInt(d.monthlyrent)}
         )
-        --ON CONFLICT DO NOTHING
+        ON CONFLICT DO NOTHING
       `;
             inserted++;
         } catch (e) {

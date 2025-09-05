@@ -50,7 +50,11 @@
       "Read(/C:\\OpenImjang\\apps\\bff\\src\\routes/**)",
       "Read(/C:\\OpenImjang\\apps\\web\\src\\components\\chatbot/**)",
       "Read(/C:\\OpenImjang\\apps\\web\\src\\components\\card/**)",
-      "Read(/C:\\OpenImjang\\apps\\web\\src\\components\\memo/**)"
+      "Read(/C:\\OpenImjang\\apps\\web\\src\\components\\memo/**)",
+      "Bash(claude config set permission-mode bypassPermissions)",
+      "Bash(claude config set --global permission-mode bypassPermissions)",
+      "Bash(taskkill:*)",
+      "Read(//c/Users/gunho/Pictures/Screenshots/**)"
     ],
     "deny": [],
     "ask": []

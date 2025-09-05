@@ -37,7 +37,7 @@ export default function LayerToggle({
                             <button
                                 className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                                     currentMapType === 'ROADMAP' 
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                                        ? 'bg-primary-50 text-primary-700 border border-primary-200' 
                                         : 'hover:bg-gray-50'
                                 }`}
                                 onClick={() => handleMapTypeChange('ROADMAP')}
@@ -47,7 +47,7 @@ export default function LayerToggle({
                             <button
                                 className={`w-full text-left px-3 py-2 rounded-md text-sm mt-1 transition-colors ${
                                     currentMapType === 'SATELLITE' 
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                                        ? 'bg-secondary-50 text-secondary-700 border border-secondary-200' 
                                         : 'hover:bg-gray-50'
                                 }`}
                                 onClick={() => handleMapTypeChange('SATELLITE')}
