@@ -395,7 +395,7 @@ searchRoute.get("/landuse/:aptId", async (c) => {
     }
 });
 
-// 📍 주변 정보 조회 (POI)
+// 📍 주변 정보 조회 (POI) - 카카오 로컬 API 사용
 searchRoute.get("/nearby", async (c) => {
     const lat = parseFloat(c.req.query("lat") ?? "");
     const lon = parseFloat(c.req.query("lon") ?? "");
@@ -408,23 +408,120 @@ searchRoute.get("/nearby", async (c) => {
     try {
         console.log(`📍 주변 정보 조회: 중심=(${lat}, ${lon}), 반경=${radius}m`);
 
-        // 임시 주변 정보 데이터 (실제로는 POI 데이터베이스나 외부 API 사용)
-        const mockPOIs = [
-            { id: 1, category: "교육", name: "○○초등학교", distance: 350, x: lon + 0.003, y: lat + 0.002, place_name: "○○초등학교" },
-            { id: 2, category: "교통", name: "○○역", distance: 800, x: lon - 0.007, y: lat + 0.005, place_name: "○○역" },
-            { id: 3, category: "생활", name: "이마트", distance: 1200, x: lon + 0.01, y: lat - 0.008, place_name: "이마트" },
-            { id: 4, category: "의료", name: "○○병원", distance: 600, x: lon - 0.005, y: lat - 0.004, place_name: "○○병원" }
+        const KAKAO_REST_KEY = process.env.KAKAO_REST_KEY;
+        if (!KAKAO_REST_KEY) {
+            console.warn("카카오 REST API 키가 설정되지 않아 Mock 데이터를 사용합니다.");
+            // Fallback to mock data
+            const mockPOIs = [
+                { id: 1, category: "교육", name: "인근 초등학교", distance: 350, x: lon + 0.003, y: lat + 0.002, place_name: "인근 초등학교" },
+                { id: 2, category: "교통", name: "인근 지하철역", distance: 800, x: lon - 0.007, y: lat + 0.005, place_name: "인근 지하철역" },
+                { id: 3, category: "생활", name: "대형마트", distance: 1200, x: lon + 0.01, y: lat - 0.008, place_name: "대형마트" },
+                { id: 4, category: "의료", name: "종합병원", distance: 600, x: lon - 0.005, y: lat - 0.004, place_name: "종합병원" },
+                { id: 5, category: "공공기관", name: "주민센터", distance: 400, x: lon + 0.002, y: lat - 0.003, place_name: "주민센터" }
+            ];
+            return c.json({
+                center: { lat, lon },
+                radius,
+                pois: mockPOIs.filter(poi => poi.distance <= radius),
+                total: mockPOIs.filter(poi => poi.distance <= radius).length
+            });
+        }
+
+        // 카테고리별로 검색할 키워드들 정의
+        const searchCategories = [
+            // 교육시설
+            { keyword: "초등학교", category: "교육" },
+            { keyword: "중학교", category: "교육" },
+            { keyword: "고등학교", category: "교육" },
+            { keyword: "유치원", category: "교육" },
+            
+            // 공공기관 및 안전시설
+            { keyword: "주민센터", category: "공공기관" },
+            { keyword: "동주민센터", category: "공공기관" },
+            { keyword: "소방서", category: "안전시설" },
+            { keyword: "119안전센터", category: "안전시설" },
+            { keyword: "파출소", category: "안전시설" },
+            { keyword: "지구대", category: "안전시설" },
+            { keyword: "우체국", category: "공공기관" },
+            { keyword: "보건소", category: "공공기관" },
+            
+            // 교통시설
+            { keyword: "지하철역", category: "교통" },
+            { keyword: "버스정류장", category: "교통" },
+            
+            // 생활편의시설
+            { keyword: "마트", category: "생활" },
+            { keyword: "병원", category: "의료" },
+            { keyword: "약국", category: "의료" },
+            { keyword: "은행", category: "금융" }
         ];
 
-        const nearbyPOIs = mockPOIs.filter(poi => poi.distance <= radius);
+        const allPOIs: any[] = [];
 
-        console.log(`📍 주변 정보 결과: ${nearbyPOIs.length}개`);
+        // 각 카테고리별로 병렬 검색
+        const searchPromises = searchCategories.map(async ({ keyword, category }) => {
+            try {
+                const response = await fetch(
+                    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(keyword)}&x=${lon}&y=${lat}&radius=${radius}&size=5&sort=distance`,
+                    {
+                        headers: {
+                            'Authorization': `KakaoAK ${KAKAO_REST_KEY}`
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.documents.map((poi: any) => ({
+                        id: poi.id,
+                        category: category,
+                        name: poi.place_name,
+                        distance: parseInt(poi.distance),
+                        x: parseFloat(poi.x),
+                        y: parseFloat(poi.y),
+                        place_name: poi.place_name,
+                        address: poi.address_name,
+                        road_address: poi.road_address_name,
+                        phone: poi.phone
+                    }));
+                }
+            } catch (error) {
+                console.error(`❌ ${keyword} 검색 오류:`, error);
+            }
+            return [];
+        });
+
+        const results = await Promise.all(searchPromises);
+        
+        // 결과 통합 및 중복 제거
+        results.forEach(pois => {
+            pois.forEach((poi: any) => {
+                // 같은 장소 중복 제거 (이름과 거리 기준)
+                if (!allPOIs.find(existing => 
+                    existing.name === poi.name && 
+                    Math.abs(existing.distance - poi.distance) < 50
+                )) {
+                    allPOIs.push(poi);
+                }
+            });
+        });
+
+        // 거리순 정렬
+        allPOIs.sort((a, b) => a.distance - b.distance);
+
+        console.log(`📍 주변 정보 결과: ${allPOIs.length}개 (교육: ${allPOIs.filter(p => p.category === '교육').length}, 공공기관: ${allPOIs.filter(p => p.category === '공공기관').length}, 안전시설: ${allPOIs.filter(p => p.category === '안전시설').length})`);
 
         return c.json({
             center: { lat, lon },
             radius,
-            pois: nearbyPOIs,
-            total: nearbyPOIs.length
+            pois: allPOIs,
+            total: allPOIs.length,
+            categories: {
+                education: allPOIs.filter(p => p.category === '교육'),
+                publicFacilities: allPOIs.filter(p => ['공공기관', '안전시설'].includes(p.category)),
+                transportation: allPOIs.filter(p => p.category === '교통'),
+                convenience: allPOIs.filter(p => ['생활', '의료', '금융'].includes(p.category))
+            }
         });
     } catch (err) {
         console.error("❌ 주변 정보 조회 오류:", err);

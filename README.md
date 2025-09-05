@@ -326,6 +326,23 @@ CREATE TABLE public.landuse_code (
 );
 ```
 
+#### `oi.ai_smart_summary` - AI 요약 결과 저장
+```sql
+CREATE TABLE oi.ai_smart_summary (
+    apt_id INTEGER PRIMARY KEY,          -- 아파트 ID (외래키)
+    apt_nm VARCHAR(255) NOT NULL,        -- 아파트명  
+    jibun_address TEXT NOT NULL,         -- 지번 주소
+    summary TEXT NOT NULL,               -- AI 요약 내용
+    user_id VARCHAR(255) NOT NULL,       -- 사용자 ID (Firebase UID)
+    created_at TIMESTAMP DEFAULT NOW(),  -- 생성일시
+    updated_at TIMESTAMP DEFAULT NOW(),  -- 수정일시
+    FOREIGN KEY (apt_id) REFERENCES oi.apt_info(id)
+);
+
+CREATE INDEX idx_ai_summary_user_id ON oi.ai_smart_summary(user_id);
+CREATE INDEX idx_ai_summary_created_at ON oi.ai_smart_summary(created_at);
+```
+
 ### 사용자 데이터 (Firebase Firestore)
 
 #### `users/{uid}/favorites` - 즐겨찾기

@@ -11,6 +11,105 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+// AI 요약 조회 (PostgreSQL에서 공유 요약 가져오기)
+aiRoute.get('/summary/:aptId', async (c) => {
+    try {
+        const aptId = parseInt(c.req.param('aptId'));
+        
+        if (!aptId) {
+            return c.json({ success: false, error: '유효한 아파트 ID가 필요합니다.' }, 400);
+        }
+
+        // PostgreSQL에서 저장된 요약 조회
+        const summary = await db
+            .selectFrom('oi.ai_smart_summary')
+            .selectAll()
+            .where('apt_id', '=', aptId)
+            .executeTakeFirst();
+
+        if (summary) {
+            return c.json({
+                success: true,
+                summary: summary.summary,
+                createdAt: summary.created_at,
+                updatedAt: summary.updated_at
+            });
+        }
+
+        return c.json({
+            success: false,
+            message: '저장된 요약이 없습니다.'
+        });
+
+    } catch (error: any) {
+        console.error('❌ 요약 조회 오류:', error);
+        return c.json({
+            success: false,
+            error: error.message || '요약 조회 중 오류가 발생했습니다.'
+        }, 500);
+    }
+});
+
+// AI 요약 저장 (PostgreSQL에 공유 요약 저장)
+aiRoute.post('/summary/save', authMiddleware, async (c) => {
+    try {
+        const { aptId, aptName, jibunAddress, summary, userId } = await c.req.json();
+        
+        if (!aptId || !aptName || !jibunAddress || !summary || !userId) {
+            return c.json({ 
+                success: false, 
+                error: '필수 정보가 누락되었습니다.' 
+            }, 400);
+        }
+
+        // 기존 요약이 있는지 확인
+        const existing = await db
+            .selectFrom('oi.ai_smart_summary')
+            .select(['apt_id'])
+            .where('apt_id', '=', aptId)
+            .executeTakeFirst();
+
+        if (existing) {
+            // 기존 요약 업데이트
+            await db
+                .updateTable('oi.ai_smart_summary')
+                .set({
+                    summary: summary,
+                    user_id: userId,
+                    updated_at: new Date()
+                })
+                .where('apt_id', '=', aptId)
+                .execute();
+        } else {
+            // 새 요약 생성
+            await db
+                .insertInto('oi.ai_smart_summary')
+                .values({
+                    apt_id: aptId,
+                    apt_nm: aptName,
+                    jibun_address: jibunAddress,
+                    summary: summary,
+                    user_id: userId,
+                    created_at: new Date(),
+                    updated_at: new Date()
+                })
+                .execute();
+        }
+
+        return c.json({
+            success: true,
+            message: '요약이 성공적으로 저장되었습니다.'
+        });
+
+    } catch (error: any) {
+        console.error('❌ 요약 저장 오류:', error);
+        return c.json({
+            success: false,
+            error: error.message || '요약 저장 중 오류가 발생했습니다.'
+        }, 500);
+    }
+});
+
 // AI 분석 리포트 생성
 aiRoute.post('/analyze', authMiddleware, async (c) => {
     try {

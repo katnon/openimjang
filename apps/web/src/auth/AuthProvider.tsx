@@ -8,16 +8,19 @@ import {
     signInWithPopup,
     GoogleAuthProvider
 } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import axios, { type InternalAxiosRequestConfig } from "axios";
-import { auth } from "../firebase"; // firebase.ts에서 auth 객체를 가져옵니다.
+import { auth, db } from "../firebase"; // firebase.ts에서 auth 객체를 가져옵니다.
 
 interface AuthContextType {
     user: User | null;
     loading: boolean;
+    needsOnboarding: boolean;
     signIn: (email: string, password: string) => Promise<void>;
     signUp: (email: string, password: string) => Promise<void>;
     signInWithGoogle: () => Promise<void>;
     signOut: () => Promise<void>;
+    markOnboardingComplete: () => void;
 }
 
 // Context를 생성합니다.
@@ -26,15 +29,58 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const [needsOnboarding, setNeedsOnboarding] = useState(false);
+
+    // 온보딩 상태 확인
+    const checkOnboardingStatus = async (currentUser: User) => {
+        try {
+            const profileDoc = await getDoc(doc(db, 'users', currentUser.uid, 'profile', 'basic'));
+            
+            if (profileDoc.exists()) {
+                const profileData = profileDoc.data();
+                // completedAt 필드가 있으면 온보딩 완료로 판단
+                const hasCompletedOnboarding = profileData && profileData.completedAt;
+                setNeedsOnboarding(!hasCompletedOnboarding);
+                
+                console.log(`✅ 온보딩 상태 확인: ${hasCompletedOnboarding ? '완료됨' : '필요함'}`);
+            } else {
+                console.log("📝 프로필 문서가 존재하지 않음 - 온보딩 필요");
+                setNeedsOnboarding(true);
+            }
+        } catch (error: any) {
+            console.error("❌ 온보딩 상태 확인 오류:", error);
+            
+            // Firebase 권한 오류인 경우 특별 처리
+            if (error?.code === 'permission-denied' || error?.message?.includes('permission')) {
+                console.log("🔒 Firebase 권한 오류 - 온보딩을 기본값으로 설정");
+                setNeedsOnboarding(true); // 권한 오류 시 온보딩 모달 표시
+            } else {
+                console.log("⚠️ 기타 오류 - 온보딩 건너뛰기");
+                setNeedsOnboarding(false); // 기타 오류 시 온보딩 건너뛰기
+            }
+        }
+    };
 
     // ① Firebase 로그인 상태 변화를 감지합니다.
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
+            
+            if (currentUser) {
+                await checkOnboardingStatus(currentUser);
+            } else {
+                setNeedsOnboarding(false);
+            }
+            
             setLoading(false);
         });
         return () => unsubscribe();
     }, []);
+
+    const markOnboardingComplete = () => {
+        console.log("🎯 온보딩 완료 처리 - needsOnboarding을 false로 설정");
+        setNeedsOnboarding(false);
+    };
 
     // ② Axios 요청에 Firebase ID 토큰을 자동으로 붙입니다.
     useEffect(() => {
@@ -102,10 +148,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const value: AuthContextType = {
         user,
         loading,
+        needsOnboarding,
         signIn,
         signUp,
         signInWithGoogle,
         signOut,
+        markOnboardingComplete,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

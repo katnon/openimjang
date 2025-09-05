@@ -8,6 +8,8 @@ type TopBarProps = {
     onSearchResult?: (results: AptInfo[]) => void;
     onOpenAuth?: () => void;
     onOpenMyImjang?: () => void;
+    onOpenProfile?: () => void;
+    onOpenChatbot?: () => void;
 };
 
 export type AptInfo = {
@@ -19,7 +21,7 @@ export type AptInfo = {
     lat: number;
 };
 
-const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, onOpenMyImjang }) => {
+const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, onOpenMyImjang, onOpenProfile, onOpenChatbot }) => {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
     const [query, setQuery] = useState("");
@@ -203,6 +205,15 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                         </button>
                     )}
                     
+                    {user && onOpenChatbot && (
+                        <button
+                            onClick={onOpenChatbot}
+                            className="px-4 py-2 text-sm font-medium bg-[#14e3dc] text-white hover:bg-[#12d4cc] rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            🤖 AI 챗봇
+                        </button>
+                    )}
+                    
                     {user ? (
                         /* 로그인된 상태 */
                         <div className="relative">
@@ -243,7 +254,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                                     <button
                                         onClick={() => {
                                             setShowUserMenu(false);
-                                            // TODO: 프로필 페이지로 이동
+                                            onOpenProfile?.();
                                         }}
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
                                     >

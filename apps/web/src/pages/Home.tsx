@@ -12,6 +12,9 @@ import MyImjangModal from "@/components/memo/MyImjangModal";
 import { useAuth } from "@/auth/AuthProvider";
 import { doc, setDoc, deleteDoc, getDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebase";
+import UserOnboardingModal from "@/components/onboarding/UserOnboardingModal";
+import UserProfileModal from "@/components/profile/UserProfileModal";
+import ChatbotModal from "@/components/chatbot/ChatbotModal";
 import type { POIItem } from "@/types/poi";
 
 type AptInfo = {
@@ -23,7 +26,7 @@ type AptInfo = {
 };
 
 export default function Home() {
-    const { user } = useAuth();
+    const { user, needsOnboarding, markOnboardingComplete } = useAuth();
     const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
     const [show3D, setShow3D] = useState(false);
     const [selectedApt, setSelectedApt] = useState<AptInfo | null>(null);
@@ -32,6 +35,9 @@ export default function Home() {
     const [isDistrictOverlayActive, setIsDistrictOverlayActive] = useState(false);
     const [showAuth, setShowAuth] = useState(false);
     const [showMemoModal, setShowMemoModal] = useState(false);
+    const [showProfile, setShowProfile] = useState(false);
+    const [showChatbot, setShowChatbot] = useState(false);
+    const [chatbotContext, setChatbotContext] = useState<any>(null);
     const [currentMapType, setCurrentMapType] = useState<'ROADMAP' | 'SATELLITE'>('ROADMAP');
     const [favorites, setFavorites] = useState<Set<number>>(new Set());
     const [showFavoritePopup, setShowFavoritePopup] = useState(false);
@@ -151,6 +157,11 @@ export default function Home() {
                 }}
                 onOpenAuth={() => setShowAuth(true)}
                 onOpenMyImjang={() => setShowMyImjang(true)}
+                onOpenProfile={() => setShowProfile(true)}
+                onOpenChatbot={() => {
+                    setChatbotContext({ type: 'general' });
+                    setShowChatbot(true);
+                }}
             />
 
             {/* 지도 */}
@@ -200,6 +211,10 @@ export default function Home() {
                 onPOIHover={setHoveredPOI}
                 onFavoriteToggle={handleFavoriteToggle}
                 isFavorited={selectedApt ? favorites.has(selectedApt.id) : false}
+                onOpenChatbot={(contextData) => {
+                    setChatbotContext(contextData);
+                    setShowChatbot(true);
+                }}
             />
 
             {/* 3D 팝업 */}
@@ -277,12 +292,39 @@ export default function Home() {
                     // 메모 삭제 후 즐겨찾기 마커 새로고침
                     refreshFavoritesRef.current?.();
                 }}
+                onOpenChatbot={(contextData) => {
+                    setChatbotContext(contextData);
+                    setShowChatbot(true);
+                }}
             />
 
             {/* 인증 모달 */}
             <AuthPage
                 isOpen={showAuth}
                 onClose={() => setShowAuth(false)}
+            />
+
+            {/* 온보딩 모달 */}
+            <UserOnboardingModal
+                isOpen={user !== null && needsOnboarding}
+                onComplete={markOnboardingComplete}
+                onSkip={markOnboardingComplete}
+            />
+
+            {/* 프로필 수정 모달 */}
+            <UserProfileModal
+                isOpen={showProfile}
+                onClose={() => setShowProfile(false)}
+            />
+
+            {/* 챗봇 모달 */}
+            <ChatbotModal
+                isOpen={showChatbot}
+                onClose={() => {
+                    setShowChatbot(false);
+                    setChatbotContext(null);
+                }}
+                contextData={chatbotContext}
             />
         </div>
     );

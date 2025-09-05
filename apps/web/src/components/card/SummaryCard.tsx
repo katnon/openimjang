@@ -24,9 +24,10 @@ type SummaryCardProps = {
     onPOIHover?: (poi: POIItem | null) => void; // POI 호버 콜백
     onFavoriteToggle?: (apt: { id: number; apt_nm: string; jibun_address: string; lat: number; lon: number }) => void; // 즐겨찾기 토글 콜백
     isFavorited?: boolean; // 즐겨찾기 상태
+    onOpenChatbot?: (contextData: { aptId: number; aptName: string; aptAddress: string; type: 'apartment' }) => void; // 챗봇 열기 콜백
 };
 
-export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited }: SummaryCardProps) {
+export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot }: SummaryCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("실거래가");
     const [pnuData, setPnuData] = useState<PNUData | null>(null);
@@ -90,6 +91,17 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
         }
     };
 
+    const handleChatbotClick = () => {
+        if (selectedApt && onOpenChatbot) {
+            onOpenChatbot({
+                aptId: selectedApt.id,
+                aptName: selectedApt.apt_nm,
+                aptAddress: selectedApt.jibun_address,
+                type: 'apartment'
+            });
+        }
+    };
+
     return (
         <div className={`absolute left-4 z-50 bg-white shadow-xl rounded-xl border border-gray-200 transition-all duration-300 ${isExpanded
                 ? 'w-[29rem] h-[calc(100vh-8rem)] top-20' // ✅ 폭 20% 감소 (36rem→29rem), TopBar 아래 여유공간 확보 (top-4→top-20)
@@ -138,12 +150,23 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 </p>
                             </div>
 
-                            <button
-                                onClick={handleMoreClick}
-                                className="w-full mt-3 px-4 py-2 bg-[#14e3dc] text-white text-sm font-medium rounded-lg hover:bg-[#12d4cc] transition-colors"
-                            >
-                                자세히 보기
-                            </button>
+                            <div className="flex gap-2 mt-3">
+                                <button
+                                    onClick={handleMoreClick}
+                                    className="flex-1 px-4 py-2 bg-[#14e3dc] text-white text-sm font-medium rounded-lg hover:bg-[#12d4cc] transition-colors"
+                                >
+                                    자세히 보기
+                                </button>
+                                {onOpenChatbot && (
+                                    <button
+                                        onClick={handleChatbotClick}
+                                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors flex items-center justify-center"
+                                        title="AI 챗봇으로 질문하기"
+                                    >
+                                        🤖
+                                    </button>
+                                )}
+                            </div>
                         </>
                     ) : point ? (
                         <>
@@ -181,12 +204,23 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                     </svg>
                                 </button>
                             </div>
-                            <button
-                                onClick={handleCloseExpanded}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                ✕
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {onOpenChatbot && (
+                                    <button
+                                        onClick={handleChatbotClick}
+                                        className="px-3 py-1.5 bg-[#14e3dc] hover:bg-[#12d4cc] text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                                        title="AI 챗봇으로 질문하기"
+                                    >
+                                        🤖 AI 챗봇
+                                    </button>
+                                )}
+                                <button
+                                    onClick={handleCloseExpanded}
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                >
+                                    ✕
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-1 mb-4">

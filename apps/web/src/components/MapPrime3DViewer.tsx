@@ -30,6 +30,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewerRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const prevLocationRef = useRef<{lat: number, lon: number} | null>(null); // ✅ 이전 좌표 저장용
     const [isFull, setIsFull] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -49,10 +50,10 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
     useWalkingMode(viewerRef.current, isFirstPersonMode, () => setIsFirstPersonMode(false));
 
     // ✅ 음영분석 훅
-    const { 
-        isAnalyzing, 
-        startShadeAnalysis, 
-        clearShadeAnalysis, 
+    const {
+        isAnalyzing,
+        startShadeAnalysis,
+        clearShadeAnalysis,
         clearShadeResults,
         error: shadeError,
         setSeasonPreset
@@ -88,7 +89,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
             pitch: -50,
             roll: 0
         };
-        
+
         viewerRef.current._setCameraView(cameraView);
     };
 
@@ -156,7 +157,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                     console.log('🚫 뷰어 초기화 취소됨');
                     return;
                 }
-                
+
                 setError(null);
                 console.log('라이브러리 로딩 완료, 뷰어 생성 시작');
 
@@ -193,6 +194,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                     cesiumViewer.extend(window.MapPrime3DExtension, {
                         terrain: "https://mapprime.synology.me:15289/seoul/data/terrain/1m_v1.1/",
                         tileset: "https://mapprime.synology.me:15289/seoul/data/all_ktx2/tileset.json",
+                        // tileset: "https://mapprime.synology.me:15289/MapPrimeServer/map/wmts?LAYER=mapprime:ecw_12cm&STYLE=&TILEMATRIXSET=google_tms&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&FORMAT=image/png&TILEMATRIX={z}&TILECOL={x}&TILEROW={y}",
                         controls: [],
                         credit: "<i>MapPrime</i>",
                         imageries: [
@@ -202,6 +204,16 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                                 type: "TMS",
                                 epsg: "EPSG:3857",
                                 url: "https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                                format: "jpeg",
+                                maximumLevel: 18,
+                                current: false,
+                            },
+                            {
+                                // title: "Arcgis",
+                                // credit: "Arcgis",
+                                // type: "TMS",
+                                epsg: "EPSG:3857",
+                                url: "https://mapprime.synology.me:15289/MapPrimeServer/map/wmts?LAYER=mapprime:ecw_12cm&STYLE=&TILEMATRIXSET=google_tms&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&FORMAT=image/png&TILEMATRIX={z}&TILECOL={x}&TILEROW={y}",
                                 format: "jpeg",
                                 maximumLevel: 18,
                                 current: true,
@@ -250,7 +262,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
 
         return () => {
             console.log('🧹 3D 뷰어 cleanup 시작');
-            
+
             // 1. 모든 진행 중인 요청 취소
             if (abortControllerRef.current) {
                 console.log('❌ 진행 중인 모든 요청 취소');
@@ -265,7 +277,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
             } catch (e) {
                 console.warn('⚠️ 하이라이트 정리 중 오류:', e);
             }
-            
+
             try {
                 console.log('🧹 3D 음영분석 정리 시작');
                 clearShadeAnalysis();
@@ -289,7 +301,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                     viewerRef.current = null;
                 }
             }
-            
+
             console.log('✅ 3D 뷰어 cleanup 완료');
         };
     }, [visible]); // ✅ selectedLocation 의존성 제거 - 뷰어는 한 번만 생성
@@ -300,7 +312,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
         if (!visible) {
             return;
         }
-        
+
         if (!viewerRef.current || isLoading || error) {
             console.log('⏳ 3D 뷰어 준비 대기 중...', {
                 hasViewer: !!viewerRef.current,
@@ -311,20 +323,34 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
         }
 
         if (selectedLocation) {
-            console.log('🎯 3D 카메라 이동 및 하이라이트:', selectedLocation);
-
-            // 1. 카메라 이동 (즉시 실행)
-            flyToLocation(selectedLocation.lat, selectedLocation.lon);
+            // ✅ 좌표가 실제로 변경된 경우에만 실행
+            const prev = prevLocationRef.current;
+            const isSameLocation = prev && 
+                Math.abs(prev.lat - selectedLocation.lat) < 0.000001 && 
+                Math.abs(prev.lon - selectedLocation.lon) < 0.000001;
             
-            // 2. 짧은 지연 후 하이라이트 적용
-            setTimeout(() => {
-                console.log('✅ 하이라이트 시작');
-                highlightApartment(selectedLocation.lat, selectedLocation.lon);
-            }, 300); // 300ms 지연
+            if (!isSameLocation) {
+                console.log('🎯 3D 카메라 이동 및 하이라이트:', selectedLocation);
+
+                // 1. 카메라 이동 (즉시 실행)
+                flyToLocation(selectedLocation.lat, selectedLocation.lon);
+
+                // 2. 짧은 지연 후 하이라이트 적용
+                setTimeout(() => {
+                    console.log('✅ 하이라이트 시작');
+                    highlightApartment(selectedLocation.lat, selectedLocation.lon);
+                }, 300); // 300ms 지연
+                
+                // 3. 현재 좌표를 이전 좌표로 저장
+                prevLocationRef.current = { lat: selectedLocation.lat, lon: selectedLocation.lon };
+            } else {
+                console.log('🔄 동일한 좌표 - 카메라 이동 및 하이라이트 생략');
+            }
         } else {
             console.log('🧹 3D 하이라이트 제거');
             // 선택 해제 시 하이라이트 제거 (카메라는 그대로)
             clearHighlight();
+            prevLocationRef.current = null; // 이전 좌표 초기화
         }
     }, [visible, selectedLocation, highlightApartment, clearHighlight, isLoading, error]);
 
@@ -394,10 +420,10 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                 {isFull && (
                     <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-10">
                         <button
-                            className={`${isWindowViewMode 
-                                ? "bg-blue-500 text-white border-blue-500" 
+                            className={`${isWindowViewMode
+                                ? "bg-blue-500 text-white border-blue-500"
                                 : "bg-white/90 hover:bg-white border-gray-300 text-gray-700"
-                            } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm`}
+                                } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm`}
                             onClick={() => setIsWindowViewMode(!isWindowViewMode)}
                             disabled={isLoading || !!error}
                             title="창가 뷰 모드"
@@ -408,10 +434,10 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                             </div>
                         </button>
                         <button
-                            className={`${isFirstPersonMode 
-                                ? "bg-green-500 text-white border-green-500" 
+                            className={`${isFirstPersonMode
+                                ? "bg-green-500 text-white border-green-500"
                                 : "bg-white/90 hover:bg-white border-gray-300 text-gray-700"
-                            } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm`}
+                                } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm`}
                             onClick={() => setIsFirstPersonMode(!isFirstPersonMode)}
                             disabled={isLoading || !!error}
                             title="1인칭 걷기 모드 (WASD)"
@@ -426,9 +452,8 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                                 className={`${isAnalyzing
                                     ? "bg-orange-500 text-white border-orange-500"
                                     : "bg-white/90 hover:bg-white border-gray-300 text-gray-700"
-                                } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm ${
-                                    isAnalyzing ? "opacity-75 cursor-not-allowed" : ""
-                                }`}
+                                    } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm ${isAnalyzing ? "opacity-75 cursor-not-allowed" : ""
+                                    }`}
                                 onClick={async () => {
                                     // shade.html처럼 바로 분석 시작
                                     const options = { interval: 15 }; // 기본 옵션
@@ -463,7 +488,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                                     <span className="text-xs">초기화</span>
                                 </div>
                             </button>
-                            
+
                             {/* 계절 프리셋 드롭다운 (음영분석 결과가 있을 때만 표시) */}
                             {hasShadeResult && (
                                 <div className="bg-white/90 border border-gray-300 rounded-lg shadow-md backdrop-blur-sm">
@@ -472,13 +497,13 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                                         onChange={async (e) => {
                                             const season = e.target.value as SeasonPreset;
                                             if (season && lastShadeOptions) {
-                                                
+
                                                 // 1. 기존 음영분석 결과만 제거 (포인트는 유지)
                                                 clearShadeResults();
-                                                
+
                                                 // 2. 계절 프리셋 시간 설정
                                                 setSeasonPreset(season);
-                                                
+
                                                 // 3. 짧은 지연 후 새로운 계절로 음영분석 재실행
                                                 setTimeout(async () => {
                                                     const newOptions = {

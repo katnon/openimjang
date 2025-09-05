@@ -20,9 +20,10 @@ type MyImjangModalProps = {
     onClose: () => void;
     onEditMemo?: (memo: Memo) => void;
     onMemoDeleted?: () => void;
+    onOpenChatbot?: (contextData: { aptId?: string; aptName?: string; aptAddress?: string; memoContent?: string; type: 'memo' }) => void;
 };
 
-const MyImjangModal: React.FC<MyImjangModalProps> = ({ isOpen, onClose, onEditMemo, onMemoDeleted }) => {
+const MyImjangModal: React.FC<MyImjangModalProps> = ({ isOpen, onClose, onEditMemo, onMemoDeleted, onOpenChatbot }) => {
     const { user } = useAuth();
     const [memos, setMemos] = useState<Memo[]>([]);
     const [loading, setLoading] = useState(false);
@@ -168,6 +169,24 @@ const MyImjangModal: React.FC<MyImjangModalProps> = ({ isOpen, onClose, onEditMe
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
+                                            {onOpenChatbot && (
+                                                <button
+                                                    onClick={() => {
+                                                        onOpenChatbot({
+                                                            aptId: memo.aptId,
+                                                            aptName: memo.aptName,
+                                                            aptAddress: memo.aptAddress,
+                                                            memoContent: `${memo.title}\n${memo.body || ''}`,
+                                                            type: 'memo'
+                                                        });
+                                                        onClose();
+                                                    }}
+                                                    className="p-2 text-gray-400 hover:text-[#14e3dc] hover:bg-teal-50 rounded transition-colors"
+                                                    title="AI 챗봇으로 메모 분석하기"
+                                                >
+                                                    🤖
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => {
                                                     if (onEditMemo) {

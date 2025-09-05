@@ -225,7 +225,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
 
     useEffect(() => {
         adjustMapCenter();
-    }, [adjustMapCenter]);
+    }, [isCardExpanded]); // 카드 확장/축소 시에만 실행
 
     // ✅ 임시 마커 업데이트 (POI 호버)
     useEffect(() => {
