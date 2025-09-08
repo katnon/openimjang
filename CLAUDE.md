@@ -26,10 +26,10 @@ OpenImjang is a real-time real estate risk analysis and spatial information visu
 mapprime3d 라이브러리를 사용해야할 때가 굉장히 많은데, 세슘의 연장선이기 때문에 혼동하지 않도록 주의. mapprime3d의 사용 예시 확인이 필요할 경우 web/public/code-example 내부의 main.js와 html파일들을 참고해야함.
 (정보 없는 채로 코딩 금지. 리소스 낭비이기 때문)
 
-절대로 vite.config.ts 등과 같은 곳에서 bff서버주소의 포트 같은걸 변경하지 마. 
-claude code가 자체적으로 bash켜서 테스트를 해보고 로그를 확인해본다 하면, 무조건 프론트 5173 bff 8787포트로만 해. 
-항상 해당 포트로 프론트와 bff 켜져있으니 로그 확인하고싶으면 해당포트에서 테스트 해봐.
-만약 접근 불가할경우 기존 5173,8787 끈 다음에 직접 같은 포트로 다시 켜.
+절대로 vite.config.ts 등과 같은 곳에서 bff서버주소의 포트 같은걸 변경하지 마. (기본값 프론트 5173, bff 8787) 
+claude code가 자체적으로 프론트나 백 로그를 확인하고 싶다 하면 --watch로 보기만 해 
+직접 bash 켜서 bff서버나 vite 서버를 키려고 하지 마.
+
 
 ## AI 데이터 처리 방침 (중요)
 

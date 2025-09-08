@@ -124,13 +124,16 @@ searchRoute.get("/deals/:aptId", async (c) => {
     const aptId = parseInt(c.req.param("aptId"));
     const dealType = c.req.query("dealType") || "";
     const area = c.req.query("area") || "";
+    const rawPeriod = c.req.query("period") || "1년";
+    const period = decodeURIComponent(rawPeriod);
 
     if (isNaN(aptId)) {
         return c.json({ error: "Invalid apartment ID" }, 400);
     }
 
     try {
-        console.log(`💰 실거래가 조회: aptId=${aptId}, 거래유형=${dealType || '전체'}, 면적=${area || '전체'}`);
+        console.log(`💰 실거래가 조회: aptId=${aptId}, 거래유형=${dealType || '전체'}, 면적=${area || '전체'}, 기간=${period}`);
+        console.log(`🔍 받은 파라미터 - rawPeriod: "${rawPeriod}", decodedPeriod: "${period}", dealType: "${dealType}", area: "${area}"`);
 
         // ✅ 1단계: apt_info에서 조인 정보 가져오기
         const aptInfo = await (db
@@ -145,17 +148,32 @@ searchRoute.get("/deals/:aptId", async (c) => {
 
         console.log(`💰 조회할 아파트: ${aptInfo.apt_nm}, ${aptInfo.jibun_address}`);
 
-        // ✅ 2단계: 최근 1년간 정확한 날짜 계산
-        const today = new Date();
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(today.getFullYear() - 1);
+        // ✅ 2단계: 선택된 기간에 따른 날짜 계산 (최대한 단순하게)
+        const currentYear = 2025; // 하드코딩으로 일단 고정
+        let startYear;
+        
+        console.log(`📅 현재: ${currentYear}년, 선택된 기간: "${period}"`);
+        
+        // 기간에 따른 시작 년도 (아주 단순)
+        switch (period) {
+            case "3개월":
+            case "6개월":
+                startYear = 2024; // 작년부터 안전하게
+                break;
+            case "1년":
+                startYear = 2024; // 2024~2025
+                break;
+            case "3년":
+                startYear = 2022; // 2022~2025
+                break;
+            case "전체":
+                startYear = 2000; // 2000~2025 (정말 모든 데이터)
+                break;
+            default:
+                startYear = 2024;
+        }
 
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth() + 1; // 0-based이므로 +1
-        const lastYear = oneYearAgo.getFullYear();
-        const lastYearMonth = oneYearAgo.getMonth() + 1;
-
-        console.log(`📅 조회 기간: ${lastYear}.${lastYearMonth} ~ ${currentYear}.${currentMonth}`);
+        console.log(`📅 조회 기간: ${startYear}년 ~ ${currentYear}년 (${period})`);
 
         let query = (db
             .selectFrom("oi.apt_deal_all" as any)
@@ -167,28 +185,14 @@ searchRoute.get("/deals/:aptId", async (c) => {
             .where("apt_nm", "=", aptInfo.apt_nm)
             .where("jibun_address", "=", aptInfo.jibun_address);
 
-        // ✅ 정확한 1년간 날짜 필터링
-        if (currentYear === lastYear) {
-            // 같은 해인 경우 (거의 없겠지만)
-            query = query
-                .where("deal_year", "=", currentYear)
-                .where("deal_month", ">=", lastYearMonth)
-                .where("deal_month", "<=", currentMonth);
-        } else {
-            // 다른 해인 경우 (일반적)
-            query = query.where((eb: any) => eb.or([
-                // 작년 데이터: lastYearMonth 이후
-                eb.and([
-                    eb("deal_year", "=", lastYear),
-                    eb("deal_month", ">=", lastYearMonth)
-                ]),
-                // 올해 데이터: currentMonth 이전
-                eb.and([
-                    eb("deal_year", "=", currentYear),
-                    eb("deal_month", "<=", currentMonth)
-                ])
-            ]));
-        }
+        // ✅ 날짜 필터링 (가장 단순한 방법)
+        console.log(`🔍 날짜 필터링 시작: ${startYear} <= deal_year <= ${currentYear}`);
+        
+        query = query
+            .where("deal_year", ">=", startYear)
+            .where("deal_year", "<=", currentYear);
+            
+        console.log(`🔍 날짜 필터링 완료`);
 
         // 거래 유형 필터 (기존과 동일)
         if (dealType === "매매") {
@@ -223,12 +227,18 @@ searchRoute.get("/deals/:aptId", async (c) => {
             .orderBy("deal_day", "desc")
             .execute();
 
-        console.log(`💰 실거래가 조회 완료: ${results.length}건 (최근 1년간, 제한 없음)`);
+        console.log(`💰 실거래가 조회 완료: ${results.length}건`);
+        console.log(`📅 기간: ${startYear}~${currentYear} (${period})`);
+        console.log(`🔍 거래유형 필터: ${dealType || '없음'}`);
+        console.log(`🔍 면적 필터: ${area || '없음'}`);
 
         return c.json(results);
     } catch (err) {
-        console.error("❌ 실거래가 조회 오류:", err);
-        return c.json({ error: "조회 중 오류가 발생했습니다." }, 500);
+        console.error("❌ 실거래가 조회 오류 상세:");
+        console.error("❌ 에러 메시지:", err.message);
+        console.error("❌ 에러 스택:", err.stack);
+        console.error("❌ 전체 에러 객체:", err);
+        return c.json({ error: "조회 중 오류가 발생했습니다.", details: err.message }, 500);
     }
 });
 

@@ -24,6 +24,7 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
     const [areas, setAreas] = useState<number[]>([]);
     const [selectedDealTypes, setSelectedDealTypes] = useState<string[]>(["매매", "전세", "월세"]);
     const [selectedArea, setSelectedArea] = useState<string>("전체");
+    const [selectedPeriod, setSelectedPeriod] = useState<string>("1년");
     const [isLoading, setIsLoading] = useState(true);
 
     // ✅ 페이지네이션 상태
@@ -32,6 +33,7 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
     const ITEMS_PER_PAGE = 20;
 
     const dealTypes = ["매매", "전세", "월세"];
+    const periods = ["3개월", "6개월", "1년", "3년", "전체"];
 
     // 전용면적 목록 조회
     useEffect(() => {
@@ -56,11 +58,30 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
             try {
                 const params = new URLSearchParams();
                 if (selectedArea !== "전체") params.append("area", selectedArea);
+                params.append("period", selectedPeriod);
 
+                console.log(`🔍 선택된 기간: "${selectedPeriod}"`);
                 console.log(`🔍 API 호출: /api/search/deals/${aptId}?${params}`);
+                console.log(`🔍 전체 파라미터: area=${selectedArea}, period=${selectedPeriod}, dealTypes=${selectedDealTypes.join(',')}`);
 
                 const res = await fetch(`/api/search/deals/${aptId}?${params}`);
                 const dealsData = await res.json();
+
+                console.log(`📬 API 응답 상태: ${res.status}`);
+                console.log(`📬 백엔드 응답:`, dealsData);
+                console.log(`📬 데이터 타입:`, typeof dealsData, Array.isArray(dealsData));
+                
+                if (!res.ok) {
+                    console.error(`❌ API 에러: ${res.status}`, dealsData);
+                    setAllDeals([]);
+                    return;
+                }
+                
+                if (!Array.isArray(dealsData)) {
+                    console.error(`❌ 예상과 다른 데이터 형식:`, dealsData);
+                    setAllDeals([]);
+                    return;
+                }
 
                 console.log(`📥 백엔드에서 받은 원시 데이터: ${dealsData.length}건`);
 
@@ -82,7 +103,7 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
             setIsLoading(false);
         };
         fetchDeals();
-    }, [aptId, selectedDealTypes, selectedArea]);
+    }, [aptId, selectedDealTypes, selectedArea, selectedPeriod]);
 
     // ✅ 표시할 데이터 계산 로그 강화
     useEffect(() => {
@@ -195,6 +216,27 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
                 )}
 
                 <div className="flex items-center gap-4 flex-wrap">
+                    {/* 기간 선택 버튼 */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">기간:</span>
+                        <div className="flex gap-1">
+                            {periods.map((period) => (
+                                <button
+                                    key={period}
+                                    onClick={() => setSelectedPeriod(period)}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                                        selectedPeriod === period
+                                            ? "bg-cyan-100 text-cyan-800 border-cyan-200"
+                                            : "bg-white text-gray-600 border-gray-300 hover:bg-cyan-50 hover:text-cyan-700 hover:border-cyan-200"
+                                    }`}
+                                >
+                                    {selectedPeriod === period && "✓ "}
+                                    {period}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* 거래 유형 토글 */}
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-700">거래유형:</span>
@@ -205,7 +247,7 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
                                     onClick={() => toggleDealType(type)}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${selectedDealTypes.includes(type)
                                         ? getDealTypeColorClass(type)
-                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                        : 'bg-white text-gray-600 border-gray-300 hover:bg-cyan-50 hover:text-cyan-700 hover:border-cyan-200'
                                         }`}
                                 >
                                     {selectedDealTypes.includes(type) && "✓ "}
@@ -306,7 +348,7 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
             {/* ✅ 푸터 (전체 건수 표시) */}
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
                 <p className="text-xs text-gray-500 text-center">
-                    총 {allDeals.length}건의 거래 내역 (최근 1년간) • 현재 {displayedDeals.length}건 표시 • 데이터 출처: 국토교통부 실거래가 공개시스템
+                    총 {allDeals.length}건의 거래 내역 (최근 {selectedPeriod}) • 현재 {displayedDeals.length}건 표시 • 데이터 출처: 국토교통부 실거래가 공개시스템
                 </p>
             </div>
         </>

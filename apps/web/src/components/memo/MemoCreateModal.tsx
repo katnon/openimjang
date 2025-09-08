@@ -3,6 +3,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc, doc, setDoc } from "firebase/firestore";
 import { storage, db } from "@/firebase";
+import ReactMarkdown from 'react-markdown';
 
 type MemoCreateModalProps = {
     isOpen: boolean;
@@ -45,6 +46,7 @@ const MemoCreateModal: React.FC<MemoCreateModalProps> = ({
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState('');
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+    const [previewMode, setPreviewMode] = useState<'edit' | 'preview'>('edit');
     const isEditMode = !!editMemo;
 
     // 편집 모드일 때 초기값 설정
@@ -264,19 +266,64 @@ const MemoCreateModal: React.FC<MemoCreateModalProps> = ({
 
                     {/* 메모 본문 */}
                     <div>
-                        <label htmlFor="body" className="block text-sm font-medium text-gray-700 mb-2">
-                            메모 내용 (선택사항)
-                        </label>
-                        <textarea
-                            id="body"
-                            name="body"
-                            value={formData.body}
-                            onChange={handleInputChange}
-                            rows={6}
-                            placeholder="현장에서 느낀 점, 주변 환경, 교통 상황, 향후 전망 등을 자유롭게 작성해주세요..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
-                            disabled={isUploading}
-                        />
+                        <div className="flex items-center justify-between mb-2">
+                            <label htmlFor="body" className="block text-sm font-medium text-gray-700">
+                                메모 내용 (선택사항) - 마크다운 지원
+                            </label>
+                            <div className="flex bg-gray-100 rounded-lg p-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setPreviewMode('edit')}
+                                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                                        previewMode === 'edit'
+                                            ? 'bg-white text-gray-900 shadow-sm'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    편집
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPreviewMode('preview')}
+                                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                                        previewMode === 'preview'
+                                            ? 'bg-white text-gray-900 shadow-sm'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                    disabled={!formData.body.trim()}
+                                >
+                                    미리보기
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {previewMode === 'edit' ? (
+                            <textarea
+                                id="body"
+                                name="body"
+                                value={formData.body}
+                                onChange={handleInputChange}
+                                rows={6}
+                                placeholder="현장에서 느낀 점, 주변 환경, 교통 상황, 향후 전망 등을 자유롭게 작성해주세요...
+
+마크다운 문법을 사용할 수 있습니다:
+**굵게**, *기울임*, # 제목, - 목록, [링크](URL) 등"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
+                                disabled={isUploading}
+                            />
+                        ) : (
+                            <div className="w-full min-h-[144px] px-3 py-2 border border-gray-300 rounded-md bg-gray-50">
+                                {formData.body.trim() ? (
+                                    <div className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-700 prose-strong:text-gray-800 prose-em:text-gray-700 prose-code:text-gray-800 prose-pre:text-gray-800 prose-ul:text-gray-700 prose-ol:text-gray-700 prose-li:text-gray-700">
+                                        <ReactMarkdown>
+                                            {formData.body}
+                                        </ReactMarkdown>
+                                    </div>
+                                ) : (
+                                    <div className="text-gray-500 italic">내용을 입력하면 여기에 미리보기가 표시됩니다.</div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* 사진 업로드 */}

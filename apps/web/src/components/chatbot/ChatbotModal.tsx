@@ -5,6 +5,7 @@ import { db } from "@/firebase";
 import axios from "axios";
 import { chatbotService } from "@/services/chatbotService";
 import type { ChatMessage, ChatSession, ChatSessionType } from "@/types/chatbot";
+import ReactMarkdown from 'react-markdown';
 
 type ChatbotModalProps = {
     isOpen: boolean;
@@ -130,10 +131,10 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
             if (needNewSession) {
                 const sessionType: ChatSessionType = contextData?.type || 'general';
                 const contextDataForSession = contextData ? {
-                    apartmentId: contextData.aptId?.toString(),
-                    apartmentName: contextData.aptName,
-                    apartmentAddress: contextData.aptAddress,
-                    memoContent: contextData.memoContent
+                    ...(contextData.aptId && { apartmentId: contextData.aptId.toString() }),
+                    ...(contextData.aptName && { apartmentName: contextData.aptName }),
+                    ...(contextData.aptAddress && { apartmentAddress: contextData.aptAddress }),
+                    ...(contextData.memoContent && { memoContent: contextData.memoContent })
                 } : undefined;
 
                 const sessionId = await chatbotService.createChatSession(user.uid, {
@@ -305,6 +306,8 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
                 })),
                 userProfile,
                 userId: user.uid
+            }, {
+                timeout: 60000 // 60초로 타임아웃 연장
             });
 
             const assistantMessage: ChatMessage = {
@@ -486,8 +489,16 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
                                         : 'bg-gray-100 text-gray-800'
                                 }`}
                             >
-                                <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                                    {message.content}
+                                <div className="text-sm leading-relaxed">
+                                    {message.role === 'assistant' ? (
+                                        <div className="prose prose-sm max-w-none prose-headings:text-inherit prose-p:text-inherit prose-strong:text-inherit prose-em:text-inherit prose-code:text-inherit prose-pre:text-inherit prose-ul:text-inherit prose-ol:text-inherit prose-li:text-inherit">
+                                            <ReactMarkdown>
+                                                {message.content}
+                                            </ReactMarkdown>
+                                        </div>
+                                    ) : (
+                                        <div className="whitespace-pre-wrap">{message.content}</div>
+                                    )}
                                 </div>
                                 <div className={`text-xs mt-1 opacity-70 ${
                                     message.role === 'user' ? 'text-white' : 'text-gray-500'
