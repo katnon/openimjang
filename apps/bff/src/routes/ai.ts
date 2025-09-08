@@ -1499,22 +1499,58 @@ async function handleSearchApartmentDeals(args: { apartmentName: string; period?
         const { apartmentName, period = "1년" } = args;
         console.log(`🔍 통합 실거래가 검색: apartmentName=${apartmentName}, period=${period}`);
         
-        // 다단계 검색 전략 (건물정보 검색과 동일)
         let aptList: any[] = [];
         let searchStrategy = '';
         
-        // 1차 검색: 원본 검색어 그대로
-        aptList = await db
-            .selectFrom('oi.apt_info')
-            .select(['id', 'apt_nm', 'jibun_address'])
-            .where('apt_nm', 'ilike', `%${apartmentName}%`)
-            .orderBy('apt_nm', 'asc')
-            .limit(10)
-            .execute();
+        // 지번 주소 검색 시도 (예: "신당동 840")
+        const addressMatch = apartmentName.match(/(.+동)\s*(\d+)/);
+        if (addressMatch) {
+            const dong = addressMatch[1];
+            const jibun = addressMatch[2];
             
-        searchStrategy = '1차검색(원본)';
+            aptList = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address'])
+                .where(sql`jibun_address ~ ${dong + '.*' + jibun}`)
+                .limit(10)
+                .execute();
+                
+            if (aptList.length > 0) {
+                searchStrategy = `지번검색(${dong} ${jibun}번지)`;
+            }
+        }
         
-        // 2차 검색: 지명+아파트명 분리
+        // 1차 검색: pg_trgm 유사도 기반 검색
+        if (aptList.length === 0) {
+            aptList = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address', sql`similarity(apt_nm, ${apartmentName}) as sim_score`])
+                .where(sql`similarity(apt_nm, ${apartmentName}) > 0.3`)
+                .orderBy(sql`similarity(apt_nm, ${apartmentName}) desc`)
+                .limit(10)
+                .execute();
+                
+            if (aptList.length > 0) {
+                searchStrategy = `유사도검색(similarity > 0.3)`;
+            }
+        }
+        
+        // 2차 검색: 기존 ILIKE 검색 (후보 확장용)
+        if (aptList.length === 0) {
+            aptList = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address'])
+                .where('apt_nm', 'ilike', `%${apartmentName}%`)
+                .orderBy('apt_nm', 'asc')
+                .limit(10)
+                .execute();
+                
+            if (aptList.length > 0) {
+                searchStrategy = 'ILIKE검색';
+            }
+        }
+        
+        // 3차 검색: 지명+아파트명 분리
         if (aptList.length === 0) {
             const locationKeywords = ['신당', '강남', '서초', '마포', '송파', '강서', '구로', '영등포', '용산', '중구', '종로', '성북', '동대문', '성동', '광진', '노원', '도봉', '강북', '은평', '서대문', '중랑', '강동'];
             
@@ -1532,7 +1568,7 @@ async function handleSearchApartmentDeals(args: { apartmentName: string; period?
                             .execute();
                             
                         if (aptList.length > 0) {
-                            searchStrategy = `2차검색(지명분리: ${location} + ${remaining})`;
+                            searchStrategy = `지명분리검색(${location} + ${remaining})`;
                             break;
                         }
                     }
@@ -1540,7 +1576,7 @@ async function handleSearchApartmentDeals(args: { apartmentName: string; period?
             }
         }
         
-        // 3차 검색: 건설사명만으로 시도
+        // 4차 검색: 건설사명만으로 시도
         if (aptList.length === 0) {
             const constructorKeywords = ['현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벽산'];
             
@@ -1555,7 +1591,7 @@ async function handleSearchApartmentDeals(args: { apartmentName: string; period?
                         .execute();
                         
                     if (aptList.length > 0) {
-                        searchStrategy = `3차검색(건설사명: ${constructor})`;
+                        searchStrategy = `건설사검색(${constructor})`;
                         break;
                     }
                 }
@@ -1567,8 +1603,14 @@ async function handleSearchApartmentDeals(args: { apartmentName: string; period?
         if (!aptList || aptList.length === 0) {
             return { 
                 error: `"${apartmentName}" 아파트를 찾을 수 없습니다.`,
-                suggestion: "검색어를 다르게 입력해보시거나 (예: '현대아파트', '신당동 현대'), 주변 지역명을 포함해서 검색해보세요.",
-                searchAttempts: "원본 검색, 지명 분리, 건설사명 검색을 모두 시도했습니다."
+                suggestion: "다음과 같은 방법으로 다시 검색해보세요:",
+                searchTips: [
+                    "정확한 아파트명 입력 (예: '현대아파트', '현대 아파트')",
+                    "지역명 포함 (예: '신당동 현대', '강남구 래미안')",
+                    "지번 주소로 검색 (예: '신당동 840', '서초동 1588')",
+                    "건설사명만 입력 (예: '현대', '삼성', 'SK')"
+                ],
+                searchAttempts: "유사도 검색, 지번 검색, 지명 분리, 건설사명 검색을 모두 시도했습니다."
             };
         }
         
@@ -1638,25 +1680,60 @@ async function handleSearchApartmentBuildingInfo(args: { apartmentName: string }
         const { apartmentName } = args;
         console.log(`🏢 통합 건물정보 검색: apartmentName=${apartmentName}`);
         
-        // 다단계 검색 전략
         let aptList: any[] = [];
         let searchStrategy = '';
         
-        // 1차 검색: 원본 검색어 그대로
-        aptList = await db
-            .selectFrom('oi.apt_info')
-            .select(['id', 'apt_nm', 'jibun_address'])
-            .where('apt_nm', 'ilike', `%${apartmentName}%`)
-            .orderBy('apt_nm', 'asc')
-            .limit(10)
-            .execute();
+        // 지번 주소 검색 시도 (예: "신당동 840")
+        const addressMatch = apartmentName.match(/(.+동)\s*(\d+)/);
+        if (addressMatch) {
+            const dong = addressMatch[1];
+            const jibun = addressMatch[2];
             
-        searchStrategy = '1차검색(원본)';
+            aptList = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address'])
+                .where(sql`jibun_address ~ ${dong + '.*' + jibun}`)
+                .limit(10)
+                .execute();
+                
+            if (aptList.length > 0) {
+                searchStrategy = `지번검색(${dong} ${jibun}번지)`;
+            }
+        }
         
-        // 2차 검색: 지명+아파트명 분리해서 시도
+        // 1차 검색: pg_trgm 유사도 기반 검색
+        if (aptList.length === 0) {
+            aptList = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address', sql`similarity(apt_nm, ${apartmentName}) as sim_score`])
+                .where(sql`similarity(apt_nm, ${apartmentName}) > 0.3`)
+                .orderBy(sql`similarity(apt_nm, ${apartmentName}) desc`)
+                .limit(10)
+                .execute();
+                
+            if (aptList.length > 0) {
+                searchStrategy = `유사도검색(similarity > 0.3)`;
+            }
+        }
+        
+        // 2차 검색: 기존 ILIKE 검색 (후보 확장용)
+        if (aptList.length === 0) {
+            aptList = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address'])
+                .where('apt_nm', 'ilike', `%${apartmentName}%`)
+                .orderBy('apt_nm', 'asc')
+                .limit(10)
+                .execute();
+                
+            if (aptList.length > 0) {
+                searchStrategy = 'ILIKE검색';
+            }
+        }
+        
+        // 3차 검색: 지명+아파트명 분리
         if (aptList.length === 0) {
             const locationKeywords = ['신당', '강남', '서초', '마포', '송파', '강서', '구로', '영등포', '용산', '중구', '종로', '성북', '동대문', '성동', '광진', '노원', '도봉', '강북', '은평', '서대문', '중랑', '강동'];
-            const constructorKeywords = ['현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벽산'];
             
             for (const location of locationKeywords) {
                 if (apartmentName.includes(location)) {
@@ -1672,7 +1749,7 @@ async function handleSearchApartmentBuildingInfo(args: { apartmentName: string }
                             .execute();
                             
                         if (aptList.length > 0) {
-                            searchStrategy = `2차검색(지명분리: ${location} + ${remaining})`;
+                            searchStrategy = `지명분리검색(${location} + ${remaining})`;
                             break;
                         }
                     }
@@ -1680,9 +1757,9 @@ async function handleSearchApartmentBuildingInfo(args: { apartmentName: string }
             }
         }
         
-        // 3차 검색: 건설사명만 추출해서 시도  
+        // 4차 검색: 건설사명만으로 시도
         if (aptList.length === 0) {
-            const constructorKeywords = ['현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벡산'];
+            const constructorKeywords = ['현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벽산'];
             
             for (const constructor of constructorKeywords) {
                 if (apartmentName.includes(constructor)) {
@@ -1690,34 +1767,12 @@ async function handleSearchApartmentBuildingInfo(args: { apartmentName: string }
                         .selectFrom('oi.apt_info')
                         .select(['id', 'apt_nm', 'jibun_address'])
                         .where('apt_nm', 'ilike', `%${constructor}%`)
-                        .orderBy('apt_nm', 'asc')  
+                        .orderBy('apt_nm', 'asc')
                         .limit(10)
                         .execute();
                         
                     if (aptList.length > 0) {
-                        searchStrategy = `3차검색(건설사명: ${constructor})`;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // 4차 검색: 주소 기반으로도 시도
-        if (aptList.length === 0) {
-            const locationKeywords = ['신당', '강남', '서초', '마포', '송파', '강서', '구로', '영등포', '용산', '중구', '종로', '성북', '동대문', '성동', '광진', '노원', '도봉', '강북', '은평', '서대문', '중랑', '강동'];
-            
-            for (const location of locationKeywords) {
-                if (apartmentName.includes(location)) {
-                    aptList = await db
-                        .selectFrom('oi.apt_info')
-                        .select(['id', 'apt_nm', 'jibun_address'])
-                        .where('jibun_address', 'ilike', `%${location}%`)
-                        .orderBy('apt_nm', 'asc')
-                        .limit(15)
-                        .execute();
-                        
-                    if (aptList.length > 0) {
-                        searchStrategy = `4차검색(지역검색: ${location})`;
+                        searchStrategy = `건설사검색(${constructor})`;
                         break;
                     }
                 }
@@ -1729,8 +1784,14 @@ async function handleSearchApartmentBuildingInfo(args: { apartmentName: string }
         if (!aptList || aptList.length === 0) {
             return { 
                 error: `"${apartmentName}" 아파트를 찾을 수 없습니다.`,
-                suggestion: "검색어를 다르게 입력해보시거나 (예: '현대아파트', '신당동 현대'), 주변 지역명을 포함해서 검색해보세요.",
-                searchAttempts: "원본 검색, 지명 분리, 건설사명 검색, 지역 검색을 모두 시도했습니다."
+                suggestion: "다음과 같은 방법으로 다시 검색해보세요:",
+                searchTips: [
+                    "정확한 아파트명 입력 (예: '현대아파트', '현대 아파트')",
+                    "지역명 포함 (예: '신당동 현대', '강남구 래미안')",
+                    "지번 주소로 검색 (예: '신당동 840', '서초동 1588')",
+                    "건설사명만 입력 (예: '현대', '삼성', 'SK')"
+                ],
+                searchAttempts: "유사도 검색, 지번 검색, 지명 분리, 건설사명 검색을 모두 시도했습니다."
             };
         }
         
@@ -1846,11 +1907,11 @@ async function handleWebSearch(args: { query: string }) {
         const { query } = args;
         console.log(`🔍 웹 검색: "${query}"`);
         
-        // Google Custom Search API 사용 (임시 비활성화 - 인증 오류로 인해)
-        const googleApiKey = null; // process.env.GOOGLE_SEARCH_API_KEY;
+        // Google Custom Search API 사용
+        const googleApiKey = process.env.GOOGLE_SEARCH_API_KEY;
         const googleSearchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
         
-        if (false && googleApiKey && googleSearchEngineId) {
+        if (googleApiKey && googleSearchEngineId) {
             try {
                 // 부동산 관련 검색어로 확장
                 const enhancedQuery = `${query} 부동산 임장 투자 site:kr OR site:com`;
