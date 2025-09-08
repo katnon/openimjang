@@ -674,17 +674,43 @@ aiRoute.post("/chat-with-data", async (c) => {
 - build_year: 건축년도
 
 ## 사용 가능한 함수들
-- searchApartmentDeals: 실거래가 데이터 검색
-- searchApartmentBuildingInfo: 건물 정보 검색  
+- smartSearch: 🌟 추천! 사용자 입력을 자동 분석하여 최적의 검색 수행 (아파트명/주소/브랜드 자동 판별)
+- searchApartmentDeals: 실거래가 데이터 검색 (정확한 아파트명을 알 때)
+- searchApartmentBuildingInfo: 건물 정보 검색 (정확한 아파트명을 알 때)
 - searchNearbyInfo: 주변 시설 정보 검색
 - webSearch: 웹에서 최신 뉴스, 개발 계획, 이슈 검색
+
+## 검색 우선순위
+1. 사용자가 모호하거나 복잡한 검색어를 입력하면 → smartSearch 사용
+   예: "신당동 840", "래미안", "현대 아파트", "강남 재개발"
+2. 정확한 아파트명을 알고 있으면 → searchApartmentDeals 또는 searchApartmentBuildingInfo
+3. 최신 정보나 뉴스가 필요하면 → webSearch
+
+## 검색 실패 시 대응 가이드
+검색 결과가 없거나 error가 반환된 경우:
+1. 사용자에게 더 구체적인 정보를 요청하세요
+   - "정확한 아파트명을 다시 확인해 주시겠어요?"
+   - "혹시 '○○동 ○○번지'처럼 지번 주소를 아시나요?"
+   - "다른 이름으로 불리거나 비슷한 이름의 아파트일 수 있을까요?"
+2. 유사한 대안을 제시하세요
+   - searchTips가 있으면 해당 팁을 안내
+   - 주변 지역의 다른 아파트 검색을 제안
+3. 여러 결과가 나온 경우 사용자의 선택을 유도하세요
+   - "검색 결과 여러 아파트가 나왔습니다. 어느 것을 찾으시나요?"
 
 ## 웹 검색 사용 가이드
 다음의 경우 반드시 webSearch 함수를 사용하세요:
 - "최근 이슈", "뉴스", "개발", "재개발", "재건축" 등 최신 정보 요청
 - "호재", "계획", "전망" 등 미래 계획 관련 질문
 - 데이터베이스에 없는 최신 정보가 필요한 경우
+- DB 검색이 실패했지만 사용자가 확신하는 경우
 - 예: "현대연예인 아파트 최근 이슈" → webSearch("현대연예인 아파트 최근 이슈")
+
+## 검색 전략
+1. 먼저 정확한 이름으로 검색 시도
+2. 실패 시 지역명이나 건설사명을 분리해서 재검색
+3. 여전히 실패하면 웹 검색으로 대체 정보 제공
+4. 최종적으로 사용자에게 clarification 요청
 
 데이터가 필요할 때는 반드시 해당 함수를 호출하여 최신 정보를 가져와주세요.`;
 
@@ -757,6 +783,23 @@ aiRoute.post("/chat-with-data", async (c) => {
             model: "gpt-4o-mini",
             messages,
             tools: [
+                {
+                    type: "function",
+                    function: {
+                        name: "smartSearch",
+                        description: "사용자 입력을 분석하여 최적의 검색을 수행합니다 (아파트명, 주소, 브랜드명 등 자동 판별)",
+                        parameters: {
+                            type: "object",
+                            properties: {
+                                query: {
+                                    type: "string",
+                                    description: "사용자의 검색어 (예: '신당동 840', '래미안', '현대아파트')"
+                                }
+                            },
+                            required: ["query"]
+                        }
+                    }
+                },
                 {
                     type: "function",
                     function: {
@@ -862,7 +905,11 @@ aiRoute.post("/chat-with-data", async (c) => {
                 
                 let functionResult;
                 try {
-                    if (functionName === 'searchApartmentDeals') {
+                    if (functionName === 'smartSearch') {
+                        // 스마트 검색: 입력 분석 후 적절한 검색 수행
+                        const analysis = await analyzeUserInput(functionArgs.query);
+                        functionResult = await executeSearchByAnalysis(analysis, functionArgs.query);
+                    } else if (functionName === 'searchApartmentDeals') {
                         functionResult = await handleSearchApartmentDeals(functionArgs);
                     } else if (functionName === 'searchApartmentBuildingInfo') {
                         functionResult = await handleSearchApartmentBuildingInfo(functionArgs);
@@ -1491,6 +1538,208 @@ async function collectApartmentData(aptId: number) {
     }
 }
 
+// ===== 사용자 입력 분석 함수 =====
+
+interface UserInputAnalysis {
+    category: 'apartmentName' | 'address' | 'brandName' | 'generalQuery' | 'comparison' | 'unknown';
+    extractedTerms: string[];
+    clarificationNeeded: boolean;
+    confidence: number;
+    suggestedAction?: string;
+}
+
+async function analyzeUserInput(userInput: string): Promise<UserInputAnalysis> {
+    try {
+        const analysisPrompt = `너는 부동산 관련 사용자 입력을 분석하는 전문가야.
+사용자의 입력을 분석해서 의도를 정확하게 분류해줘.
+
+분류 카테고리:
+- "apartmentName": 특정 아파트 이름을 찾는 경우 (예: "청구e편한세상", "현대아파트")
+- "address": 지번이나 도로명 주소를 입력한 경우 (예: "신당동 840", "서초동 1588-1")
+- "brandName": 건설사나 브랜드명만 입력한 경우 (예: "래미안", "자이", "현대")
+- "comparison": 여러 아파트를 비교하려는 경우 (예: "A와 B 비교")
+- "generalQuery": 일반적인 부동산 정보 질문 (예: "재개발 호재", "전세 시세")
+- "unknown": 분류가 애매한 경우
+
+반드시 다음 JSON 형식으로만 응답해줘:
+{
+  "category": "카테고리명",
+  "extractedTerms": ["추출된 키워드 배열"],
+  "clarificationNeeded": true/false,
+  "confidence": 0.0~1.0,
+  "suggestedAction": "권장 검색 방법"
+}
+
+예시:
+입력: "신당동 840 현대아파트"
+출력: {"category":"address","extractedTerms":["신당동","840","현대"],"clarificationNeeded":false,"confidence":0.9,"suggestedAction":"지번 검색 후 현대 키워드로 필터링"}
+
+입력: "래미안 아파트 어때?"
+출력: {"category":"brandName","extractedTerms":["래미안"],"clarificationNeeded":true,"confidence":0.7,"suggestedAction":"래미안 브랜드 전체 검색 또는 지역 특정 필요"}
+
+사용자 입력: "${userInput}"`;
+
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                { role: "system", content: analysisPrompt }
+            ],
+            temperature: 0.0,
+            max_tokens: 200
+        });
+
+        const responseText = completion.choices[0]?.message?.content || '{}';
+        
+        // JSON 파싱 시도
+        try {
+            const analysis = JSON.parse(responseText) as UserInputAnalysis;
+            console.log('📊 입력 분석 결과:', analysis);
+            return analysis;
+        } catch (parseError) {
+            console.error('❌ 분석 결과 파싱 실패:', parseError);
+            // 기본값 반환
+            return {
+                category: 'unknown',
+                extractedTerms: [userInput],
+                clarificationNeeded: true,
+                confidence: 0.3,
+                suggestedAction: '입력을 더 구체적으로 해주세요'
+            };
+        }
+    } catch (error) {
+        console.error('❌ 사용자 입력 분석 오류:', error);
+        // 오류 시 기본값 반환
+        return {
+            category: 'unknown',
+            extractedTerms: [userInput],
+            clarificationNeeded: false,
+            confidence: 0.5,
+            suggestedAction: '일반 검색 시도'
+        };
+    }
+}
+
+// 분석 결과에 따른 검색 전략 결정
+async function executeSearchByAnalysis(analysis: UserInputAnalysis, originalInput: string) {
+    const { category, extractedTerms, clarificationNeeded, confidence, suggestedAction } = analysis;
+    
+    console.log(`🎯 검색 전략: ${category} (신뢰도: ${confidence})`);
+    
+    // 신뢰도가 낮으면 clarification 필요
+    if (confidence < 0.5 && clarificationNeeded) {
+        return {
+            needsClarification: true,
+            analysisInfo: {
+                category,
+                confidence,
+                suggestedAction
+            },
+            message: "입력하신 내용이 명확하지 않습니다. 다음 중 어떤 것을 찾으시나요?",
+            suggestions: [
+                "특정 아파트 이름 (예: '청구e편한세상')",
+                "지번 주소 (예: '신당동 840')",
+                "브랜드명 (예: '래미안 강남')",
+                "일반 정보 (예: '재개발 호재')"
+            ]
+        };
+    }
+    
+    switch (category) {
+        case 'apartmentName':
+            // 아파트명 직접 검색
+            const nameResult = await handleSearchApartmentDeals({ 
+                apartmentName: extractedTerms.join(' ') 
+            });
+            
+            // 검색 실패 시 추가 시도
+            if (nameResult.error && extractedTerms.length > 1) {
+                // 각 단어로 개별 검색 시도
+                for (const term of extractedTerms) {
+                    const retryResult = await handleSearchApartmentDeals({ 
+                        apartmentName: term 
+                    });
+                    if (!retryResult.error) {
+                        return retryResult;
+                    }
+                }
+            }
+            return nameResult;
+            
+        case 'address':
+            // 지번 주소 우선 검색
+            const addressQuery = extractedTerms.join(' ');
+            const addressResult = await handleSearchApartmentDeals({ 
+                apartmentName: addressQuery 
+            });
+            
+            // 주소 검색 실패 시 웹 검색 시도
+            if (addressResult.error) {
+                console.log('📍 주소 검색 실패, 웹 검색 시도');
+                return await handleWebSearch({ 
+                    query: `${addressQuery} 아파트` 
+                });
+            }
+            return addressResult;
+            
+        case 'brandName':
+            // 브랜드명 검색
+            const brandResult = await handleSearchApartmentDeals({ 
+                apartmentName: extractedTerms[0] 
+            });
+            
+            // 결과가 너무 많으면 지역 특정 요청
+            if (!brandResult.error && brandResult.foundApartments?.length > 10) {
+                return {
+                    ...brandResult,
+                    needsRefinement: true,
+                    message: `"${extractedTerms[0]}" 브랜드 아파트가 ${brandResult.foundApartments.length}개 검색되었습니다. 지역을 추가로 입력해주시면 더 정확한 결과를 제공할 수 있습니다.`,
+                    suggestions: ['강남구', '서초구', '송파구', '마포구']
+                };
+            }
+            return brandResult;
+            
+        case 'comparison':
+            // 비교 검색 (여러 아파트 검색)
+            const results = [];
+            for (const term of extractedTerms.slice(0, 3)) { // 최대 3개까지
+                const result = await handleSearchApartmentDeals({ 
+                    apartmentName: term 
+                });
+                results.push({ 
+                    searchTerm: term, 
+                    result,
+                    found: !result.error 
+                });
+            }
+            
+            const foundCount = results.filter(r => r.found).length;
+            return { 
+                comparisonResults: results,
+                summary: `${extractedTerms.length}개 중 ${foundCount}개 아파트를 찾았습니다.`
+            };
+            
+        case 'generalQuery':
+            // 웹 검색으로 전환
+            return await handleWebSearch({ 
+                query: originalInput 
+            });
+            
+        default:
+            // 기본 검색 시도
+            const defaultResult = await handleSearchApartmentDeals({ 
+                apartmentName: originalInput 
+            });
+            
+            // 실패시 웹 검색
+            if (defaultResult.error) {
+                return await handleWebSearch({ 
+                    query: originalInput 
+                });
+            }
+            return defaultResult;
+    }
+}
+
 // ===== Function Calling 핸들러 함수들 =====
 
 // 아파트 실거래가 검색 함수
@@ -1502,51 +1751,87 @@ async function handleSearchApartmentDeals(args: { apartmentName: string; period?
         let aptList: any[] = [];
         let searchStrategy = '';
         
-        // 지번 주소 검색 시도 (예: "신당동 840")
-        const addressMatch = apartmentName.match(/(.+동)\s*(\d+)/);
-        if (addressMatch) {
-            const dong = addressMatch[1];
-            const jibun = addressMatch[2];
-            
-            aptList = await db
-                .selectFrom('oi.apt_info')
-                .select(['id', 'apt_nm', 'jibun_address'])
-                .where(sql`jibun_address ~ ${dong + '.*' + jibun}`)
-                .limit(10)
-                .execute();
+        // 지번 주소 검색 시도 (예: "신당동 840", "신당동 840-1", "신당동 840번지")
+        const addressPatterns = [
+            /(.+[동로가])\s*(\d+)[-~]?(\d*)(?:번지|번|호)?/,  // 신당동 840-1번지
+            /(.+[동로가])\s+(\d+)/,  // 신당동 840
+        ];
+        
+        for (const pattern of addressPatterns) {
+            const addressMatch = apartmentName.match(pattern);
+            if (addressMatch) {
+                const location = addressMatch[1];
+                const mainNum = addressMatch[2];
+                const subNum = addressMatch[3] || '';
                 
-            if (aptList.length > 0) {
-                searchStrategy = `지번검색(${dong} ${jibun}번지)`;
+                // 정규식과 유사도 검색 병합
+                const jibunPattern = subNum 
+                    ? `${location}.*${mainNum}[-~]?${subNum}`
+                    : `${location}.*${mainNum}(?!\\d)`;
+                
+                aptList = await db
+                    .selectFrom('oi.apt_info')
+                    .select(['id', 'apt_nm', 'jibun_address'])
+                    .where(sql`jibun_address ~ ${jibunPattern}`)
+                    .limit(10)
+                    .execute();
+                
+                // 정규식 매칭 실패시 유사도 검색 시도
+                if (aptList.length === 0) {
+                    const searchAddr = `${location} ${mainNum}${subNum ? '-' + subNum : ''}`;
+                    aptList = await db
+                        .selectFrom('oi.apt_info')
+                        .select(['id', 'apt_nm', 'jibun_address', sql`similarity(jibun_address, ${searchAddr}) as addr_sim`])
+                        .where(sql`similarity(jibun_address, ${searchAddr}) > 0.3`)
+                        .orderBy(sql`similarity(jibun_address, ${searchAddr}) desc`)
+                        .limit(10)
+                        .execute();
+                }
+                    
+                if (aptList.length > 0) {
+                    searchStrategy = `지번검색(${location} ${mainNum}${subNum ? '-' + subNum : ''}번지)`;
+                    break;
+                }
             }
         }
         
-        // 1차 검색: pg_trgm 유사도 기반 검색
+        // 1차 검색: pg_trgm 유사도 기반 검색 (동적 기준)
         if (aptList.length === 0) {
-            aptList = await db
-                .selectFrom('oi.apt_info')
-                .select(['id', 'apt_nm', 'jibun_address', sql`similarity(apt_nm, ${apartmentName}) as sim_score`])
-                .where(sql`similarity(apt_nm, ${apartmentName}) > 0.3`)
-                .orderBy(sql`similarity(apt_nm, ${apartmentName}) desc`)
-                .limit(10)
-                .execute();
-                
-            if (aptList.length > 0) {
-                searchStrategy = `유사도검색(similarity > 0.3)`;
+            // 높은 유사도부터 시도
+            const similarityLevels = [0.3, 0.25, 0.2];
+            for (const threshold of similarityLevels) {
+                aptList = await db
+                    .selectFrom('oi.apt_info')
+                    .select(['id', 'apt_nm', 'jibun_address', sql`similarity(apt_nm, ${apartmentName}) as sim_score`])
+                    .where(sql`similarity(apt_nm, ${apartmentName}) > ${threshold}`)
+                    .orderBy(sql`similarity(apt_nm, ${apartmentName}) desc`)
+                    .limit(15)
+                    .execute();
+                    
+                if (aptList.length > 0) {
+                    searchStrategy = `유사도검색(similarity > ${threshold})`;
+                    break;
+                }
             }
         }
         
-        // 2차 검색: 기존 ILIKE 검색 (후보 확장용)
-        if (aptList.length === 0) {
-            aptList = await db
+        // 2차 검색: 기존 ILIKE 검색과 병합
+        if (aptList.length < 5) {  // 결과가 부족하면 추가 검색
+            const ilikeResults = await db
                 .selectFrom('oi.apt_info')
                 .select(['id', 'apt_nm', 'jibun_address'])
                 .where('apt_nm', 'ilike', `%${apartmentName}%`)
                 .orderBy('apt_nm', 'asc')
                 .limit(10)
                 .execute();
+            
+            // 기존 결과와 병합 (중복 제거)
+            const existingIds = new Set(aptList.map(apt => apt.id));
+            const newResults = ilikeResults.filter(apt => !existingIds.has(apt.id));
+            aptList = [...aptList, ...newResults].slice(0, 15);
                 
-            if (aptList.length > 0) {
-                searchStrategy = 'ILIKE검색';
+            if (ilikeResults.length > 0) {
+                searchStrategy = aptList.length > 0 ? `${searchStrategy} + ILIKE검색` : 'ILIKE검색';
             }
         }
         
@@ -1578,7 +1863,16 @@ async function handleSearchApartmentDeals(args: { apartmentName: string; period?
         
         // 4차 검색: 건설사명만으로 시도
         if (aptList.length === 0) {
-            const constructorKeywords = ['현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벽산'];
+            // 건설사 및 브랜드명 확대
+            const constructorKeywords = [
+                // 건설사
+                '현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벽산',
+                'GS', '두산', '태영', '계룡', '금호', '호반', '중흥', '부영', '신세계', '이수', '동부',
+                // 브랜드명
+                '래미안', '자이', '아이파크', '푸르지오', '롯데캐슬', 'SK뷰', 'e편한세상', '힐스테이트', 
+                '더샵', '트리플에이', '센트럴', '파크리오', '리버파크', '파크뷰', '센트레빌', '하늘채',
+                '위브', '데시앙', '센트럴파크', '아크로', '디에이치', '엘크루', '리슈빌', '유보라'
+            ];
             
             for (const constructor of constructorKeywords) {
                 if (apartmentName.includes(constructor)) {
@@ -1683,51 +1977,87 @@ async function handleSearchApartmentBuildingInfo(args: { apartmentName: string }
         let aptList: any[] = [];
         let searchStrategy = '';
         
-        // 지번 주소 검색 시도 (예: "신당동 840")
-        const addressMatch = apartmentName.match(/(.+동)\s*(\d+)/);
-        if (addressMatch) {
-            const dong = addressMatch[1];
-            const jibun = addressMatch[2];
-            
-            aptList = await db
-                .selectFrom('oi.apt_info')
-                .select(['id', 'apt_nm', 'jibun_address'])
-                .where(sql`jibun_address ~ ${dong + '.*' + jibun}`)
-                .limit(10)
-                .execute();
+        // 지번 주소 검색 시도 (예: "신당동 840", "신당동 840-1", "신당동 840번지")
+        const addressPatterns = [
+            /(.+[동로가])\s*(\d+)[-~]?(\d*)(?:번지|번|호)?/,  // 신당동 840-1번지
+            /(.+[동로가])\s+(\d+)/,  // 신당동 840
+        ];
+        
+        for (const pattern of addressPatterns) {
+            const addressMatch = apartmentName.match(pattern);
+            if (addressMatch) {
+                const location = addressMatch[1];
+                const mainNum = addressMatch[2];
+                const subNum = addressMatch[3] || '';
                 
-            if (aptList.length > 0) {
-                searchStrategy = `지번검색(${dong} ${jibun}번지)`;
+                // 정규식과 유사도 검색 병합
+                const jibunPattern = subNum 
+                    ? `${location}.*${mainNum}[-~]?${subNum}`
+                    : `${location}.*${mainNum}(?!\\d)`;
+                
+                aptList = await db
+                    .selectFrom('oi.apt_info')
+                    .select(['id', 'apt_nm', 'jibun_address'])
+                    .where(sql`jibun_address ~ ${jibunPattern}`)
+                    .limit(10)
+                    .execute();
+                
+                // 정규식 매칭 실패시 유사도 검색 시도
+                if (aptList.length === 0) {
+                    const searchAddr = `${location} ${mainNum}${subNum ? '-' + subNum : ''}`;
+                    aptList = await db
+                        .selectFrom('oi.apt_info')
+                        .select(['id', 'apt_nm', 'jibun_address', sql`similarity(jibun_address, ${searchAddr}) as addr_sim`])
+                        .where(sql`similarity(jibun_address, ${searchAddr}) > 0.3`)
+                        .orderBy(sql`similarity(jibun_address, ${searchAddr}) desc`)
+                        .limit(10)
+                        .execute();
+                }
+                    
+                if (aptList.length > 0) {
+                    searchStrategy = `지번검색(${location} ${mainNum}${subNum ? '-' + subNum : ''}번지)`;
+                    break;
+                }
             }
         }
         
-        // 1차 검색: pg_trgm 유사도 기반 검색
+        // 1차 검색: pg_trgm 유사도 기반 검색 (동적 기준)
         if (aptList.length === 0) {
-            aptList = await db
-                .selectFrom('oi.apt_info')
-                .select(['id', 'apt_nm', 'jibun_address', sql`similarity(apt_nm, ${apartmentName}) as sim_score`])
-                .where(sql`similarity(apt_nm, ${apartmentName}) > 0.3`)
-                .orderBy(sql`similarity(apt_nm, ${apartmentName}) desc`)
-                .limit(10)
-                .execute();
-                
-            if (aptList.length > 0) {
-                searchStrategy = `유사도검색(similarity > 0.3)`;
+            // 높은 유사도부터 시도
+            const similarityLevels = [0.3, 0.25, 0.2];
+            for (const threshold of similarityLevels) {
+                aptList = await db
+                    .selectFrom('oi.apt_info')
+                    .select(['id', 'apt_nm', 'jibun_address', sql`similarity(apt_nm, ${apartmentName}) as sim_score`])
+                    .where(sql`similarity(apt_nm, ${apartmentName}) > ${threshold}`)
+                    .orderBy(sql`similarity(apt_nm, ${apartmentName}) desc`)
+                    .limit(15)
+                    .execute();
+                    
+                if (aptList.length > 0) {
+                    searchStrategy = `유사도검색(similarity > ${threshold})`;
+                    break;
+                }
             }
         }
         
-        // 2차 검색: 기존 ILIKE 검색 (후보 확장용)
-        if (aptList.length === 0) {
-            aptList = await db
+        // 2차 검색: 기존 ILIKE 검색과 병합
+        if (aptList.length < 5) {  // 결과가 부족하면 추가 검색
+            const ilikeResults = await db
                 .selectFrom('oi.apt_info')
                 .select(['id', 'apt_nm', 'jibun_address'])
                 .where('apt_nm', 'ilike', `%${apartmentName}%`)
                 .orderBy('apt_nm', 'asc')
                 .limit(10)
                 .execute();
+            
+            // 기존 결과와 병합 (중복 제거)
+            const existingIds = new Set(aptList.map(apt => apt.id));
+            const newResults = ilikeResults.filter(apt => !existingIds.has(apt.id));
+            aptList = [...aptList, ...newResults].slice(0, 15);
                 
-            if (aptList.length > 0) {
-                searchStrategy = 'ILIKE검색';
+            if (ilikeResults.length > 0) {
+                searchStrategy = aptList.length > 0 ? `${searchStrategy} + ILIKE검색` : 'ILIKE검색';
             }
         }
         
@@ -1759,7 +2089,16 @@ async function handleSearchApartmentBuildingInfo(args: { apartmentName: string }
         
         // 4차 검색: 건설사명만으로 시도
         if (aptList.length === 0) {
-            const constructorKeywords = ['현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벽산'];
+            // 건설사 및 브랜드명 확대
+            const constructorKeywords = [
+                // 건설사
+                '현대', '삼성', 'SK', 'LG', '대우', '한화', '롯데', '포스코', '코오롱', '한양', '대림', '현진', '벽산',
+                'GS', '두산', '태영', '계룡', '금호', '호반', '중흥', '부영', '신세계', '이수', '동부',
+                // 브랜드명
+                '래미안', '자이', '아이파크', '푸르지오', '롯데캐슬', 'SK뷰', 'e편한세상', '힐스테이트', 
+                '더샵', '트리플에이', '센트럴', '파크리오', '리버파크', '파크뷰', '센트레빌', '하늘채',
+                '위브', '데시앙', '센트럴파크', '아크로', '디에이치', '엘크루', '리슈빌', '유보라'
+            ];
             
             for (const constructor of constructorKeywords) {
                 if (apartmentName.includes(constructor)) {
