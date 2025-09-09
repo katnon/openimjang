@@ -12,6 +12,7 @@ import poi from './routes/poi';
 import { aiRoute } from './routes/ai';
 import apiAiToolsRoute from './routes/apiAiTools';
 import aiChatRoute from './routes/aiChat';
+import swaggerRoute from './routes/swagger';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -33,6 +34,7 @@ app.route('/api/poi', poi);
 app.route('/api/ai', aiRoute);
 app.route('/api/ai', apiAiToolsRoute);  // AI Functions 전용 라우터
 app.route('/api/ai-new', aiChatRoute);  // 새로운 표준 패턴 테스트용
+app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
 
