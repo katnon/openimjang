@@ -69,13 +69,41 @@ OpenImjang/
 │   │   │   │   └── db.ts            # Kysely PostGIS 연결
 │   │   │   ├── middleware/
 │   │   │   │   └── auth.ts          # Firebase 인증 미들웨어
-│   │   │   └── routes/
-│   │   │       ├── ai.ts            # 🆕 OpenAI API 라우트
-│   │   │       ├── search.ts        # 부동산 검색 API
-│   │   │       ├── poi.ts           # POI(관심지점) API
-│   │   │       └── geo/
-│   │   │           ├── buildings.ts # 건물 정보 API
-│   │   │           └── upis.ts      # 지적 정보 API
+│   │   │   ├── routes/
+│   │   │   │   ├── ai.ts            # 🆕 OpenAI API 라우트 (기존 채팅봇)
+│   │   │   │   ├── apiAiTools.ts    # 🆕 모듈형 AI Function API
+│   │   │   │   ├── search.ts        # 부동산 검색 API
+│   │   │   │   ├── poi.ts           # POI(관심지점) API
+│   │   │   │   └── geo/
+│   │   │   │       ├── buildings.ts # 건물 정보 API
+│   │   │   │       └── upis.ts      # 지적 정보 API
+│   │   │   └── ai/                  # 🆕 AI 모듈형 시스템
+│   │   │       ├── tools/
+│   │   │       │   ├── types.ts     # AI Tool 타입 정의
+│   │   │       │   ├── validation.ts # Ajv 검증 파이프라인
+│   │   │       │   └── index.ts     # Tool 스키마 집계
+│   │   │       ├── schemas/         # JSON Schema 정의
+│   │   │       │   ├── realestate/  # 부동산 함수 스키마 (5개)
+│   │   │       │   └── geo/         # 지리정보 함수 스키마 (8개)
+│   │   │       ├── handlers/        # Function 핸들러 구현체
+│   │   │       │   ├── index.ts     # 핸들러 동적 로딩 맵
+│   │   │       │   ├── searchRealEstateDeals.ts
+│   │   │       │   ├── getLatestTrade.ts
+│   │   │       │   ├── getPriceTrends.ts
+│   │   │       │   ├── getDealStatsSummary.ts
+│   │   │       │   ├── getDealDistribution.ts
+│   │   │       │   └── geo/         # 지리정보 핸들러군
+│   │   │       │       ├── geocodeAddress.ts
+│   │   │       │       ├── reverseGeocode.ts
+│   │   │       │       ├── lookupLegalDongCode.ts
+│   │   │       │       ├── convertDongCode.ts
+│   │   │       │       ├── getNearbyByCoords.ts
+│   │   │       │       ├── isochroneSearch.ts
+│   │   │       │       ├── transformCoordinates.ts
+│   │   │       │       └── normalizeKoreanAddress.ts
+│   │   │       └── repo/            # Repository 패턴 데이터 계층
+│   │   │           ├── dealsRepo.ts # 부동산 거래 데이터 레포지토리
+│   │   │           └── geoRepo.ts   # 지리정보 서비스 레포지토리
 │   │   └── package.json
 │   └── web/                         # React SPA Frontend
 │       ├── src/
@@ -506,14 +534,248 @@ POST /api/ai/chat
   "aptId": 12345,
   "chatHistory": [...]
 }
+
+// 🆕 AI Function Calling API - 모듈형 핸들러 시스템
+GET /api/ai/tools                    // 사용 가능한 AI 함수 목록 조회 (20개)
+GET /api/ai/tools/{functionName}     // 특정 함수 스키마 조회
+POST /api/ai/tools/{functionName}    // AI 함수 실행 (Ajv 파라미터 검증)
+
+// 예시: 부동산 함수 호출
+POST /api/ai/tools/searchRealEstateDeals
+{
+  "apartmentName": "래미안",
+  "dealType": "매매",
+  "area": 84.5
+}
+
+// 예시: 지리정보 함수 호출
+POST /api/ai/tools/geocodeAddress
+{
+  "address": "서울특별시 강남구 테헤란로 123"
+}
 ```
 
 ## 🎯 핵심 기능
 
-### 🤖 AI 임장 도우미
-- **종합 분석**: 실거래가, 건물정보, 주변환경을 AI가 통합 분석
-- **채팅봇**: 부동산 관련 질의응답 (컨텍스트 유지)
-- **개인화**: 사용자의 임장 메모와 선호도 반영
+### 🤖 AI 임장 도우미 - 차세대 모듈형 Function Calling 시스템
+
+OpenImjang의 AI 시스템은 **OpenAI Function Calling**과 **모듈형 아키텍처**를 기반으로 설계된 차세대 부동산 분석 플랫폼입니다.
+
+#### 🏗️ 아키텍처 개요
+
+```mermaid
+graph TB
+    subgraph "AI Frontend Layer"
+        A[AI 채팅봇] --> B[Function Calling Router]
+        C[AI 분석 패널] --> B
+    end
+    
+    subgraph "AI Backend - Modular Function System"
+        B --> D[AI Tools API Router<br/>/api/ai/tools]
+        D --> E[Ajv Parameter Validation<br/>JSON Schema 검증]
+        E --> F[Dynamic Handler Import<br/>동적 모듈 로딩]
+        
+        F --> G[부동산 함수군<br/>12개 함수]
+        F --> H[지리정보 함수군<br/>8개 함수]
+        
+        subgraph "RealEstate Handlers"
+            G1[searchRealEstateDeals] --> R1[dealsRepo.ts]
+            G2[getLatestTrade] --> R1
+            G3[getPriceTrends] --> R1
+            G4[getDealStatsSummary] --> R1
+            G5[getDealDistribution] --> R1
+            G --> G1 & G2 & G3 & G4 & G5
+        end
+        
+        subgraph "Geo Handlers" 
+            H1[geocodeAddress] --> R2[geoRepo.ts]
+            H2[reverseGeocode] --> R2
+            H3[getNearbyByCoords] --> R2
+            H4[transformCoordinates] --> R2
+            H --> H1 & H2 & H3 & H4
+        end
+        
+        subgraph "Repository Layer"
+            R1 --> I[Kysely ORM]
+            R2 --> J[외부 API 통합<br/>V-World, 카카오, 공공데이터]
+            I --> K[PostGIS Database]
+            J --> L[External APIs]
+        end
+    end
+    
+    style A fill:#61dafb
+    style D fill:#10a37f
+    style E fill:#f39c12
+    style G fill:#e74c3c
+    style H fill:#3498db
+    style R1 fill:#9b59b6
+    style R2 fill:#2ecc71
+```
+
+#### 🔧 핵심 기술 구성요소
+
+##### 1. **모듈형 Function Handler 시스템**
+```typescript
+// 동적 핸들러 로딩 (apps/bff/src/ai/handlers/index.ts)
+export const handlers: ToolHandlers = {
+  searchRealEstateDeals: async (args) => {
+    const { searchRealEstateDeals } = await import('./searchRealEstateDeals');
+    return searchRealEstateDeals(args);
+  },
+  geocodeAddress: async (args) => {
+    const { geocodeAddress } = await import('./geo/geocodeAddress');
+    return geocodeAddress(args);
+  },
+  // 총 20개 함수 - 필요시에만 동적 로딩
+};
+```
+
+##### 2. **Ajv 기반 파라미터 검증 파이프라인**
+```typescript
+// JSON Schema 실시간 검증 (apps/bff/src/ai/tools/validation.ts)
+export function validateOrThrow(schema: ToolSchema, data: unknown): void {
+  const validate = ajv.compile(schema.parameters);
+  const isValid = validate(data);
+  
+  if (!isValid) {
+    const errors = validate.errors || [];
+    const errorMessages = errors.map(err => 
+      `${err.instancePath}: ${err.message}`
+    );
+    throw new ValidationError(`파라미터 검증 실패: ${errorMessages.join(', ')}`);
+  }
+}
+```
+
+##### 3. **Repository Pattern 기반 데이터 접근**
+- **`dealsRepo.ts`**: 부동산 거래 데이터 전문 레포지토리
+  - PostGIS 공간 쿼리 최적화
+  - 복잡한 집계 함수 (트렌드 분석, 통계 요약, 분포 분석)
+  - Kysely ORM으로 타입 안전 SQL 쿼리
+
+- **`geoRepo.ts`**: 지리정보 서비스 통합 레포지토리  
+  - V-World API: 정부 지리정보 (지오코딩 1차 우선)
+  - 카카오 지도 API: 상용 지리정보 (Fallback)
+  - 공공데이터포털: 법정동 코드 조회
+  - proj4.js: 좌표계 변환 (WGS84/GRS80/KATEC/TM 지원)
+
+#### 📋 Function Catalog - 총 20개 함수
+
+##### **부동산 분석 함수군 (12개)**
+1. **`searchRealEstateDeals`** - 실거래 데이터 검색
+   - 아파트명/ID 기반 거래 내역 조회
+   - 매매/전세/월세 유형별 필터링
+   - 면적별 거래가 분석 (±5㎡ 허용오차)
+
+2. **`getLatestTrade`** - 최신 거래 내역
+   - 시간순 정렬된 최근 거래 Top N
+   - 거래 유형별 최신 동향 파악
+
+3. **`getPriceTrends`** - 가격 트렌드 분석  
+   - 월별/분기별 평균 거래가 추이
+   - 상승/하락률 계산 및 안정성 점수
+   - 전월 대비 변화율 상세 분석
+
+4. **`getDealStatsSummary`** - 거래 통계 요약
+   - 평균/최저/최고 거래가
+   - 거래량 및 유형별 분포
+   - 한국어 통화 포맷팅 (만원→억/천만원)
+
+5. **`getDealDistribution`** - 거래 분포 분석
+   - 가격대별 히스토그램 (5천만원 단위)
+   - 면적별 분포 (10㎡ 단위)  
+   - 층별 분포 (5층 단위)
+
+6. **`getBuildingInfo`** - 건축물 상세 정보
+7. **`searchNearbyPOI`** - 주변 편의시설 검색
+8. **`compareMultipleApartments`** - 다중 아파트 비교
+9. **`findSimilarApartments`** - 유사 아파트 추천
+10. **`searchDealsByFilters`** - 복합 조건 검색 (구현 예정)
+11. **`getComparableSales`** - 비교 거래 사례 (구현 예정)  
+12. **`estimateRentYield`** - 임대 수익률 계산 (구현 예정)
+
+##### **지리정보 함수군 (8개) - 🆕 새로 구현**
+1. **`geocodeAddress`** - 주소→좌표 변환
+   ```json
+   // V-World API 1차, 카카오 API Fallback
+   {
+     "coordinates": { "longitude": 127.031, "latitude": 37.499 },
+     "confidence": 0.9,
+     "source": "VWorld"
+   }
+   ```
+
+2. **`reverseGeocode`** - 좌표→주소 변환
+   ```json
+   {
+     "addresses": {
+       "roadAddress": "서울특별시 강남구 테헤란로 123",  
+       "jibunAddress": "서울특별시 강남구 역삼동 123-45"
+     }
+   }
+   ```
+
+3. **`lookupLegalDongCode`** - 법정동 코드 조회
+   ```json
+   {
+     "legalDongInfo": {
+       "code": "1168010100",
+       "name": "서울특별시 강남구 역삼동"
+     }
+   }
+   ```
+
+4. **`convertDongCode`** - 법정동↔행정동 변환
+5. **`getNearbyByCoords`** - 좌표 기반 POI 검색
+6. **`isochroneSearch`** - 등시간대 접근성 분석
+7. **`transformCoordinates`** - 좌표계 변환 (proj4.js)
+8. **`normalizeKoreanAddress`** - 한국 주소 정규화
+
+#### 🛡️ 안전성 및 성능 최적화
+
+##### **파라미터 검증**
+- **Ajv JSON Schema**: OpenAI Function Calling 스펙 완전 준수
+- **타입 안전성**: TypeScript 인터페이스와 스키마 일치성 검증  
+- **에러 처리**: 한국어 에러 메시지 및 상세 제안사항
+
+##### **성능 최적화**
+- **동적 Import**: 사용되는 핸들러만 런타임 로딩
+- **Repository 캐싱**: 외부 API 응답 5-30분 캐시 
+- **Connection Pooling**: Kysely + PostgreSQL 연결 풀 최적화
+
+##### **Fallback 전략**
+- **API 다중화**: 1차 실패시 2차 API 자동 전환
+- **Mock 응답**: 외부 API 장애시 기본 응답 제공
+- **Graceful Degradation**: 부분 실패시에도 가용한 데이터 반환
+
+#### 🔄 확장 가능한 설계
+
+새로운 AI 함수 추가는 다음 4단계로 완성됩니다:
+
+```typescript
+// 1. 스키마 정의 (apps/bff/src/ai/schemas/)
+export const newFunctionSchema: ToolSchema = {
+  name: "newFunction",
+  description: "새로운 기능 설명",
+  parameters: { /* JSON Schema */ }
+}
+
+// 2. 핸들러 구현 (apps/bff/src/ai/handlers/)
+export async function newFunction(args: NewFunctionParams) {
+  // 비즈니스 로직 구현
+}
+
+// 3. 핸들러 등록 (handlers/index.ts)
+newFunction: async (args) => {
+  const { newFunction } = await import('./newFunction');
+  return newFunction(args);
+}
+
+// 4. 스키마 등록 (tools/index.ts)
+export { newFunctionSchema } from '../schemas/newFunction.schema';
+```
+
+이 모듈형 설계로 **무한 확장 가능한 AI 부동산 분석 플랫폼**을 구축했습니다.
 
 ### 🗺️ 인터랙티브 지도
 - **2D/3D 통합**: 카카오맵 + Cesium 3D 지구본
@@ -584,6 +846,56 @@ npm run test:e2e
 
 # 지도 인터랙션 테스트
 npm run test:map
+```
+
+## 🔄 AI 시스템 검증 및 배포
+
+### Part 3: OpenAI Assistant 동기화 검증
+```bash
+# 로컬 스키마와 OpenAI Assistant 일치성 검사
+bun run validate:assistant-tools
+
+# 환경변수 설정 필요
+OPENAI_API_KEY=your_key_here
+OPENAI_ASSISTANT_ID=asst_your_assistant_id
+```
+
+**검증 항목:**
+- ✅ 로컬 20개 함수 vs Assistant 함수 이름 매칭
+- ✅ JSON Schema 구조 deep-equal 비교  
+- ✅ 파라미터 타입/enum 일치성 검사
+- ✅ description 텍스트 동일성 확인
+
+### Part 4: 모듈형 채팅 시스템
+```bash
+# 새로운 표준 패턴 Chat API 테스트
+curl -X POST http://localhost:8787/api/ai-new/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "서울 강남의 아파트 가격 동향을 알려주세요"}'
+```
+
+**핵심 개선사항:**
+- **인라인 도구 제거**: 모든 function 정의를 `tools/` 모듈로 이동
+- **표준 Tool Call 루프**: Ajv 검증 → Handler 실행 → Tool 피드백 → 재호출
+- **무한루프 방지**: 최대 6회 제한, guard 카운터
+- **책임 분리**: 대화 orchestration vs 비즈니스 로직 분리
+- **에러 표준화**: `{success: false, error}` 구조로 모델 이해도 향상
+
+### 배포 전 체크리스트
+```bash
+# 1. 스키마 동기화 확인
+bun run validate:assistant-tools
+
+# 2. 타입 검사
+bun run typecheck  
+
+# 3. 개발 서버 재시작
+bun run dev
+
+# 4. API 응답 테스트
+curl -X POST localhost:8787/api/ai/tools/getPriceTrends \
+  -H "Content-Type: application/json" \
+  -d '{"aptId": 123, "period": "1년"}'
 ```
 
 ## 📈 로드맵
