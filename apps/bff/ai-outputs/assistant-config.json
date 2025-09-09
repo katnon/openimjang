@@ -1,0 +1,12 @@
+{
+  "name": "OpenImjang AI 임장봇",
+  "model": "gpt-4o",
+  "description": "OpenImjang 부동산 임장 분석 전문 AI 어시스턴트",
+  "toolCount": 20,
+  "categories": {
+    "realestate": 8,
+    "geo": 8,
+    "other": 4
+  },
+  "exportedAt": "2025-09-09T04:49:57.276Z"
+}

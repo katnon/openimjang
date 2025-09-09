@@ -1,0 +1,786 @@
+{
+  "searchRealEstateDeals": {
+    "name": "searchRealEstateDeals",
+    "description": "특정 아파트의 실거래 데이터를 검색합니다. 거래 유형(매매/전세/월세)과 면적별로 필터링 가능합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "apartmentName": {
+          "type": "string",
+          "description": "아파트명 (예: 래미안, 힐스테이트)"
+        },
+        "aptId": {
+          "type": "number",
+          "description": "아파트 ID (현재 컨텍스트의 아파트를 사용하려면 생략 가능)"
+        },
+        "dealType": {
+          "type": "string",
+          "enum": [
+            "매매",
+            "전세",
+            "월세",
+            "전월세",
+            "전체"
+          ],
+          "description": "거래 유형 필터"
+        },
+        "area": {
+          "type": "number",
+          "description": "전용면적 필터 (평방미터)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "getBuildingInfo": {
+    "name": "getBuildingInfo",
+    "description": "아파트의 건물 정보(표제부등본, 총괄표제부)를 조회합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "aptId": {
+          "type": "number",
+          "description": "아파트 ID"
+        }
+      },
+      "required": [
+        "aptId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "searchNearbyPOI": {
+    "name": "searchNearbyPOI",
+    "description": "특정 위치 주변의 POI(관심지점)를 검색합니다. 학교, 병원, 마트, 지하철역 등을 찾을 수 있습니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number",
+          "description": "위도 (현재 아파트 위치를 사용하려면 생략 가능)"
+        },
+        "lng": {
+          "type": "number",
+          "description": "경도 (현재 아파트 위치를 사용하려면 생략 가능)"
+        },
+        "poiType": {
+          "type": "string",
+          "enum": [
+            "학교",
+            "병원",
+            "마트",
+            "지하철",
+            "버스정류장",
+            "공원",
+            "편의점",
+            "은행",
+            "전체"
+          ],
+          "description": "검색할 POI 유형"
+        },
+        "radius": {
+          "type": "number",
+          "description": "검색 반경 (미터, 기본값: 1000)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "compareMultipleApartments": {
+    "name": "compareMultipleApartments",
+    "description": "여러 아파트의 최근 거래 평균가를 비교합니다. 마곡엠밸리 전체 단지 등 다중 비교에 최적화되어 있습니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "apartmentIds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "비교할 아파트 ID 목록 (최대 20개)"
+        },
+        "apartmentPattern": {
+          "type": "string",
+          "description": "아파트명 패턴 (예: '마곡엠밸리', '래미안'). apartmentIds가 없을 때 사용"
+        },
+        "period": {
+          "type": "string",
+          "description": "조회 기간 (예: '3년', '1년', '6개월', 기본값: '3년')"
+        },
+        "numDeals": {
+          "type": "number",
+          "description": "각 아파트별 평균 계산할 최근 거래 수 (기본값: 3)"
+        },
+        "areaTolerance": {
+          "type": "number",
+          "description": "면적 오차 허용 범위 (㎡, 기본값: 5)"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  "findSimilarApartments": {
+    "name": "findSimilarApartments",
+    "description": "특정 아파트와 유사한 조건의 다른 아파트를 추천합니다. 면적, 가격대, 위치, 건축년도 등을 고려합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "aptId": {
+          "type": "number",
+          "description": "기준이 되는 아파트 ID (현재 아파트를 사용하려면 생략 가능)"
+        },
+        "priceRange": {
+          "type": "number",
+          "description": "가격 범위 허용 오차 (%, 기본값: 20)"
+        },
+        "areaRange": {
+          "type": "number",
+          "description": "면적 범위 허용 오차 (%, 기본값: 15)"
+        },
+        "distanceKm": {
+          "type": "number",
+          "description": "검색할 거리 반경 (km, 기본값: 5)"
+        },
+        "maxResults": {
+          "type": "number",
+          "description": "최대 결과 개수 (기본값: 5)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "getLatestTrade": {
+    "name": "getLatestTrade",
+    "description": "특정 아파트의 최근 거래 내역을 조회합니다. 매매, 전세, 월세 거래를 시간순으로 정렬하여 제공합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "apartmentName": {
+          "type": "string",
+          "description": "아파트 이름"
+        },
+        "aptId": {
+          "type": "number",
+          "description": "아파트 ID (apartmentName 대신 사용 가능)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "조회할 최대 거래 수 (기본값: 10)"
+        },
+        "dealType": {
+          "type": "string",
+          "enum": [
+            "매매",
+            "전세",
+            "월세",
+            "전체"
+          ],
+          "description": "거래 유형 필터 (기본값: 전체)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "getPriceTrends": {
+    "name": "getPriceTrends",
+    "description": "특정 아파트의 가격 트렌드를 분석합니다. 시간대별 평균가, 상승/하락률 등을 제공합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "aptId": {
+          "type": "number",
+          "description": "아파트 ID (현재 컨텍스트의 아파트를 사용하려면 생략 가능)"
+        },
+        "period": {
+          "type": "string",
+          "enum": [
+            "1년",
+            "2년",
+            "3년",
+            "5년"
+          ],
+          "description": "분석 기간 (기본값: 3년)"
+        },
+        "dealType": {
+          "type": "string",
+          "enum": [
+            "매매",
+            "전세",
+            "월세",
+            "전체"
+          ],
+          "description": "거래 유형 (기본값: 전체)"
+        },
+        "areaRange": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "면적 범위 [최소, 최대] (㎡)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "getDealStatsSummary": {
+    "name": "getDealStatsSummary",
+    "description": "특정 아파트의 거래 통계 요약을 제공합니다. 평균가, 중간값, 거래량, 평균 거래일수 등을 포함합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "aptId": {
+          "type": "number",
+          "description": "아파트 ID (현재 컨텍스트의 아파트를 사용하려면 생략 가능)"
+        },
+        "period": {
+          "type": "string",
+          "enum": [
+            "1개월",
+            "3개월",
+            "6개월",
+            "1년",
+            "2년",
+            "3년"
+          ],
+          "description": "집계 기간 (기본값: 1년)"
+        },
+        "dealType": {
+          "type": "string",
+          "enum": [
+            "매매",
+            "전세",
+            "월세",
+            "전체"
+          ],
+          "description": "거래 유형 (기본값: 전체)"
+        },
+        "includeFloorAnalysis": {
+          "type": "boolean",
+          "description": "층별 분석 포함 여부 (기본값: false)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "getDealDistribution": {
+    "name": "getDealDistribution",
+    "description": "특정 아파트의 거래 분포를 분석합니다. 가격대별, 면적별, 층별 거래 분포를 제공합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "aptId": {
+          "type": "number",
+          "description": "아파트 ID (현재 컨텍스트의 아파트를 사용하려면 생략 가능)"
+        },
+        "distributionType": {
+          "type": "string",
+          "enum": [
+            "가격대별",
+            "면적별",
+            "층별",
+            "전체"
+          ],
+          "description": "분포 분석 유형 (기본값: 전체)"
+        },
+        "period": {
+          "type": "string",
+          "enum": [
+            "6개월",
+            "1년",
+            "2년",
+            "3년"
+          ],
+          "description": "분석 기간 (기본값: 1년)"
+        },
+        "dealType": {
+          "type": "string",
+          "enum": [
+            "매매",
+            "전세",
+            "월세",
+            "전체"
+          ],
+          "description": "거래 유형 (기본값: 전체)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "searchDealsByFilters": {
+    "name": "searchDealsByFilters",
+    "description": "복합 조건으로 부동산 거래를 검색합니다. 지역, 가격대, 면적, 건축년도 등 다양한 필터를 조합할 수 있습니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "region": {
+          "type": "string",
+          "description": "검색할 지역 (구, 동 단위)"
+        },
+        "priceRange": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "가격 범위 [최소, 최대] (만원)"
+        },
+        "areaRange": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "면적 범위 [최소, 최대] (㎡)"
+        },
+        "buildYearRange": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "건축년도 범위 [최소, 최대]"
+        },
+        "dealType": {
+          "type": "string",
+          "enum": [
+            "매매",
+            "전세",
+            "월세"
+          ],
+          "description": "거래 유형"
+        },
+        "limit": {
+          "type": "number",
+          "description": "최대 결과 개수 (기본값: 50)"
+        }
+      },
+      "required": [
+        "dealType"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "getComparableSales": {
+    "name": "getComparableSales",
+    "description": "특정 아파트와 유사한 조건의 비교 가능한 실거래 사례를 찾습니다. 감정평가나 시세 추정에 활용됩니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "aptId": {
+          "type": "number",
+          "description": "기준 아파트 ID (현재 컨텍스트의 아파트를 사용하려면 생략 가능)"
+        },
+        "targetArea": {
+          "type": "number",
+          "description": "비교할 면적 (㎡)"
+        },
+        "areaTolerance": {
+          "type": "number",
+          "description": "면적 허용 오차 (㎡, 기본값: 10)"
+        },
+        "timePeriod": {
+          "type": "string",
+          "enum": [
+            "3개월",
+            "6개월",
+            "1년",
+            "2년"
+          ],
+          "description": "비교 거래 기간 (기본값: 6개월)"
+        },
+        "radiusKm": {
+          "type": "number",
+          "description": "검색 반경 (km, 기본값: 2)"
+        },
+        "maxResults": {
+          "type": "number",
+          "description": "최대 결과 개수 (기본값: 10)"
+        },
+        "includeOtherBuildings": {
+          "type": "boolean",
+          "description": "같은 단지 외 다른 건물 포함 여부 (기본값: true)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "estimateRentYield": {
+    "name": "estimateRentYield",
+    "description": "특정 아파트의 임대 수익률을 추정합니다. 매매가 대비 전세/월세 수익률을 계산하고 투자 분석을 제공합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "aptId": {
+          "type": "number",
+          "description": "아파트 ID (현재 컨텍스트의 아파트를 사용하려면 생략 가능)"
+        },
+        "purchasePrice": {
+          "type": "number",
+          "description": "매입 가격 (만원, 생략시 최근 거래가 사용)"
+        },
+        "targetArea": {
+          "type": "number",
+          "description": "대상 면적 (㎡, 생략시 평균 면적 사용)"
+        },
+        "rentType": {
+          "type": "string",
+          "enum": [
+            "전세",
+            "월세",
+            "전체"
+          ],
+          "description": "임대 유형 (기본값: 전체)"
+        },
+        "includeTax": {
+          "type": "boolean",
+          "description": "세금 고려 여부 (기본값: true)"
+        },
+        "includeMaintenanceCost": {
+          "type": "boolean",
+          "description": "관리비 고려 여부 (기본값: true)"
+        },
+        "analysisType": {
+          "type": "string",
+          "enum": [
+            "단순",
+            "상세",
+            "시나리오"
+          ],
+          "description": "분석 유형 (기본값: 상세)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "geocodeAddress": {
+    "name": "geocodeAddress",
+    "description": "주소를 좌표(위도, 경도)로 변환합니다. 지번, 도로명 주소 모두 지원합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "변환할 주소 (지번 또는 도로명 주소)"
+        },
+        "coordinateSystem": {
+          "type": "string",
+          "enum": [
+            "WGS84",
+            "GRS80",
+            "KATEC",
+            "TM"
+          ],
+          "description": "좌표계 (기본값: WGS84)"
+        },
+        "addressType": {
+          "type": "string",
+          "enum": [
+            "지번",
+            "도로명",
+            "자동"
+          ],
+          "description": "주소 유형 (기본값: 자동)"
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "reverseGeocode": {
+    "name": "reverseGeocode",
+    "description": "좌표(위도, 경도)를 주소로 변환합니다. 행정구역, 도로명, 지번 주소를 제공합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number",
+          "description": "위도"
+        },
+        "lng": {
+          "type": "number",
+          "description": "경도"
+        },
+        "coordinateSystem": {
+          "type": "string",
+          "enum": [
+            "WGS84",
+            "GRS80",
+            "KATEC",
+            "TM"
+          ],
+          "description": "입력 좌표계 (기본값: WGS84)"
+        },
+        "addressFormat": {
+          "type": "string",
+          "enum": [
+            "지번",
+            "도로명",
+            "전체"
+          ],
+          "description": "출력 주소 형식 (기본값: 전체)"
+        }
+      },
+      "required": [
+        "lat",
+        "lng"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "lookupLegalDongCode": {
+    "name": "lookupLegalDongCode",
+    "description": "법정동 코드를 조회합니다. 시/군/구, 읍/면/동 정보로 법정동 코드를 찾을 수 있습니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sido": {
+          "type": "string",
+          "description": "시/도명 (예: 서울특별시, 경기도)"
+        },
+        "sigungu": {
+          "type": "string",
+          "description": "시/군/구명 (예: 강남구, 성남시)"
+        },
+        "dong": {
+          "type": "string",
+          "description": "읍/면/동명 (예: 역삼동, 분당동)"
+        },
+        "codeType": {
+          "type": "string",
+          "enum": [
+            "법정동",
+            "행정동",
+            "전체"
+          ],
+          "description": "코드 유형 (기본값: 법정동)"
+        }
+      },
+      "required": [
+        "sido"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "convertDongCode": {
+    "name": "convertDongCode",
+    "description": "법정동 코드를 행정동 코드로 변환하거나 그 반대로 변환합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "변환할 동 코드"
+        },
+        "fromType": {
+          "type": "string",
+          "enum": [
+            "법정동",
+            "행정동"
+          ],
+          "description": "입력 코드 유형"
+        },
+        "toType": {
+          "type": "string",
+          "enum": [
+            "법정동",
+            "행정동"
+          ],
+          "description": "출력 코드 유형"
+        }
+      },
+      "required": [
+        "code",
+        "fromType",
+        "toType"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "getNearbyByCoords": {
+    "name": "getNearbyByCoords",
+    "description": "특정 좌표 주변의 POI나 부동산을 검색합니다. 반경 내 아파트, 상가, 학교 등을 찾을 수 있습니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number",
+          "description": "중심점 위도"
+        },
+        "lng": {
+          "type": "number",
+          "description": "중심점 경도"
+        },
+        "radius": {
+          "type": "number",
+          "description": "검색 반경 (미터, 기본값: 1000)"
+        },
+        "searchType": {
+          "type": "string",
+          "enum": [
+            "아파트",
+            "상가",
+            "학교",
+            "병원",
+            "지하철",
+            "버스정류장",
+            "전체"
+          ],
+          "description": "검색할 시설 유형 (기본값: 전체)"
+        },
+        "maxResults": {
+          "type": "number",
+          "description": "최대 결과 개수 (기본값: 50)"
+        }
+      },
+      "required": [
+        "lat",
+        "lng"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "isochroneSearch": {
+    "name": "isochroneSearch",
+    "description": "특정 지점에서 지정된 시간 내에 도달 가능한 영역(등시선)을 계산합니다. 교통수단별 접근성 분석에 활용됩니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "startLat": {
+          "type": "number",
+          "description": "출발점 위도"
+        },
+        "startLng": {
+          "type": "number",
+          "description": "출발점 경도"
+        },
+        "travelTime": {
+          "type": "number",
+          "description": "이동 시간 (분)"
+        },
+        "transportMode": {
+          "type": "string",
+          "enum": [
+            "도보",
+            "자전거",
+            "자동차",
+            "대중교통"
+          ],
+          "description": "교통수단 (기본값: 대중교통)"
+        },
+        "timeOfDay": {
+          "type": "string",
+          "description": "출발 시간 (HH:MM 형식, 기본값: 현재 시간)"
+        },
+        "includeTraffic": {
+          "type": "boolean",
+          "description": "교통상황 고려 여부 (기본값: true)"
+        }
+      },
+      "required": [
+        "startLat",
+        "startLng",
+        "travelTime"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "transformCoordinates": {
+    "name": "transformCoordinates",
+    "description": "좌표계를 변환합니다. WGS84, 한국측지계, UTM-K 등 다양한 좌표계 간 변환을 지원합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "X 좌표 (경도 또는 동쪽 좌표)"
+        },
+        "y": {
+          "type": "number",
+          "description": "Y 좌표 (위도 또는 북쪽 좌표)"
+        },
+        "fromEPSG": {
+          "type": "number",
+          "enum": [
+            4326,
+            5179,
+            5181,
+            3857
+          ],
+          "description": "입력 좌표계 EPSG 코드"
+        },
+        "toEPSG": {
+          "type": "number",
+          "enum": [
+            4326,
+            5179,
+            5181,
+            3857
+          ],
+          "description": "출력 좌표계 EPSG 코드"
+        },
+        "precision": {
+          "type": "number",
+          "description": "소수점 자릿수 (기본값: 6)"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "fromEPSG",
+        "toEPSG"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "normalizeKoreanAddress": {
+    "name": "normalizeKoreanAddress",
+    "description": "한국 주소를 표준화합니다. 다양한 형태의 주소 입력을 통일된 형식으로 변환하고 유효성을 검증합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "정규화할 주소"
+        },
+        "outputFormat": {
+          "type": "string",
+          "enum": [
+            "지번",
+            "도로명",
+            "통합"
+          ],
+          "description": "출력 주소 형식 (기본값: 통합)"
+        },
+        "includePostalCode": {
+          "type": "boolean",
+          "description": "우편번호 포함 여부 (기본값: true)"
+        },
+        "validateAddress": {
+          "type": "boolean",
+          "description": "주소 유효성 검증 수행 여부 (기본값: true)"
+        },
+        "detailLevel": {
+          "type": "string",
+          "enum": [
+            "기본",
+            "상세",
+            "최상세"
+          ],
+          "description": "주소 상세 수준 (기본값: 기본)"
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

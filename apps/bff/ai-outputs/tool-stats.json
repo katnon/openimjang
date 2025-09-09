@@ -1,0 +1,32 @@
+{
+  "totalFunctions": 20,
+  "realEstateFunctions": 8,
+  "geoFunctions": 8,
+  "functionsByCategory": {
+    "realestate": 8,
+    "geo": 8,
+    "other": 4
+  },
+  "functionNames": [
+    "searchRealEstateDeals",
+    "getBuildingInfo",
+    "searchNearbyPOI",
+    "compareMultipleApartments",
+    "findSimilarApartments",
+    "getLatestTrade",
+    "getPriceTrends",
+    "getDealStatsSummary",
+    "getDealDistribution",
+    "searchDealsByFilters",
+    "getComparableSales",
+    "estimateRentYield",
+    "geocodeAddress",
+    "reverseGeocode",
+    "lookupLegalDongCode",
+    "convertDongCode",
+    "getNearbyByCoords",
+    "isochroneSearch",
+    "transformCoordinates",
+    "normalizeKoreanAddress"
+  ]
+}

@@ -1,0 +1,456 @@
+{
+  "schemaValidation": {
+    "isValid": true,
+    "totalSchemas": 20,
+    "validSchemas": 20,
+    "invalidSchemas": [],
+    "duplicateNames": [],
+    "missingHandlers": []
+  },
+  "parameterTests": {
+    "totalTests": 40,
+    "passedTests": 30,
+    "results": [
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'aptId'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must be number"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'dealType'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must be string",
+            "must be equal to one of the allowed values"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'address'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must be string"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'lat'",
+            "must have required property 'lng'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'lng'",
+            "must be number"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'sido'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must be string"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'code'",
+            "must have required property 'fromType'",
+            "must have required property 'toType'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'fromType'",
+            "must have required property 'toType'",
+            "must be string"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'lat'",
+            "must have required property 'lng'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'lng'",
+            "must be number"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'startLat'",
+            "must have required property 'startLng'",
+            "must have required property 'travelTime'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'startLng'",
+            "must have required property 'travelTime'",
+            "must be number"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'x'",
+            "must have required property 'y'",
+            "must have required property 'fromEPSG'",
+            "must have required property 'toEPSG'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'y'",
+            "must have required property 'fromEPSG'",
+            "must have required property 'toEPSG'",
+            "must be number"
+          ]
+        }
+      },
+      {
+        "testName": "빈 매개변수 객체",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must have required property 'address'"
+          ]
+        }
+      },
+      {
+        "testName": "필수 필드만 포함",
+        "passed": true,
+        "errors": [],
+        "actualResult": {
+          "isValid": true,
+          "errors": []
+        }
+      },
+      {
+        "testName": "잘못된 타입",
+        "passed": false,
+        "errors": [
+          "예상한 에러를 찾을 수 없음: type"
+        ],
+        "actualResult": {
+          "isValid": false,
+          "errors": [
+            "must be string"
+          ]
+        }
+      }
+    ]
+  },
+  "timestamp": "2025-09-09T04:49:50.180Z"
+}
