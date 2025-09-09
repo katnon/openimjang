@@ -5,6 +5,9 @@ import { authMiddleware } from '../middleware/auth';
 import { db } from '../lib/db';
 import { sql } from 'kysely';
 import admin from 'firebase-admin';
+import { tools as functionTools } from '../ai/tools';
+import { handlers as functionHandlers } from '../ai/handlers';
+import { validateOrThrow } from '../ai/tools/validation';
 
 const aiRoute = new Hono();
 

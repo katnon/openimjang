@@ -11,6 +11,7 @@ import buildings from './routes/geo/buildings';
 import poi from './routes/poi';
 import { aiRoute } from './routes/ai';
 import apiAiToolsRoute from './routes/apiAiTools';
+import aiChatRoute from './routes/aiChat';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -31,6 +32,7 @@ app.route('/api/search', searchRoute);
 app.route('/api/poi', poi);
 app.route('/api/ai', aiRoute);
 app.route('/api/ai', apiAiToolsRoute);  // AI Functions 전용 라우터
+app.route('/api/ai-new', aiChatRoute);  // 새로운 표준 패턴 테스트용
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
 

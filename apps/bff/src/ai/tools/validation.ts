@@ -58,3 +58,35 @@ export function validateSchema(schema: ToolSchema, data: unknown): {
     };
   }
 }
+
+/**
+ * 함수명으로 매개변수 검증
+ */
+export async function validateParameters(functionName: string, parameters: any): Promise<{
+  isValid: boolean;
+  errors: string[];
+}> {
+  try {
+    // tools에서 해당 함수의 스키마 찾기
+    const { tools } = await import('./index');
+    const tool = tools.find(t => t.function.name === functionName);
+    
+    if (!tool) {
+      return {
+        isValid: false,
+        errors: [`함수 '${functionName}'을 찾을 수 없습니다.`]
+      };
+    }
+
+    const result = validateSchema(tool.function, parameters);
+    return {
+      isValid: result.valid,
+      errors: result.errors ? result.errors.map(err => err.message || JSON.stringify(err)) : []
+    };
+  } catch (error: any) {
+    return {
+      isValid: false,
+      errors: [`검증 중 오류 발생: ${error.message}`]
+    };
+  }
+}
