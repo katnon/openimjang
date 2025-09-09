@@ -10,6 +10,8 @@ export { findSimilarApartments } from './findSimilarApartments';
 // 신규 realestate 함수 핸들러들 (구현 필요)
 export { getLatestTrade } from './getLatestTrade';
 export { getPriceTrends } from './getPriceTrends';
+export { getDealStatsSummary } from './getDealStatsSummary';
+export { getDealDistribution } from './getDealDistribution';
 
 // 핸들러 맵
 import { ToolHandlers } from '../tools/types';
@@ -45,11 +47,13 @@ export const handlers: ToolHandlers = {
     const { getPriceTrends } = await import('./getPriceTrends');
     return getPriceTrends(args);
   },
-  getDealStatsSummary: async () => {
-    throw new Error('getDealStatsSummary: 아직 구현되지 않았습니다.');
+  getDealStatsSummary: async (args) => {
+    const { getDealStatsSummary } = await import('./getDealStatsSummary');
+    return getDealStatsSummary(args);
   },
-  getDealDistribution: async () => {
-    throw new Error('getDealDistribution: 아직 구현되지 않았습니다.');
+  getDealDistribution: async (args) => {
+    const { getDealDistribution } = await import('./getDealDistribution');
+    return getDealDistribution(args);
   },
   searchDealsByFilters: async () => {
     throw new Error('searchDealsByFilters: 아직 구현되지 않았습니다.');
