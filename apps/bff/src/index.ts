@@ -10,6 +10,7 @@ import upisGeoRouter from './routes/geo/upis';
 import buildings from './routes/geo/buildings';
 import poi from './routes/poi';
 import { aiRoute } from './routes/ai';
+import apiAiToolsRoute from './routes/apiAiTools';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -29,6 +30,7 @@ app.use('*', cors({
 app.route('/api/search', searchRoute);
 app.route('/api/poi', poi);
 app.route('/api/ai', aiRoute);
+app.route('/api/ai', apiAiToolsRoute);  // AI Functions 전용 라우터
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
 
