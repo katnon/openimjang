@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import { tools } from '../ai/tools';
 import { handlers } from '../ai/handlers';
+import { validateOrThrow } from '../ai/tools/validation';
 
 const apiAiToolsRoute = new Hono();
 
@@ -31,11 +32,16 @@ apiAiToolsRoute.post('/tools/:name', async (c) => {
       }, 400);
     }
 
-    // TODO: JSON Schema 검증 추가 (ajv 등 사용)
-    // const validate = ajv.compile(tool.function.parameters);
-    // if (!validate(requestBody)) {
-    //   return c.json({ success: false, error: 'Parameter validation failed', details: validate.errors }, 400);
-    // }
+    // JSON Schema 검증
+    try {
+      validateOrThrow(tool.function, requestBody);
+    } catch (validationError: any) {
+      return c.json({
+        success: false,
+        error: validationError.message || '파라미터 검증 실패',
+        validationDetails: validationError.validationErrors
+      }, validationError.status || 400);
+    }
 
     // 핸들러 존재 여부 확인
     const handler = handlers[name];
