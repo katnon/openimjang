@@ -10,6 +10,7 @@ import { compareMultipleApartmentsSchema } from '../schemas/realestate/compareMu
 import { findSimilarApartmentsSchema } from '../schemas/realestate/findSimilarApartments.schema';
 
 // 신규 realestate 스키마 import
+import { getLatestTradeSchema } from '../schemas/realestate/getLatestTrade.schema';
 import { getPriceTrendsSchema } from '../schemas/realestate/getPriceTrends.schema';
 import { getDealStatsSummarySchema } from '../schemas/realestate/getDealStatsSummary.schema';
 import { getDealDistributionSchema } from '../schemas/realestate/getDealDistribution.schema';
@@ -43,6 +44,7 @@ export const tools: OpenAITool[] = [
   createTool(findSimilarApartmentsSchema),
   
   // 신규 realestate 함수들
+  createTool(getLatestTradeSchema),
   createTool(getPriceTrendsSchema),
   createTool(getDealStatsSummarySchema),
   createTool(getDealDistributionSchema),

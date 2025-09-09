@@ -8,6 +8,7 @@ export { compareMultipleApartments } from './compareMultipleApartments';
 export { findSimilarApartments } from './findSimilarApartments';
 
 // 신규 realestate 함수 핸들러들 (구현 필요)
+export { getLatestTrade } from './getLatestTrade';
 export { getPriceTrends } from './getPriceTrends';
 
 // 핸들러 맵
@@ -35,7 +36,11 @@ export const handlers: ToolHandlers = {
     const { findSimilarApartments } = await import('./findSimilarApartments');
     return findSimilarApartments(args);
   },
-  // 신규 함수들 (모두 스텁)
+  // 신규 함수들
+  getLatestTrade: async (args) => {
+    const { getLatestTrade } = await import('./getLatestTrade');
+    return getLatestTrade(args);
+  },
   getPriceTrends: async (args) => {
     const { getPriceTrends } = await import('./getPriceTrends');
     return getPriceTrends(args);
