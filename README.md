@@ -37,11 +37,11 @@ graph TB
         G --> H[Logger<br/>구조화 로깅] --> I[Metrics<br/>성능 수집]
     end
     
-    subgraph "🚀 Backend Layer (Hono BFF)"
-        J[🤖 AI Function Router<br/>20개 모듈형 함수] --> F
-        K[📊 REST API Router<br/>부동산 검색/분석] --> F  
-        L[📚 Swagger Router<br/>API 문서화] --> F
-        M[🔍 Monitoring Router<br/>시스템 모니터링] --> F
+    subgraph "Backend Layer (Hono BFF)"
+        J["AI Function Router<br/>20개 모듈형 함수"] --> F
+        K["REST API Router<br/>부동산 검색/분석"] --> F  
+        L["Swagger Router<br/>API 문서화"] --> F
+        M["Monitoring Router<br/>시스템 모니터링"] --> F
         
         J --> N[OpenAI GPT-4o-mini<br/>Function Calling]
         K --> O[Kysely ORM<br/>타입 안전 SQL]
@@ -90,7 +90,7 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "🤖 AI Function Calling Pipeline"
+    subgraph "AI Function Calling Pipeline"
         A[사용자 질문] --> B[GPT-4o-mini<br/>Function Calling]
         B --> C[Tool Call 루프<br/>최대 6회 제한]
         C --> D[Ajv Schema 검증<br/>파라미터 유효성]
@@ -102,12 +102,12 @@ graph TB
         C --> I[최종 답변 생성]
     end
     
-    subgraph "📦 Function Categories"
-        J[🏠 부동산 함수군 12개<br/>실거래/가격동향/통계] --> E
-        K[🗺️ 지리정보 함수군 8개<br/>지오코딩/좌표변환/법정동] --> E
+    subgraph "Function Categories"
+        J["부동산 함수군 12개<br/>실거래/가격동향/통계"] --> E
+        K["지리정보 함수군 8개<br/>지오코딩/좌표변환/법정동"] --> E
     end
     
-    subgraph "🗄️ Repository Layer"
+    subgraph "Repository Layer"
         L[DealsRepo<br/>실거래 데이터] --> M[PostGIS 공간쿼리<br/>Kysely ORM]
         N[GeoRepo<br/>지리정보 서비스] --> O[V-World API<br/>카카오 API 연동]
     end
@@ -134,11 +134,11 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph "👤 사용자 계층"
+    subgraph "사용자 계층"
         A[웹 브라우저] --> B[React SPA<br/>포트 5173]
     end
     
-    subgraph "🌉 API Gateway 계층"
+    subgraph "API Gateway 계층"
         B --> C[Hono BFF Server<br/>포트 8787]
         C --> D[CORS 미들웨어<br/>도메인 검증]
         D --> E[Rate Limiter<br/>요청 제한]
@@ -146,14 +146,14 @@ graph LR
         F --> G[Logger<br/>요청 추적]
     end
     
-    subgraph "🎯 라우터 계층"
-        G --> H[/api/ai/tools/*<br/>AI 함수 호출]
-        G --> I[/api/search/*<br/>부동산 검색]
-        G --> J[/api/docs/*<br/>API 문서]
-        G --> K[/api/ai/metrics/*<br/>모니터링]
+    subgraph "라우터 계층"
+        G --> H["API AI Tools<br/>함수 호출"]
+        G --> I["API Search<br/>부동산 검색"]
+        G --> J["API Docs<br/>API 문서"]
+        G --> K["API Metrics<br/>모니터링"]
     end
     
-    subgraph "🔧 비즈니스 로직 계층"
+    subgraph "비즈니스 로직 계층"
         H --> L[AI Handler<br/>Function 실행]
         I --> M[Search Controller<br/>검색 로직]
         J --> N[OpenAPI Generator<br/>문서 생성]
@@ -803,7 +803,7 @@ graph TB
     end
     
     subgraph "AI Backend - Modular Function System"
-        B --> D[AI Tools API Router<br/>/api/ai/tools]
+        B --> D["AI Tools API Router<br/>/api/ai/tools"]
         D --> E[Ajv Parameter Validation<br/>JSON Schema 검증]
         E --> F[Dynamic Handler Import<br/>동적 모듈 로딩]
         
@@ -1253,10 +1253,10 @@ graph TB
     end
     
     subgraph "Developer Access"
-        F[/api/docs/docs] --> E
-        G[/api/docs/openapi.json] --> C
-        H[/api/docs/info] --> I[API 통계 정보]
-        J[/api/docs/validate] --> K[스펙 검증]
+        F["/api/docs/docs"] --> E
+        G["/api/docs/openapi.json"] --> C
+        H["/api/docs/info"] --> I["API 통계 정보"]
+        J["/api/docs/validate"] --> K["스펙 검증"]
     end
     
     subgraph "Auto-Generated Content"
