@@ -1,102 +1,147 @@
-// validate-assistant-tools.ts
-import 'dotenv/config';
+// apps/bff/scripts/validate-assistant-tools.ts
+import { config } from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+config({ path: path.resolve(__dirname, '../.env') });
+
 import { OpenAI } from 'openai';
 import deepEqual from 'fast-deep-equal';
 import { tools as localTools } from '../src/ai/tools';
 
-type ToolSchema = {
-  name: string;
-  description: string;
-  strict?: boolean;
-  parameters: any; // JSON Schema
-};
+// ──────────────────────────────────────────────────────────────
+// 진단 로그 (원하시면 주석 처리)
+console.log('[ENV] CWD =', process.cwd());
+console.log('[ENV] dotenv path =', path.resolve(__dirname, '../.env'));
+console.log('[ENV] has keys =', !!process.env.OPENAI_API_KEY, !!process.env.OPENAI_ASSISTANT_ID);
+// ──────────────────────────────────────────────────────────────
 
-const REQUIRED_ENV = ['OPENAI_API_KEY', 'OPENAI_ASSISTANT_ID'] as const;
+type FlatTool = { name?: string; description?: string; strict?: boolean; parameters?: any };
+type OAITool = { type: 'function'; function: { name?: string; description?: string; parameters?: any } };
 
-function assertEnv() {
-  const miss = REQUIRED_ENV.filter(k => !process.env[k]);
-  if (miss.length) {
-    throw new Error(`Missing ENV: ${miss.join(', ')}`);
-  }
+// OpenAI 포맷 판별
+function isOAITool(x: any): x is OAITool {
+  return x && x.type === 'function' && x.function && typeof x.function === 'object';
 }
 
-// JSON Schema 정규화(정렬·기본값 제거 등)로 비교를 안정화
-function normalizeSchema(s: any): any {
-  if (Array.isArray(s)) return s.map(normalizeSchema);
-  if (s && typeof s === 'object') {
-    const out: Record<string, any> = {};
-    Object.keys(s).sort().forEach(k => {
-      const v = s[k];
-      if (v === undefined) return; // undefined 제거
-      out[k] = normalizeSchema(v);
-    });
-    return out;
+// parameters 정규화 (sync와 동일 규칙)
+function normalizeParameters(params: any) {
+  if (!params || typeof params !== 'object') {
+    return { type: 'object', properties: {}, required: [], additionalProperties: false };
   }
-  return s;
+  const p: any = { ...params };
+
+  if (p.type !== 'object') p.type = 'object';
+  if (!p.properties || typeof p.properties !== 'object') p.properties = {};
+
+  // required = properties 모든 키 포함
+  const keys = Object.keys(p.properties);
+  const req: string[] = Array.isArray(p.required) ? [...p.required] : [];
+  for (const k of keys) if (!req.includes(k)) req.push(k);
+  p.required = req;
+
+  if (typeof p.additionalProperties !== 'boolean') p.additionalProperties = false;
+
+  // 속성/enum 등 비교 안정화를 위한 정렬
+  const sortObj = (o: any): any => {
+    if (Array.isArray(o)) return o.map(sortObj);
+    if (o && typeof o === 'object') {
+      const out: Record<string, any> = {};
+      Object.keys(o).sort().forEach(k => { out[k] = sortObj(o[k]); });
+      return out;
+    }
+    return o;
+  };
+
+  p.properties = sortObj(p.properties);
+  if (Array.isArray(p.required)) p.required = [...p.required].sort();
+  return sortObj(p);
 }
 
-function normalizeTool(t: ToolSchema) {
+// 도구를 “평평한 비교용”으로 변환 + 정규화 적용
+function toFlatNormalized(t: any) {
+  // OAI 포맷이면 function에서 꺼냄
+  if (isOAITool(t)) {
+    return {
+      name: t.function?.name,
+      description: (t.function?.description ?? '').trim(),
+      strict: true,
+      parameters: normalizeParameters(t.function?.parameters),
+    };
+  }
+  // 평평한 포맷
   return {
-    name: t.name,
-    description: t.description,
-    strict: t.strict ?? true,
-    parameters: normalizeSchema(t.parameters),
+    name: t?.name,
+    description: (t?.description ?? '').trim(),
+    strict: t?.strict ?? true,
+    parameters: normalizeParameters(t?.parameters),
   };
 }
 
+// 최종 비교 전 전체 정규화
+function normalizeToolForCompare(t: any) {
+  // JSON 정렬(키순) + undefined 제거
+  const sortObj = (o: any): any => {
+    if (Array.isArray(o)) return o.map(sortObj);
+    if (o && typeof o === 'object') {
+      const out: Record<string, any> = {};
+      Object.keys(o).sort().forEach(k => {
+        const v = (o as any)[k];
+        if (v === undefined) return;
+        out[k] = sortObj(v);
+      });
+      return out;
+    }
+    return o;
+  };
+  return sortObj(toFlatNormalized(t));
+}
+
 async function main() {
-  assertEnv();
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-  const asstId = process.env.OPENAI_ASSISTANT_ID!;
+  const { OPENAI_API_KEY, OPENAI_ASSISTANT_ID } = process.env;
+  if (!OPENAI_API_KEY || !OPENAI_ASSISTANT_ID) {
+    throw new Error('OPENAI_API_KEY/OPENAI_ASSISTANT_ID missing');
+  }
 
-  // 1) 플랫폼에서 Assistant 조회
-  const asst = await client.beta.assistants.retrieve(asstId);
+  const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+  // 1) 원격 Assistant 툴셋 수집
+  const asst = await client.beta.assistants.retrieve(OPENAI_ASSISTANT_ID);
   const remoteFns = (asst.tools ?? [])
-    .filter((t: any) => t.type === 'function')
-    .map((t: any) => ({
-      name: t.function?.name,
-      description: t.function?.description ?? '',
-      strict: true, // Platform에선 기본적으로 strict function schema 사용
-      parameters: t.function?.parameters ?? {},
-    })) as ToolSchema[];
+    .filter((t: any) => t.type === 'function');
 
-  // 2) 로컬 tools
-  const local = (localTools as any[]).map((t: any) => ({
-    name: t.function.name,
-    description: t.function.description,
-    strict: t.function.strict ?? true,
-    parameters: t.function.parameters,
-  }) as ToolSchema).map(normalizeTool);
-  const remote = remoteFns.map(normalizeTool);
+  // 2) 로컬/원격 정규화
+  const localNorm = (Array.isArray(localTools) ? localTools : []).map(normalizeToolForCompare);
+  const remoteNorm = remoteFns.map(normalizeToolForCompare);
 
-  // 3) 이름 세트 단위 1차 비교
-  const localNames = new Set(local.map(t => t.name));
-  const remoteNames = new Set(remote.map(t => t.name));
+  // 3) 이름 세트 비교
+  const localNames = new Set(localNorm.map(t => t.name));
+  const remoteNames = new Set(remoteNorm.map(t => t.name));
 
   const missingOnRemote = [...localNames].filter(n => !remoteNames.has(n));
-  const extraOnRemote   = [...remoteNames].filter(n => !localNames.has(n));
+  const extraOnRemote = [...remoteNames].filter(n => !localNames.has(n));
 
-  // 4) 동일 이름의 스키마 shape 비교
+  // 4) 동일 이름 shape 비교
   const diffs: string[] = [];
   for (const ln of localNames) {
     if (!remoteNames.has(ln)) continue;
-    const l = local.find(t => t.name === ln)!;
-    const r = remote.find(t => t.name === ln)!;
+    const l = localNorm.find(t => t.name === ln)!;
+    const r = remoteNorm.find(t => t.name === ln)!;
 
-    const sameDesc = l.description.trim() === r.description.trim();
+    const sameDesc = l.description === r.description;
     const sameStrict = (l.strict ?? true) === (r.strict ?? true);
     const sameParams = deepEqual(l.parameters, r.parameters);
 
     if (!sameDesc || !sameStrict || !sameParams) {
-      diffs.push(`- ${ln}: ${[
-        sameDesc ? null : 'description',
-        sameStrict ? null : 'strict',
-        sameParams ? null : 'parameters',
-      ].filter(Boolean).join(', ')} mismatch`);
+      const parts = [];
+      if (!sameDesc) parts.push('description');
+      if (!sameStrict) parts.push('strict');
+      if (!sameParams) parts.push('parameters');
+      diffs.push(`- ${ln}: ${parts.join(', ')} mismatch`);
     }
   }
 
-  // 5) 리포팅
   if (missingOnRemote.length || extraOnRemote.length || diffs.length) {
     console.error('❌ Assistant functions mismatch detected.');
     if (missingOnRemote.length) {
@@ -109,10 +154,7 @@ async function main() {
       console.error('  - Shape differences:');
       diffs.forEach(d => console.error(`    ${d}`));
     }
-    // 엄격 모드: 부팅 차단
-    if (!process.env.ALLOW_MISMATCH) {
-      process.exit(1);
-    }
+    process.exit(1);
   } else {
     console.log('✅ Assistant functions are fully in sync with local tools.');
   }

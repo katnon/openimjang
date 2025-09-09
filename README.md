@@ -21,152 +21,354 @@
 
 ## 🏗️ 시스템 아키텍처
 
+### 🌐 전체 시스템 개요
+
 ```mermaid
 graph TB
-    subgraph "Frontend Layer"
-        A[React SPA<br/>Vite + TypeScript] --> B[Kakao Maps 2D]
-        A --> C[Cesium 3D Viewer]
-        A --> D[Firebase Auth/Storage]
+    subgraph "🎨 Frontend Layer (React SPA)"
+        A[React 19 SPA<br/>Vite + TypeScript] --> B[Kakao Maps 2D<br/>지도 시각화]
+        A --> C[Cesium 3D Viewer<br/>3차원 공간 분석]
+        A --> D[Firebase Auth<br/>사용자 인증]
+        A --> E[AI 챗봇 UI<br/>임장 도우미]
     end
     
-    subgraph "Backend Layer" 
-        E[Hono BFF<br/>Bun Runtime] --> F[Kysely ORM]
-        E --> G[OpenAI API]
-        E --> H[Firebase Admin SDK]
+    subgraph "🔒 Middleware Layer"
+        F[Rate Limiter<br/>요청 제한] --> G[Cache System<br/>응답 캐싱]
+        G --> H[Logger<br/>구조화 로깅] --> I[Metrics<br/>성능 수집]
     end
     
-    subgraph "Data Layer"
-        I[PostGIS<br/>Spatial Database] --> J[부동산 실거래 데이터]
-        I --> K[건물/토지 정보]
-        I --> L[지적편집도 데이터]
+    subgraph "🚀 Backend Layer (Hono BFF)"
+        J[🤖 AI Function Router<br/>20개 모듈형 함수] --> F
+        K[📊 REST API Router<br/>부동산 검색/분석] --> F  
+        L[📚 Swagger Router<br/>API 문서화] --> F
+        M[🔍 Monitoring Router<br/>시스템 모니터링] --> F
+        
+        J --> N[OpenAI GPT-4o-mini<br/>Function Calling]
+        K --> O[Kysely ORM<br/>타입 안전 SQL]
+        J --> P[Repository Pattern<br/>데이터 추상화]
     end
     
-    subgraph "External APIs"
-        M[국토부 RTMS API] --> E
-        N[VWorld WMS/WFS] --> E
-        O[카카오맵 API] --> A
-        P[건축물대장 API] --> E
+    subgraph "🗄️ Data Layer"
+        Q[PostGIS Database<br/>공간 데이터베이스] --> R[부동산 실거래<br/>매매/전월세 데이터]
+        Q --> S[건물 정보<br/>건축물대장 데이터]
+        Q --> T[지적 정보<br/>연속지적도/용도지역]
+        
+        U[Firebase Firestore<br/>NoSQL 문서 DB] --> V[사용자 프로필<br/>온보딩 데이터]
+        U --> W[임장 메모<br/>현장 방문 기록]
+        U --> X[즐겨찾기<br/>관심 아파트]
     end
     
-    A <--> E
-    E <--> I
+    subgraph "🌍 External APIs"
+        Y[국토부 RTMS API<br/>실거래가 수집] --> P
+        Z[VWorld API<br/>지리정보 서비스] --> P
+        AA[카카오 Maps API<br/>지도/장소 검색] --> A
+        BB[건축물대장 API<br/>건물 상세정보] --> P
+        CC[공공데이터포털<br/>법정동 코드] --> P
+    end
     
-    style A fill:#61dafb
-    style E fill:#000000
-    style I fill:#336791
-    style G fill:#10a37f
+    subgraph "📋 Documentation & Monitoring"
+        DD[Swagger UI<br/>인터랙티브 문서] --> L
+        EE[OpenAPI 3.0 Spec<br/>자동 생성 스키마] --> DD
+        FF[Metrics Dashboard<br/>성능 모니터링] --> M
+        GG[Health Check<br/>시스템 상태] --> M
+    end
+    
+    A <--> J
+    A <--> K
+    O <--> Q
+    P <--> U
+    
+    style A fill:#61dafb,color:#000
+    style J fill:#10a37f,color:#fff
+    style Q fill:#336791,color:#fff
+    style U fill:#ff6f00,color:#fff
+    style F fill:#e74c3c,color:#fff
+    style DD fill:#85c1e5,color:#000
+```
+
+### 🎯 모듈형 AI 시스템 아키텍처
+
+```mermaid
+graph TB
+    subgraph "🤖 AI Function Calling Pipeline"
+        A[사용자 질문] --> B[GPT-4o-mini<br/>Function Calling]
+        B --> C[Tool Call 루프<br/>최대 6회 제한]
+        C --> D[Ajv Schema 검증<br/>파라미터 유효성]
+        D --> E[동적 Handler 로딩<br/>필요시에만 Import]
+        E --> F[Repository 호출<br/>데이터 추상화 계층]
+        F --> G[캐시 확인/저장<br/>응답 최적화]
+        G --> H[구조화 응답<br/>JSON 표준화]
+        H --> C
+        C --> I[최종 답변 생성]
+    end
+    
+    subgraph "📦 Function Categories"
+        J[🏠 부동산 함수군 12개<br/>실거래/가격동향/통계] --> E
+        K[🗺️ 지리정보 함수군 8개<br/>지오코딩/좌표변환/법정동] --> E
+    end
+    
+    subgraph "🗄️ Repository Layer"
+        L[DealsRepo<br/>실거래 데이터] --> M[PostGIS 공간쿼리<br/>Kysely ORM]
+        N[GeoRepo<br/>지리정보 서비스] --> O[V-World API<br/>카카오 API 연동]
+    end
+    
+    subgraph "💾 Performance Layer"
+        P[메모리 캐시<br/>SHA256 키 기반] --> Q[TTL 정책<br/>지리:24h 검색:5m]
+        R[레이트 리밋<br/>IP/사용자/함수별] --> S[모니터링<br/>메트릭 수집]
+    end
+    
+    F --> L
+    F --> N
+    G --> P
+    D --> R
+    E --> S
+    
+    style B fill:#10a37f,color:#fff
+    style D fill:#f39c12,color:#fff
+    style E fill:#9b59b6,color:#fff
+    style P fill:#3498db,color:#fff
+    style R fill:#e74c3c,color:#fff
+```
+
+### 📱 데이터 흐름 아키텍처
+
+```mermaid
+graph LR
+    subgraph "👤 사용자 계층"
+        A[웹 브라우저] --> B[React SPA<br/>포트 5173]
+    end
+    
+    subgraph "🌉 API Gateway 계층"
+        B --> C[Hono BFF Server<br/>포트 8787]
+        C --> D[CORS 미들웨어<br/>도메인 검증]
+        D --> E[Rate Limiter<br/>요청 제한]
+        E --> F[Cache Middleware<br/>응답 캐싱]
+        F --> G[Logger<br/>요청 추적]
+    end
+    
+    subgraph "🎯 라우터 계층"
+        G --> H[/api/ai/tools/*<br/>AI 함수 호출]
+        G --> I[/api/search/*<br/>부동산 검색]
+        G --> J[/api/docs/*<br/>API 문서]
+        G --> K[/api/ai/metrics/*<br/>모니터링]
+    end
+    
+    subgraph "🔧 비즈니스 로직 계층"
+        H --> L[AI Handler<br/>Function 실행]
+        I --> M[Search Controller<br/>검색 로직]
+        J --> N[OpenAPI Generator<br/>문서 생성]
+        K --> O[Metrics Collector<br/>성능 수집]
+    end
+    
+    subgraph "💾 데이터 접근 계층"
+        L --> P[Repository Pattern<br/>데이터 추상화]
+        M --> Q[Kysely ORM<br/>SQL 빌더]
+        P --> R[외부 API 연동<br/>V-World/카카오]
+        Q --> S[PostGIS Database<br/>공간 데이터]
+    end
+    
+    subgraph "☁️ 외부 서비스"
+        R --> T[정부 API<br/>V-World/공공데이터]
+        R --> U[상용 API<br/>카카오맵/OpenAI]
+        L --> V[Firebase<br/>Auth/Firestore]
+    end
+    
+    style C fill:#000000,color:#fff
+    style H fill:#10a37f,color:#fff
+    style S fill:#336791,color:#fff
+    style V fill:#ff6f00,color:#fff
 ```
 
 ## 📂 프로젝트 구조
 
-```
-OpenImjang/
-├── apps/                            # 애플리케이션
-│   ├── bff/                         # Backend for Frontend (Hono + Bun)
-│   │   ├── src/
-│   │   │   ├── index.ts             # BFF 메인 서버
-│   │   │   ├── lib/
-│   │   │   │   ├── db.ts            # Kysely PostGIS 연결
-│   │   │   │   ├── cache.ts         # 🆕 캐시 매니저 (SHA256 키 생성)
-│   │   │   │   ├── logger.ts        # 🆕 구조화된 로거 (Pino 기반)
-│   │   │   │   ├── metrics.ts       # 🆕 메트릭 수집 시스템
-│   │   │   │   └── openapi.ts       # 🆕 OpenAPI 3.0 문서 생성기
-│   │   │   ├── middleware/
-│   │   │   │   ├── auth.ts          # Firebase 인증 미들웨어
-│   │   │   │   ├── cache.ts         # 🆕 캐시 미들웨어 (메모리 기반)
-│   │   │   │   └── rateLimit.ts     # 🆕 레이트 리밋 미들웨어
-│   │   │   ├── routes/
-│   │   │   │   ├── ai.ts            # 🆕 OpenAI API 라우트 (기존 채팅봇)
-│   │   │   │   ├── apiAiTools.ts    # 🆕 모듈형 AI Function API
-│   │   │   │   ├── swagger.ts       # 🆕 Swagger UI & OpenAPI 문서
-│   │   │   │   ├── search.ts        # 부동산 검색 API
-│   │   │   │   ├── poi.ts           # POI(관심지점) API
-│   │   │   │   └── geo/
-│   │   │   │       ├── buildings.ts # 건물 정보 API
-│   │   │   │       └── upis.ts      # 지적 정보 API
-│   │   │   └── ai/                  # 🆕 AI 모듈형 시스템
-│   │   │       ├── tools/
-│   │   │       │   ├── types.ts     # AI Tool 타입 정의
-│   │   │       │   ├── validation.ts # Ajv 검증 파이프라인
-│   │   │       │   └── index.ts     # Tool 스키마 집계
-│   │   │       ├── config/          # 🆕 설정 파일
-│   │   │       │   └── cache.config.ts # 함수별 TTL 및 캐시 정책
-│   │   │       ├── schemas/         # JSON Schema 정의
-│   │   │       │   ├── realestate/  # 부동산 함수 스키마 (5개)
-│   │   │       │   └── geo/         # 지리정보 함수 스키마 (8개)
-│   │   │       ├── handlers/        # Function 핸들러 구현체
-│   │   │       │   ├── index.ts     # 핸들러 동적 로딩 맵
-│   │   │       │   ├── searchRealEstateDeals.ts
-│   │   │       │   ├── getLatestTrade.ts
-│   │   │       │   ├── getPriceTrends.ts
-│   │   │       │   ├── getDealStatsSummary.ts
-│   │   │       │   ├── getDealDistribution.ts
-│   │   │       │   └── geo/         # 지리정보 핸들러군
-│   │   │       │       ├── geocodeAddress.ts
-│   │   │       │       ├── reverseGeocode.ts
-│   │   │       │       ├── lookupLegalDongCode.ts
-│   │   │       │       ├── convertDongCode.ts
-│   │   │       │       ├── getNearbyByCoords.ts
-│   │   │       │       ├── isochroneSearch.ts
-│   │   │       │       ├── transformCoordinates.ts
-│   │   │       │       └── normalizeKoreanAddress.ts
-│   │   │       └── repo/            # Repository 패턴 데이터 계층
-│   │   │           ├── dealsRepo.ts # 부동산 거래 데이터 레포지토리
-│   │   │           └── geoRepo.ts   # 지리정보 서비스 레포지토리
-│   │   └── package.json
-│   └── web/                         # React SPA Frontend
-│       ├── src/
-│       │   ├── auth/
-│       │   │   └── AuthProvider.tsx # 🆕 Firebase 인증 프로바이더
-│       │   ├── components/
-│       │   │   ├── ai/              # 🆕 AI 관련 컴포넌트
-│       │   │   │   ├── AIAnalysisModal.tsx
-│       │   │   │   └── AIChatbot.tsx
-│       │   │   ├── auth/            # 🆕 인증 컴포넌트
-│       │   │   │   └── AuthPage.tsx
-│       │   │   ├── onboarding/      # 🆕 온보딩 시스템
-│       │   │   │   └── UserOnboardingModal.tsx # 사용자 맞춤 설정
-│       │   │   ├── card/
-│       │   │   │   ├── AiSummaryPanel.tsx    # 🆕 AI 종합 분석 패널
-│       │   │   │   ├── SummaryCard.tsx       # 업데이트: 4개 탭 구조
-│       │   │   │   ├── RealEstateDealsTable.tsx # 실거래가 테이블
-│       │   │   │   ├── BuildingLandInfo.tsx  # 건물/토지 정보
-│       │   │   │   └── NearbyInfoPanel.tsx   # 주변 정보
-│       │   │   ├── layout/
-│       │   │   │   └── TopBar.tsx            # 업데이트: 통합 브랜드 색상
-│       │   │   ├── map/
-│       │   │   │   ├── MapContainer.tsx      # 업데이트: 즐겨찾기 마커
-│       │   │   │   └── MapControls.tsx       # 업데이트: 즐겨찾기 토글
-│       │   │   ├── memo/            # 🆕 임장 메모 시스템
-│       │   │   │   ├── MemoCreateModal.tsx   # 메모 작성/수정
-│       │   │   │   ├── MyImjangModal.tsx     # 내 임장 목록
-│       │   │   │   └── FavoriteConfirmPopup.tsx # 즐겨찾기 확인
-│       │   │   └── MapPrime3DViewer.tsx      # 3D 지도 뷰어
-│       │   ├── firebase.ts          # 🆕 Firebase 설정
-│       │   └── hooks/
-│       │       ├── use3DEqbHighlight.ts      # 3D 연계정보 하이라이트
-│       │       ├── useEqbOverlay.ts          # EQB 오버레이
-│       │       ├── useFirstPersonLook.ts     # 🆕 1인칭 시점
-│       │       ├── useShadeAnalysis.ts       # 🆕 그림자 분석
-│       │       ├── useWalkingMode.ts         # 🆕 워킹 모드
-│       │       └── useWindowView.ts          # 🆕 창문 뷰
-│       └── public/
-│           └── js/cesium/            # Cesium 3D 라이브러리
+### 🏗️ 전체 디렉토리 구조
 
-├── db/                              # 데이터베이스 & ETL
-│   └── scripts/
-│       ├── fetch/                   # 🆕 데이터 수집 스크립트
-│       │   ├── fetch_building_info.ts        # 건축물대장 API 수집
-│       │   ├── fetch_landuse_included.ts     # 토지이용계획 수집
-│       │   ├── fetch_rent_raw.ts             # 전월세 데이터 수집
-│       │   ├── fetch_trade_raw.ts            # 매매 데이터 수집
-│       │   ├── populate_apt_deal_all.ts      # 통합 거래 데이터 가공
-│       │   └── fill_apt_info_coordinates.ts  # 좌표 정보 보완
-│       ├── setup/
-│       │   └── legal_dong_loader.ts          # 법정동 코드 로더
-│       └── SQLquery/
-│           └── oi.query.sql          # 🆕 OpenImjang 스키마 정의
-└── CLAUDE.md                        # Claude Code 개발 가이드
+```
+OpenImjang/ (Root)
+├── 📱 apps/                                    # 애플리케이션 컨테이너
+│   ├── 🚀 bff/                                # Backend for Frontend (Hono + Bun)
+│   │   ├── 📄 package.json                    # 의존성: hono, kysely, openai, pino, zod 등
+│   │   ├── 📄 bun.lock                        # Bun 패키지 락 파일
+│   │   ├── 📄 tsconfig.json                   # TypeScript 설정 (strict mode)
+│   │   ├── 📄 .env                            # 환경 변수 (DATABASE_URL, API keys)
+│   │   ├── 📁 scripts/                        # 🆕 개발/검증 스크립트
+│   │   │   ├── 📄 validate-assistant-tools.ts # OpenAI Assistant 동기화 검증
+│   │   │   └── 📄 sync-assistant-tools.ts     # Assistant 함수 동기화 도구
+│   │   └── 📁 src/                            # 소스 코드
+│   │       ├── 📄 index.ts                    # 🎯 BFF 메인 서버 (포트 8787)
+│   │       │                                  # ├─ Hono 앱 초기화
+│   │       │                                  # ├─ CORS/Logger 미들웨어
+│   │       │                                  # ├─ 7개 라우터 등록
+│   │       │                                  # └─ 서버 시작 (Bun 런타임)
+│   │       ├── 📁 lib/                        # 🔧 핵심 라이브러리
+│   │       │   ├── 📄 db.ts                   # Kysely PostGIS 연결 설정
+│   │       │   ├── 📄 cache.ts                # 🆕 캐시 매니저 (SHA256 키/TTL)
+│   │       │   ├── 📄 logger.ts               # 🆕 구조화 로거 (Pino/JSON)
+│   │       │   ├── 📄 metrics.ts              # 🆕 메트릭 수집 (성능/에러)
+│   │       │   └── 📄 openapi.ts              # 🆕 OpenAPI 3.0 문서 생성기
+│   │       ├── 📁 middleware/                 # 🛡️ 미들웨어 계층
+│   │       │   ├── 📄 auth.ts                 # Firebase 인증 미들웨어
+│   │       │   ├── 📄 cache.ts                # 🆕 캐시 미들웨어 (응답 캐싱)
+│   │       │   └── 📄 rateLimit.ts            # 🆕 레이트 리밋 (IP/사용자/함수별)
+│   │       ├── 📁 routes/                     # 🛣️ API 라우터
+│   │       │   ├── 📄 ai.ts                   # 🆕 기존 채팅봇 라우트
+│   │       │   ├── 📄 apiAiTools.ts           # 🆕 모듈형 AI Function API
+│   │       │   │                              # ├─ POST /api/ai/tools/:name
+│   │       │   │                              # ├─ 캐시/레이트리밋/로깅 통합
+│   │       │   │                              # └─ 메트릭 수집 및 에러 처리
+│   │       │   ├── 📄 aiChat.ts               # 🆕 표준 Tool Call 루프 패턴
+│   │       │   ├── 📄 swagger.ts              # 🆕 Swagger UI & OpenAPI 문서
+│   │       │   │                              # ├─ GET /api/docs/docs (Swagger UI)
+│   │       │   │                              # ├─ GET /api/docs/openapi.json
+│   │       │   │                              # ├─ GET /api/docs/info (항상 접근)
+│   │       │   │                              # └─ GET /api/docs/validate (검증)
+│   │       │   ├── 📄 search.ts               # 부동산 검색 API
+│   │       │   ├── 📄 poi.ts                  # POI(관심지점) API
+│   │       │   └── 📁 geo/                    # 지리정보 전용 라우터
+│   │       │       ├── 📄 buildings.ts        # 건물 정보 API
+│   │       │       └── 📄 upis.ts             # 지적 정보 API
+│   │       ├── 📁 ai/                         # 🤖 AI 모듈형 시스템
+│   │       │   ├── 📁 tools/                  # 🔧 도구 정의 및 검증
+│   │       │   │   ├── 📄 types.ts            # OpenAI Tool 타입 정의
+│   │       │   │   ├── 📄 validation.ts       # Ajv 검증 파이프라인
+│   │       │   │   └── 📄 index.ts            # 20개 Tool 스키마 집계
+│   │       │   ├── 📁 config/                 # ⚙️ 설정 파일
+│   │       │   │   └── 📄 cache.config.ts     # 함수별 TTL 및 캐시 정책
+│   │       │   ├── 📁 schemas/                # 📋 JSON Schema 정의
+│   │       │   │   ├── 📁 realestate/         # 🏠 부동산 함수 스키마 (12개)
+│   │       │   │   │   ├── 📄 searchRealEstateDeals.schema.ts
+│   │       │   │   │   ├── 📄 getLatestTrade.schema.ts
+│   │       │   │   │   ├── 📄 getPriceTrends.schema.ts
+│   │       │   │   │   ├── 📄 getDealStatsSummary.schema.ts
+│   │       │   │   │   ├── 📄 getDealDistribution.schema.ts
+│   │       │   │   │   ├── 📄 getBuildingInfo.schema.ts
+│   │       │   │   │   ├── 📄 searchNearbyPOI.schema.ts
+│   │       │   │   │   ├── 📄 compareMultipleApartments.schema.ts
+│   │       │   │   │   ├── 📄 findSimilarApartments.schema.ts
+│   │       │   │   │   ├── 📄 searchDealsByFilters.schema.ts
+│   │       │   │   │   ├── 📄 getComparableSales.schema.ts
+│   │       │   │   │   └── 📄 estimateRentYield.schema.ts
+│   │       │   │   └── 📁 geo/                # 🗺️ 지리정보 함수 스키마 (8개)
+│   │       │   │       ├── 📄 geocodeAddress.schema.ts
+│   │       │   │       ├── 📄 reverseGeocode.schema.ts
+│   │       │   │       ├── 📄 lookupLegalDongCode.schema.ts
+│   │       │   │       ├── 📄 convertDongCode.schema.ts
+│   │       │   │       ├── 📄 getNearbyByCoords.schema.ts
+│   │       │   │       ├── 📄 isochroneSearch.schema.ts
+│   │       │   │       ├── 📄 transformCoordinates.schema.ts
+│   │       │   │       └── 📄 normalizeKoreanAddress.schema.ts
+│   │       │   ├── 📁 handlers/               # ⚡ Function 핸들러 구현체
+│   │       │   │   ├── 📄 index.ts            # 핸들러 동적 로딩 맵
+│   │       │   │   ├── 📄 searchRealEstateDeals.ts
+│   │       │   │   ├── 📄 getLatestTrade.ts
+│   │       │   │   ├── 📄 getPriceTrends.ts
+│   │       │   │   ├── 📄 getDealStatsSummary.ts
+│   │       │   │   ├── 📄 getDealDistribution.ts
+│   │       │   │   ├── 📄 getBuildingInfo.ts
+│   │       │   │   ├── 📄 searchNearbyPOI.ts
+│   │       │   │   ├── 📄 compareMultipleApartments.ts
+│   │       │   │   ├── 📄 findSimilarApartments.ts
+│   │       │   │   └── 📁 geo/                # 지리정보 핸들러군
+│   │       │   │       ├── 📄 geocodeAddress.ts
+│   │       │   │       ├── 📄 reverseGeocode.ts
+│   │       │   │       ├── 📄 lookupLegalDongCode.ts
+│   │       │   │       ├── 📄 convertDongCode.ts
+│   │       │   │       ├── 📄 getNearbyByCoords.ts
+│   │       │   │       ├── 📄 isochroneSearch.ts
+│   │       │   │       ├── 📄 transformCoordinates.ts
+│   │       │   │       └── 📄 normalizeKoreanAddress.ts
+│   │       │   └── 📁 repo/                   # 💾 Repository 패턴 데이터 계층
+│   │       │       ├── 📄 dealsRepo.ts        # 부동산 거래 데이터 레포지토리
+│   │       │       └── 📄 geoRepo.ts          # 지리정보 서비스 레포지토리
+│   │       └── 📄 .env.example                # 환경변수 예시 파일
+│   └── 🎨 web/                                # React SPA Frontend
+│       ├── 📄 package.json                    # 의존성: react 19, vite, tailwind 등
+│       ├── 📄 vite.config.ts                  # Vite 개발 서버 설정 (포트 5173)
+│       ├── 📄 tailwind.config.js              # TailwindCSS 설정
+│       ├── 📄 tsconfig.json                   # TypeScript 설정
+│       ├── 📁 src/
+│       │   ├── 📄 main.tsx                    # React 앱 엔트리포인트
+│       │   ├── 📄 App.tsx                     # 메인 앱 컴포넌트
+│       │   ├── 📄 firebase.ts                 # 🆕 Firebase 설정 및 초기화
+│       │   ├── 📁 auth/                       # 🔐 인증 시스템
+│       │   │   └── 📄 AuthProvider.tsx        # Firebase 인증 컨텍스트
+│       │   ├── 📁 components/                 # React 컴포넌트
+│       │   │   ├── 📁 ai/                     # 🤖 AI 관련 컴포넌트
+│       │   │   │   ├── 📄 AIAnalysisModal.tsx # AI 종합 분석 모달
+│       │   │   │   └── 📄 AIChatbot.tsx       # AI 챗봇 UI
+│       │   │   ├── 📁 auth/                   # 🔐 인증 컴포넌트
+│       │   │   │   └── 📄 AuthPage.tsx        # 로그인/회원가입 페이지
+│       │   │   ├── 📁 onboarding/             # 📋 온보딩 시스템
+│       │   │   │   └── 📄 UserOnboardingModal.tsx # 6단계 맞춤 설정
+│       │   │   ├── 📁 card/                   # 📊 정보 카드 시스템
+│       │   │   │   ├── 📄 AiSummaryPanel.tsx  # AI 종합 분석 패널
+│       │   │   │   ├── 📄 SummaryCard.tsx     # 4개 탭 정보 카드
+│       │   │   │   ├── 📄 RealEstateDealsTable.tsx # 실거래가 테이블
+│       │   │   │   ├── 📄 BuildingLandInfo.tsx # 건물/토지 정보
+│       │   │   │   └── 📄 NearbyInfoPanel.tsx # 주변 환경 정보
+│       │   │   ├── 📁 layout/                 # 레이아웃 컴포넌트
+│       │   │   │   └── 📄 TopBar.tsx          # 상단 네비게이션 바
+│       │   │   ├── 📁 map/                    # 🗺️ 지도 컴포넌트
+│       │   │   │   ├── 📄 MapContainer.tsx    # 카카오 지도 컨테이너
+│       │   │   │   └── 📄 MapControls.tsx     # 지도 컨트롤 UI
+│       │   │   ├── 📁 memo/                   # 📝 임장 메모 시스템
+│       │   │   │   ├── 📄 MemoCreateModal.tsx # 메모 작성/수정 모달
+│       │   │   │   ├── 📄 MyImjangModal.tsx   # 내 임장 목록 모달
+│       │   │   │   └── 📄 FavoriteConfirmPopup.tsx # 즐겨찾기 확인 팝업
+│       │   │   └── 📄 MapPrime3DViewer.tsx    # 3D 지도 뷰어 (Cesium)
+│       │   ├── 📁 hooks/                      # React 커스텀 훅
+│       │   │   ├── 📄 use3DEqbHighlight.ts    # 3D 연계정보 하이라이트
+│       │   │   ├── 📄 useEqbOverlay.ts        # EQB 오버레이 관리
+│       │   │   ├── 📄 useFirstPersonLook.ts   # 1인칭 시점 컨트롤
+│       │   │   ├── 📄 useShadeAnalysis.ts     # 그림자 분석 기능
+│       │   │   ├── 📄 useWalkingMode.ts       # 워킹 모드 컨트롤
+│       │   │   └── 📄 useWindowView.ts        # 창문 뷰 기능
+│       │   ├── 📁 types/                      # TypeScript 타입 정의
+│       │   ├── 📁 utils/                      # 유틸리티 함수
+│       │   └── 📁 styles/                     # 스타일 파일
+│       └── 📁 public/                         # 정적 파일
+│           ├── 📄 index.html                  # HTML 템플릿
+│           ├── 📁 js/                         # 외부 JavaScript 라이브러리
+│           │   └── 📁 cesium/                 # Cesium 3D 라이브러리
+│           └── 📁 code-example/               # MapPrime3D 예제 코드
+├── 🗄️ db/                                     # 데이터베이스 & ETL
+│   └── 📁 scripts/                            # DB 관련 스크립트
+│       ├── 📁 fetch/                          # 🆕 데이터 수집 스크립트
+│       │   ├── 📄 fetch_building_info.ts      # 건축물대장 API 데이터 수집
+│       │   ├── 📄 fetch_landuse_included.ts   # 토지이용계획 데이터 수집
+│       │   ├── 📄 fetch_rent_raw.ts           # 전월세 실거래 데이터 수집
+│       │   ├── 📄 fetch_trade_raw.ts          # 매매 실거래 데이터 수집
+│       │   ├── 📄 populate_apt_deal_all.ts    # 통합 거래 데이터 가공
+│       │   └── 📄 fill_apt_info_coordinates.ts # 좌표 정보 보완 스크립트
+│       ├── 📁 setup/                          # DB 초기 설정
+│       │   └── 📄 legal_dong_loader.ts        # 법정동 코드 로더
+│       └── 📁 SQLquery/                       # SQL 쿼리 파일
+│           └── 📄 oi.query.sql                # OpenImjang 스키마 정의
+├── 📄 package.json                            # 루트 패키지 설정 (모노레포)
+├── 📄 README.md                               # 프로젝트 문서 (현재 파일)
+├── 📄 CLAUDE.md                               # Claude Code 개발 가이드
+└── 📄 .gitignore                              # Git 무시 파일 목록
+```
+
+### 📊 코드 메트릭 및 복잡도
+
+```
+📈 프로젝트 규모 (Part 1-6 완료 기준)
+├── 총 파일 수: ~140개
+├── TypeScript 코드: ~25,000 라인
+├── AI 함수: 20개 (부동산 12개 + 지리정보 8개)
+├── API 엔드포인트: 23개 (AI 도구 20개 + 모니터링 3개)
+├── React 컴포넌트: ~30개
+├── 데이터베이스 테이블: 10개 (PostGIS + Firebase)
+└── 외부 API 연동: 7개 서비스
+
+🛠️ 기술적 복잡도
+├── 모듈형 아키텍처: ⭐⭐⭐⭐⭐ (매우 높음)
+├── 타입 안전성: ⭐⭐⭐⭐⭐ (완전 보장)
+├── 캐싱 전략: ⭐⭐⭐⭐⭐ (3단계 TTL)
+├── 에러 처리: ⭐⭐⭐⭐⭐ (포괄적 예외 처리)
+├── 문서화 수준: ⭐⭐⭐⭐⭐ (자동 생성)
+└── 테스트 커버리지: ⭐⭐⭐⚪⚪ (개선 필요)
 ```
 
 ## 🛠️ 기술 스택
