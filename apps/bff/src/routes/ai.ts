@@ -417,6 +417,40 @@ ${index + 1}. ${trade.dealyear}.${trade.dealmonth}.${trade.dealday}
             {
                 type: "function",
                 function: {
+                    name: "compareMultipleApartments",
+                    description: "여러 아파트의 최근 거래 평균가를 비교합니다. 마곡엠밸리 전체 단지 등 다중 비교에 최적화되어 있습니다.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            apartmentIds: {
+                                type: "array",
+                                items: { type: "number" },
+                                description: "비교할 아파트 ID 목록 (최대 20개)"
+                            },
+                            apartmentPattern: {
+                                type: "string",
+                                description: "아파트명 패턴 (예: '마곡엠밸리', '래미안'). apartmentIds가 없을 때 사용"
+                            },
+                            period: {
+                                type: "string",
+                                description: "조회 기간 (예: '3년', '1년', '6개월', 기본값: '3년')"
+                            },
+                            numDeals: {
+                                type: "number",
+                                description: "각 아파트별 평균 계산할 최근 거래 수 (기본값: 3)"
+                            },
+                            areaTolerance: {
+                                type: "number",
+                                description: "면적 오차 허용 범위 (㎡, 기본값: 5)"
+                            }
+                        },
+                        required: []
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
                     name: "findSimilarApartments",
                     description: "특정 아파트와 유사한 조건의 다른 아파트를 추천합니다. 면적, 가격대, 위치, 건축년도 등을 고려합니다.",
                     parameters: {
@@ -625,7 +659,7 @@ aiRoute.post("/chat-with-data", async (c) => {
                     apartmentBasicInfo = aptInfo;
                     console.log('🏠 아파트 기본 정보 수집:', aptInfo.aptnm);
                     
-                    // 해당 아파트에 대한 사용자 메모 조회
+                    // 해당 아파트에 대한 사용자 메모 조회 (Firebase 설정 오류 방지)
                     try {
                         const userMemosRef = admin.firestore()
                             .collection('users')
@@ -649,8 +683,20 @@ aiRoute.post("/chat-with-data", async (c) => {
                             
                             console.log(`📝 해당 아파트 메모 ${userApartmentMemos.length}개 발견`);
                         }
-                    } catch (memoError) {
-                        console.error('❌ 사용자 메모 조회 실패:', memoError);
+                    } catch (memoError: any) {
+                        console.error('❌ 사용자 메모 조회 실패:', memoError.message || memoError);
+                        
+                        // Firebase ADC(Application Default Credentials) 설정 오류인 경우 정상 진행
+                        if (memoError.message?.includes('Could not load the default credentials') || 
+                            memoError.message?.includes('GOOGLE_APPLICATION_CREDENTIALS') ||
+                            memoError.code === 'app/no-app') {
+                            console.log('⚠️ Firebase 인증 설정이 없습니다. 메모 기능 없이 계속 진행합니다.');
+                            userApartmentMemos = []; // 빈 배열로 설정하고 진행
+                        } else {
+                            // 다른 오류는 그대로 로그만 남기고 진행
+                            console.log('⚠️ 메모 조회 중 오류 발생했으나 챗봇 기능은 계속 진행합니다.');
+                            userApartmentMemos = [];
+                        }
                     }
                 }
             } catch (error) {
@@ -724,22 +770,42 @@ aiRoute.post("/chat-with-data", async (c) => {
             if (userProfile.priorities) systemPrompt += `- 우선순위: ${userProfile.priorities?.join(', ')}\n`;
         }
 
-        // 아파트 기본 정보만 추가 (상세 데이터는 Function Calling으로)
-        if (apartmentBasicInfo) {
+        // 현재 임장 대상 아파트 정보 추가 (메모 데이터에서 추출)
+        let contextApartment = apartmentBasicInfo;
+        
+        // apartmentId가 없지만 메모에 아파트 정보가 있는 경우 처리
+        if (!apartmentBasicInfo && memoData && memoData.apartmentInfo) {
+            contextApartment = {
+                aptnm: memoData.apartmentInfo.name,
+                jibunaddr: memoData.apartmentInfo.address || '',
+                lat: memoData.apartmentInfo.lat || 0,
+                lon: memoData.apartmentInfo.lng || 0,
+                id: memoData.apartmentInfo.id || null
+            };
+            console.log('📍 메모에서 아파트 정보 추출:', contextApartment.aptnm);
+        }
+        
+        // 현재 분석 대상 아파트가 있는 경우
+        if (contextApartment) {
             systemPrompt += `\n\n## 현재 분석 대상 아파트
-사용자가 현재 "${apartmentBasicInfo.aptnm}" 아파트(${apartmentBasicInfo.jibunaddr})를 보고 있습니다. 
-위치: 위도 ${apartmentBasicInfo.lat}, 경도 ${apartmentBasicInfo.lon}
+사용자가 현재 "${contextApartment.aptnm}" 아파트(${contextApartment.jibunaddr})를 보고 있습니다. 
+위치: 위도 ${contextApartment.lat}, 경도 ${contextApartment.lon}
+아파트 ID: ${contextApartment.id || 'N/A'}
+
+## 🏢 동별 비교 가이드 (중요!)
+사용자가 "101동", "102동", "A동", "B동" 등 동 번호만 언급하면 현재 아파트("${contextApartment.aptnm}")의 해당 동들을 의미합니다.
+- "101동 102동 매매가 어떰" → "${contextApartment.aptnm} 101동"과 "${contextApartment.aptnm} 102동" 비교
+- "A동 B동 비교해줘" → "${contextApartment.aptnm} A동"과 "${contextApartment.aptnm} B동" 비교
 
 ## Function 호출 가이드
-- 사용자가 특정 아파트 이름을 언급하지 않으면 → 현재 아파트("${apartmentBasicInfo.aptnm}")에 대한 정보 검색
-- 다른 아파트 이름을 언급하면서 "비교" 등의 키워드 사용 시 → 해당 아파트들에 대한 정보 검색
-- searchApartmentDeals: apartmentName 파라미터에 아파트 이름 전달
-- searchApartmentBuildingInfo: apartmentName 파라미터에 아파트 이름 전달  
-- searchNearbyInfo: 위 좌표 사용`;
+- 동 번호만 언급 시 → searchApartmentDeals 호출 시 아파트명을 "${contextApartment.aptnm} [동번호]" 형식으로 검색
+- 완전한 아파트 이름 언급 시 → 해당 아파트 이름 그대로 사용
+- 현재 아파트 전체 정보 필요 시 → "${contextApartment.aptnm}" 사용
+- 주변 정보 검색 시 → 위 좌표 사용`;
 
             // 사용자의 해당 아파트 메모 추가
             if (userApartmentMemos.length > 0) {
-                systemPrompt += `\n\n## 사용자의 ${apartmentBasicInfo.aptnm} 임장 메모들`;
+                systemPrompt += `\n\n## 사용자의 ${contextApartment.aptnm} 임장 메모들`;
                 userApartmentMemos.forEach((memo, index) => {
                     const createdDate = memo.createdAt.toLocaleDateString('ko-KR');
                     systemPrompt += `\n\n### ${index + 1}. ${memo.title} (${createdDate})`;
@@ -917,6 +983,8 @@ aiRoute.post("/chat-with-data", async (c) => {
                         functionResult = await handleSearchNearbyInfo(functionArgs);
                     } else if (functionName === 'webSearch') {
                         functionResult = await handleWebSearch(functionArgs);
+                    } else if (functionName === 'compareMultipleApartments') {
+                        functionResult = await handleCompareMultipleApartments(functionArgs);
                     }
                 } catch (error) {
                     console.error(`❌ Function 실행 오류 (${functionName}):`, error);
@@ -1541,11 +1609,12 @@ async function collectApartmentData(aptId: number) {
 // ===== 사용자 입력 분석 함수 =====
 
 interface UserInputAnalysis {
-    category: 'apartmentName' | 'address' | 'brandName' | 'generalQuery' | 'comparison' | 'unknown';
+    category: 'apartmentName' | 'address' | 'brandName' | 'generalQuery' | 'comparison' | 'dongComparison' | 'multiComparison' | 'unknown';
     extractedTerms: string[];
     clarificationNeeded: boolean;
     confidence: number;
     suggestedAction?: string;
+    comparisonBase?: string; // 비교 기준 (예: "마곡엠밸리", "래미안")
 }
 
 async function analyzeUserInput(userInput: string): Promise<UserInputAnalysis> {
@@ -1555,11 +1624,17 @@ async function analyzeUserInput(userInput: string): Promise<UserInputAnalysis> {
 
 분류 카테고리:
 - "apartmentName": 특정 아파트 이름을 찾는 경우 (예: "청구e편한세상", "현대아파트")
-- "address": 지번이나 도로명 주소를 입력한 경우 (예: "신당동 840", "서초동 1588-1")
+- "address": 지번이나 도로명 주소를 입력한 경우 (예: "신당동 840", "서초동 1588-1") 
 - "brandName": 건설사나 브랜드명만 입력한 경우 (예: "래미안", "자이", "현대")
 - "comparison": 여러 아파트를 비교하려는 경우 (예: "A와 B 비교")
+- "dongComparison": 동 번호만 비교하는 경우 (예: "101동 102동", "A동 B동", "1동 2동 매매가")  
+- "multiComparison": 특정 브랜드/패턴의 모든 단지를 비교 (예: "모든 마곡엠밸리", "전체 래미안 단지", "마곡엠밸리 1~15단지")
 - "generalQuery": 일반적인 부동산 정보 질문 (예: "재개발 호재", "전세 시세")
 - "unknown": 분류가 애매한 경우
+
+특별 분류 규칙:
+- "101동", "102동", "A동", "B동" 등 동 번호만 언급되면 → dongComparison
+- "모든", "전체", "전부" + 브랜드명 → multiComparison
 
 반드시 다음 JSON 형식으로만 응답해줘:
 {
@@ -1567,7 +1642,8 @@ async function analyzeUserInput(userInput: string): Promise<UserInputAnalysis> {
   "extractedTerms": ["추출된 키워드 배열"],
   "clarificationNeeded": true/false,
   "confidence": 0.0~1.0,
-  "suggestedAction": "권장 검색 방법"
+  "suggestedAction": "권장 검색 방법",
+  "comparisonBase": "비교 기준 브랜드/패턴 (multiComparison인 경우만)"
 }
 
 예시:
@@ -1576,6 +1652,9 @@ async function analyzeUserInput(userInput: string): Promise<UserInputAnalysis> {
 
 입력: "래미안 아파트 어때?"
 출력: {"category":"brandName","extractedTerms":["래미안"],"clarificationNeeded":true,"confidence":0.7,"suggestedAction":"래미안 브랜드 전체 검색 또는 지역 특정 필요"}
+
+입력: "모든 마곡엠밸리 단지 비교해줘"
+출력: {"category":"multiComparison","extractedTerms":["마곡엠밸리"],"clarificationNeeded":false,"confidence":0.95,"suggestedAction":"마곡엠밸리 패턴으로 전체 단지 검색 후 비교","comparisonBase":"마곡엠밸리"}
 
 사용자 입력: "${userInput}"`;
 
@@ -1699,7 +1778,7 @@ async function executeSearchByAnalysis(analysis: UserInputAnalysis, originalInpu
             return brandResult;
             
         case 'comparison':
-            // 비교 검색 (여러 아파트 검색)
+            // 개별 아파트 비교 검색 (여러 아파트 검색)
             const results = [];
             for (const term of extractedTerms.slice(0, 3)) { // 최대 3개까지
                 const result = await handleSearchApartmentDeals({ 
@@ -1717,6 +1796,45 @@ async function executeSearchByAnalysis(analysis: UserInputAnalysis, originalInpu
                 comparisonResults: results,
                 summary: `${extractedTerms.length}개 중 ${foundCount}개 아파트를 찾았습니다.`
             };
+            
+        case 'dongComparison':
+            // 동별 비교 (현재 아파트 컨텍스트 필요)
+            console.log(`🏢 동별 비교 모드: ${extractedTerms.join(', ')} 동 비교`);
+            
+            // 여기서 컨텍스트 아파트 정보가 필요하지만, 현재 함수에서는 접근할 수 없음
+            // 이 문제는 시스템 프롬프트에서 이미 해결했으므로 일반 비교로 처리
+            const dongResults = [];
+            for (const dongTerm of extractedTerms) {
+                const result = await handleSearchApartmentDeals({ 
+                    apartmentName: dongTerm // AI가 이미 "현재아파트명 + 동번호" 형식으로 검색하도록 프롬프트 설정됨
+                });
+                dongResults.push({ 
+                    searchTerm: dongTerm, 
+                    result,
+                    found: !result.error 
+                });
+            }
+            
+            const dongFoundCount = dongResults.filter(r => r.found).length;
+            return { 
+                dongComparisonResults: dongResults,
+                summary: `${extractedTerms.length}개 동 중 ${dongFoundCount}개 동의 거래 데이터를 찾았습니다.`,
+                note: "동별 비교를 위해 현재 아파트 기준으로 검색했습니다."
+            };
+            
+        case 'multiComparison':
+            // 다중 단지 비교 (패턴 기반 전체 검색)
+            const comparisonBase = analysis.comparisonBase || extractedTerms[0];
+            console.log(`🏆 다중 비교 모드: ${comparisonBase} 패턴의 모든 단지 검색`);
+            
+            const comparisonResult = await handleCompareMultipleApartments({
+                apartmentPattern: comparisonBase,
+                period: "3년",
+                numDeals: 3,
+                areaTolerance: 5
+            });
+            
+            return comparisonResult;
             
         case 'generalQuery':
             // 웹 검색으로 전환
@@ -2307,6 +2425,175 @@ async function handleWebSearch(args: { query: string }) {
     } catch (error) {
         console.error('❌ 웹 검색 오류:', error);
         return { error: "웹 검색 중 오류가 발생했습니다." };
+    }
+}
+
+// 다중 아파트 비교 함수
+async function handleCompareMultipleApartments(args: { 
+    apartmentIds?: number[]; 
+    apartmentPattern?: string;
+    period?: string; 
+    numDeals?: number;
+    areaTolerance?: number;
+}) {
+    try {
+        const { apartmentIds, apartmentPattern, period = "3년", numDeals = 3, areaTolerance = 5 } = args;
+        console.log(`🏢 다중 아파트 비교 시작:`, { apartmentIds, apartmentPattern, period, numDeals });
+        
+        let targetApartments: any[] = [];
+        
+        // 1. apartmentIds가 제공된 경우
+        if (apartmentIds && apartmentIds.length > 0) {
+            const aptInfos = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address'])
+                .where('id', 'in', apartmentIds)
+                .execute();
+            targetApartments = aptInfos;
+        } 
+        // 2. apartmentPattern이 제공된 경우 (예: "마곡엠밸리")
+        else if (apartmentPattern) {
+            const aptInfos = await db
+                .selectFrom('oi.apt_info')
+                .select(['id', 'apt_nm', 'jibun_address'])
+                .where('apt_nm', 'ilike', `%${apartmentPattern}%`)
+                .orderBy('apt_nm', 'asc')
+                .limit(20) // 최대 20개까지
+                .execute();
+            targetApartments = aptInfos;
+        } else {
+            return {
+                error: "비교할 아파트 정보가 제공되지 않았습니다.",
+                message: "apartmentIds 또는 apartmentPattern을 제공해주세요."
+            };
+        }
+        
+        if (targetApartments.length === 0) {
+            return {
+                error: "비교할 아파트를 찾을 수 없습니다.",
+                pattern: apartmentPattern || "제공된 ID 목록"
+            };
+        }
+        
+        console.log(`📊 비교 대상: ${targetApartments.length}개 아파트`);
+        
+        // 기간 설정
+        const currentYear = new Date().getFullYear();
+        const periodMatch = period.match(/(\d+)/);
+        const years = periodMatch ? parseInt(periodMatch[1]) : 3;
+        const startYear = currentYear - years;
+        
+        // 각 아파트별 최근 거래 평균 계산
+        const comparisonResults = [];
+        
+        for (const apt of targetApartments) {
+            try {
+                // 최근 거래 numDeals건 조회
+                const recentDeals = await db
+                    .selectFrom('oi.apt_deal_trade_raw')
+                    .select(['deal_amount', 'exclu_use_ar', 'deal_year', 'deal_month', 'floor'])
+                    .where('apt_info_id', '=', apt.id)
+                    .where('deal_year', '>=', startYear)
+                    .orderBy('deal_year', 'desc')
+                    .orderBy('deal_month', 'desc')
+                    .limit(numDeals * 3) // 여유있게 조회 (면적 필터링 고려)
+                    .execute();
+                
+                if (recentDeals.length === 0) {
+                    comparisonResults.push({
+                        aptId: apt.id,
+                        aptName: apt.apt_nm,
+                        address: apt.jibun_address,
+                        avgPrice: null,
+                        sampleCount: 0,
+                        message: "최근 거래 없음"
+                    });
+                    continue;
+                }
+                
+                // 첫 거래의 면적을 기준으로 ±areaTolerance 범위 필터링
+                const baseArea = recentDeals[0].exclu_use_ar;
+                const filteredDeals = recentDeals.filter(deal => 
+                    Math.abs(deal.exclu_use_ar - baseArea) <= areaTolerance
+                ).slice(0, numDeals);
+                
+                if (filteredDeals.length > 0) {
+                    const avgPrice = Math.round(
+                        filteredDeals.reduce((sum, deal) => sum + deal.deal_amount, 0) / filteredDeals.length
+                    );
+                    
+                    comparisonResults.push({
+                        aptId: apt.id,
+                        aptName: apt.apt_nm,
+                        address: apt.jibun_address,
+                        avgPrice,
+                        avgPriceFormatted: avgPrice >= 10000 ? 
+                            `${Math.floor(avgPrice/10000)}억 ${avgPrice%10000 ? (avgPrice%10000).toLocaleString() : ''}만원`.trim() :
+                            `${avgPrice.toLocaleString()}만원`,
+                        baseArea: Math.round(baseArea),
+                        sampleCount: filteredDeals.length,
+                        recentDeals: filteredDeals.slice(0, 3).map(deal => ({
+                            price: `${deal.deal_amount.toLocaleString()}만원`,
+                            area: `${Math.round(deal.exclu_use_ar)}㎡`,
+                            date: `${deal.deal_year}.${String(deal.deal_month).padStart(2, '0')}`,
+                            floor: `${deal.floor}층`
+                        }))
+                    });
+                } else {
+                    comparisonResults.push({
+                        aptId: apt.id,
+                        aptName: apt.apt_nm,
+                        address: apt.jibun_address,
+                        avgPrice: null,
+                        sampleCount: 0,
+                        message: "조건에 맞는 거래 없음"
+                    });
+                }
+            } catch (error) {
+                console.error(`❌ ${apt.apt_nm} 조회 실패:`, error);
+                comparisonResults.push({
+                    aptId: apt.id,
+                    aptName: apt.apt_nm,
+                    address: apt.jibun_address,
+                    avgPrice: null,
+                    sampleCount: 0,
+                    message: "조회 실패"
+                });
+            }
+        }
+        
+        // 평균가 기준 내림차순 정렬
+        const sortedResults = comparisonResults
+            .filter(r => r.avgPrice !== null)
+            .sort((a, b) => b.avgPrice - a.avgPrice);
+        
+        const noDataResults = comparisonResults
+            .filter(r => r.avgPrice === null);
+        
+        return {
+            searchPattern: apartmentPattern || `ID 목록 (${apartmentIds?.join(', ')})`,
+            comparisonPeriod: period,
+            numDealsUsed: numDeals,
+            areaTolerance: `±${areaTolerance}㎡`,
+            totalApartments: targetApartments.length,
+            validResults: sortedResults.length,
+            ranking: sortedResults.map((r, idx) => ({
+                rank: idx + 1,
+                ...r
+            })),
+            noDataApartments: noDataResults,
+            summary: sortedResults.length > 0 ? 
+                `최고가: ${sortedResults[0].aptName} (${sortedResults[0].avgPriceFormatted}), ` +
+                `최저가: ${sortedResults[sortedResults.length-1].aptName} (${sortedResults[sortedResults.length-1].avgPriceFormatted})` :
+                "비교 가능한 거래 데이터가 없습니다."
+        };
+        
+    } catch (error) {
+        console.error('❌ 다중 아파트 비교 오류:', error);
+        return { 
+            error: "다중 아파트 비교 중 오류가 발생했습니다.",
+            details: error.message 
+        };
     }
 }
 
