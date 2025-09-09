@@ -64,29 +64,37 @@ export const handlers: ToolHandlers = {
   estimateRentYield: async () => {
     throw new Error('estimateRentYield: 아직 구현되지 않았습니다.');
   },
-  // geo 함수들 (모두 스텁)
-  geocodeAddress: async () => {
-    throw new Error('geocodeAddress: 아직 구현되지 않았습니다.');
+  // geo 함수들 (구현 완료)
+  geocodeAddress: async (args) => {
+    const { geocodeAddress } = await import('./geo/geocodeAddress');
+    return geocodeAddress(args);
   },
-  reverseGeocode: async () => {
-    throw new Error('reverseGeocode: 아직 구현되지 않았습니다.');
+  reverseGeocode: async (args) => {
+    const { reverseGeocode } = await import('./geo/reverseGeocode');
+    return reverseGeocode(args);
   },
-  lookupLegalDongCode: async () => {
-    throw new Error('lookupLegalDongCode: 아직 구현되지 않았습니다.');
+  lookupLegalDongCode: async (args) => {
+    const { lookupLegalDongCode } = await import('./geo/lookupLegalDongCode');
+    return lookupLegalDongCode(args);
   },
-  convertDongCode: async () => {
-    throw new Error('convertDongCode: 아직 구현되지 않았습니다.');
+  convertDongCode: async (args) => {
+    const { convertDongCode } = await import('./geo/convertDongCode');
+    return convertDongCode(args);
   },
-  getNearbyByCoords: async () => {
-    throw new Error('getNearbyByCoords: 아직 구현되지 않았습니다.');
+  getNearbyByCoords: async (args) => {
+    const { getNearbyByCoords } = await import('./geo/getNearbyByCoords');
+    return getNearbyByCoords(args);
   },
-  isochroneSearch: async () => {
-    throw new Error('isochroneSearch: 아직 구현되지 않았습니다.');
+  isochroneSearch: async (args) => {
+    const { isochroneSearch } = await import('./geo/isochroneSearch');
+    return isochroneSearch(args);
   },
-  transformCoordinates: async () => {
-    throw new Error('transformCoordinates: 아직 구현되지 않았습니다.');
+  transformCoordinates: async (args) => {
+    const { transformCoordinates } = await import('./geo/transformCoordinates');
+    return transformCoordinates(args);
   },
-  normalizeKoreanAddress: async () => {
-    throw new Error('normalizeKoreanAddress: 아직 구현되지 않았습니다.');
+  normalizeKoreanAddress: async (args) => {
+    const { normalizeKoreanAddress } = await import('./geo/normalizeKoreanAddress');
+    return normalizeKoreanAddress(args);
   }
 };

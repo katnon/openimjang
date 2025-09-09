@@ -6,13 +6,17 @@ export const searchRealEstateDealsSchema: ToolSchema = {
   parameters: {
     type: "object",
     properties: {
+      apartmentName: {
+        type: "string",
+        description: "아파트명 (예: 래미안, 힐스테이트)"
+      },
       aptId: {
         type: "number",
         description: "아파트 ID (현재 컨텍스트의 아파트를 사용하려면 생략 가능)"
       },
       dealType: {
         type: "string",
-        enum: ["매매", "전세", "월세", "전월세"],
+        enum: ["매매", "전세", "월세", "전월세", "전체"],
         description: "거래 유형 필터"
       },
       area: {

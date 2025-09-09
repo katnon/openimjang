@@ -13,6 +13,12 @@ const ajv = new Ajv({
  * 스키마를 이용해 데이터를 검증하고, 검증 실패시 에러를 던집니다.
  */
 export function validateOrThrow(schema: ToolSchema, data: unknown): void {
+  console.log('🔍 Validation Debug:', {
+    functionName: schema.name,
+    inputData: data,
+    expectedEnum: schema.parameters.properties?.dealType?.enum
+  });
+  
   const validate = ajv.compile(schema.parameters);
   const isValid = validate(data);
   
