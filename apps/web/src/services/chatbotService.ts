@@ -62,16 +62,28 @@ class ChatbotService {
             // 기존 활성 세션들을 비활성화
             await this.deactivateAllSessions(userId);
 
-            const sessionData: Omit<ChatSession, 'id'> = {
+            // undefined 값 제거하여 Firebase 오류 방지
+            const sessionData: any = {
                 title,
                 type: params.type,
-                contextData: params.contextData,
                 messages: [],
                 createdAt: now,
                 updatedAt: now,
                 isActive: true,
                 messageCount: 0
             };
+
+            // contextData가 있을 때만 추가
+            if (params.contextData && Object.keys(params.contextData).length > 0) {
+                sessionData.contextData = params.contextData;
+            }
+
+            // undefined 필드 제거
+            Object.keys(sessionData).forEach(key => {
+                if (sessionData[key] === undefined) {
+                    delete sessionData[key];
+                }
+            });
 
             const docRef = await addDoc(this.getUserChatSessionsRef(userId), {
                 ...sessionData,
@@ -110,11 +122,30 @@ class ChatbotService {
             const sessionRef = this.getChatSessionRef(userId, sessionId);
             const now = new Date();
 
+            // undefined 값 제거하여 Firebase 오류 방지
+            const cleanMessage: any = {
+                id: message.id,
+                role: message.role,
+                content: message.content,
+                timestamp: Timestamp.fromDate(message.timestamp)
+            };
+
+            // 선택적 필드들 추가 (undefined가 아닐 때만)
+            if (message.images && message.images.length > 0) {
+                cleanMessage.images = message.images;
+            }
+            if (message.attachments && message.attachments.length > 0) {
+                cleanMessage.attachments = message.attachments;
+            }
+            if (message.sources && message.sources.length > 0) {
+                cleanMessage.sources = message.sources;
+            }
+            if (message.metadata) {
+                cleanMessage.metadata = message.metadata;
+            }
+
             await updateDoc(sessionRef, {
-                messages: arrayUnion({
-                    ...message,
-                    timestamp: Timestamp.fromDate(message.timestamp)
-                }),
+                messages: arrayUnion(cleanMessage),
                 updatedAt: Timestamp.fromDate(now),
                 messageCount: (await this.getMessageCount(userId, sessionId)) + 1
             });

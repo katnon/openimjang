@@ -51,10 +51,10 @@ async function pgSearch(query: string, { topK = 8, filter }: SearchOptions = {})
     const rows = await sql/* sql */`
     SELECT id, source_path, schema_name, table_name, chunk_id,
            content_text,
-           1 - (embedding <=> ${sql(vec)}::vector) AS score
+           1 - (embedding <=> ${vec}::vector) AS score
     FROM ai.embeddings
     ${where.length ? sql`WHERE ${sql.join(where, sql` AND `)}` : sql``}
-    ORDER BY embedding <=> ${sql(vec)}::vector
+    ORDER BY embedding <=> ${vec}::vector
     LIMIT ${topK};
   `;
   

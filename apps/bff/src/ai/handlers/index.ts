@@ -96,5 +96,19 @@ export const handlers: ToolHandlers = {
   normalizeKoreanAddress: async (args) => {
     const { normalizeKoreanAddress } = await import('./geo/normalizeKoreanAddress');
     return normalizeKoreanAddress(args);
+  },
+  
+  // 신규 RAG + Function Calling 통합 함수들
+  generateSelectQuery: async (args) => {
+    const { generateSelectQuery } = await import('./database/generateSelectQuery');
+    return generateSelectQuery(args);
+  },
+  executeQuery: async (args) => {
+    const { executeQuery } = await import('./database/executeQuery');
+    return executeQuery(args);
+  },
+  displayOnMap: async (args) => {
+    const { displayOnMap } = await import('./visualization/displayOnMap');
+    return displayOnMap(args);
   }
 };

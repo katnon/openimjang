@@ -1,0 +1,148 @@
+부동산 거래 유형 매핑 가이드
+
+## 거래 유형별 테이블 선택
+
+### 매매 관련 질문
+**사용자 표현**:
+- "매매가", "매매 가격", "거래가", "거래 가격"
+- "매매", "매수", "매도", "거래"
+- "매매 실거래가", "아파트 가격"
+
+**데이터베이스 테이블**: oi.apt_deal_trade_raw
+**주요 컬럼**: 
+- dealamount (거래금액, 만원 단위)
+- excluusear (전용면적, ㎡)
+- floor (층수)
+
+### 전월세 관련 질문
+**사용자 표현**:
+- "전세", "전세금", "전세 가격"
+- "월세", "월세비", "임대료"  
+- "전월세", "임대", "임차"
+- "보증금"
+
+**데이터베이스 테이블**: oi.apt_deal_rent_raw
+**주요 컬럼**:
+- deposit (보증금, 만원 단위)
+- monthlyrent (월세, 만원 단위)
+- excluusear (전용면적, ㎡)
+- floor (층수)
+
+## 거래금액 관련 컬럼 상세
+
+### oi.apt_deal_trade_raw (매매)
+```sql
+-- 주요 컬럼
+dealamount INTEGER    -- 거래금액 (만원 단위, 예: 50000 = 5억원)
+excluusear NUMERIC    -- 전용면적 (㎡)
+floor INTEGER         -- 층수
+buildyear INTEGER     -- 건축년도
+
+-- 사용 예시
+SELECT dealamount, -- 50000 (5억원)
+       dealamount / 10000.0 AS price_in_eogun -- 5.0 (5억원)
+FROM oi.apt_deal_trade_raw;
+```
+
+### oi.apt_deal_rent_raw (전월세)
+```sql  
+-- 주요 컬럼
+deposit INTEGER       -- 보증금 (만원 단위)
+monthlyrent INTEGER   -- 월세 (만원 단위, 0이면 전세)
+excluusear NUMERIC    -- 전용면적 (㎡)
+floor INTEGER         -- 층수
+
+-- 전세/월세 구분
+-- monthlyrent = 0: 전세
+-- monthlyrent > 0: 월세
+```
+
+## 질문 유형별 쿼리 패턴
+
+### 평균 매매가 질문
+**사용자**: "평균 매매가", "매매가 평균"
+```sql
+SELECT AVG(dealamount) AS avg_price
+FROM oi.apt_deal_trade_raw
+WHERE aptnm ILIKE '%아파트명%';
+```
+
+### 전세금 평균
+**사용자**: "전세금 평균", "평균 전세가"
+```sql
+SELECT AVG(deposit) AS avg_jeonse
+FROM oi.apt_deal_rent_raw  
+WHERE monthlyrent = 0  -- 전세만 (월세 제외)
+  AND aptnm ILIKE '%아파트명%';
+```
+
+### 월세 평균  
+**사용자**: "월세 평균", "평균 월세"
+```sql
+SELECT AVG(monthlyrent) AS avg_monthly_rent,
+       AVG(deposit) AS avg_deposit
+FROM oi.apt_deal_rent_raw
+WHERE monthlyrent > 0  -- 월세만 (전세 제외)
+  AND aptnm ILIKE '%아파트명%';
+```
+
+### 거래량 (거래 건수)
+**사용자**: "거래량", "거래 건수", "거래 횟수"
+```sql
+-- 매매 거래량
+SELECT COUNT(*) AS trade_count
+FROM oi.apt_deal_trade_raw
+WHERE aptnm ILIKE '%아파트명%';
+
+-- 전월세 거래량  
+SELECT COUNT(*) AS rent_count
+FROM oi.apt_deal_rent_raw
+WHERE aptnm ILIKE '%아파트명%';
+```
+
+## 단위 표시 및 해석
+
+### 금액 단위 (만원 → 억원 변환)
+```sql
+-- dealamount: 50000 (만원) = 5억원
+SELECT dealamount,
+       ROUND(dealamount / 10000.0, 2) AS price_in_eogun,
+       dealamount || '만원' AS price_formatted
+FROM oi.apt_deal_trade_raw;
+```
+
+### 면적 단위 (㎡ → 평 변환)
+```sql
+-- excluusear: 84.92 (㎡) ≈ 25.7평
+SELECT excluusear,
+       ROUND(excluusear / 3.3058, 1) AS area_in_pyeong
+FROM oi.apt_deal_trade_raw;
+```
+
+## 조건별 거래 분석
+
+### 면적대별 분석
+**사용자**: "소형", "중형", "대형", "평수별"
+```sql
+-- 소형 (60㎡ 미만, ~18평)
+WHERE excluusear < 60
+
+-- 중형 (60~85㎡, 18~25평) 
+WHERE excluusear BETWEEN 60 AND 85
+
+-- 대형 (85㎡ 초과, 25평 이상)
+WHERE excluusear > 85
+```
+
+### 층수별 분석
+**사용자**: "저층", "중층", "고층"
+```sql
+-- 저층 (1~5층)
+WHERE floor BETWEEN 1 AND 5
+
+-- 중층 (6~15층)
+WHERE floor BETWEEN 6 AND 15
+
+-- 고층 (16층 이상)
+WHERE floor >= 16
+```

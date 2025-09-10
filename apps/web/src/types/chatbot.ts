@@ -8,6 +8,11 @@ export interface ChatMessage {
         type: 'apartment' | 'memo' | 'image';
         data: any;
     }[];
+    images?: {
+        name: string;
+        type: string;
+        data: string; // base64 데이터
+    }[];
     // RAG 및 하이브리드 모드 관련 정보
     sources?: string[];
     metadata?: {

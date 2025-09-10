@@ -128,13 +128,15 @@ async function upsertEmbedding(params: {
 
 /** 메인 */
 async function main() {
-    const repoRoot = process.cwd();
+    const repoRoot = path.join(process.cwd(), "..", "..");
     const ddlFile = path.join(repoRoot, "db_schema_public_oi.sql");
     const detailFiles = await globby(["docs/db_schema_report/*.txt"], { cwd: repoRoot, absolute: true });
+    const mappingFiles = await globby(["docs/natural_language_mapping/*.txt"], { cwd: repoRoot, absolute: true });
 
     const targets = [
         { source_path: ddlFile, kind: "ddl" as const },
         ...detailFiles.map((p) => ({ source_path: p, kind: "detail" as const })),
+        ...mappingFiles.map((p) => ({ source_path: p, kind: "mapping" as const })),
     ];
 
     console.log(`🔎 대상 파일: ${targets.length}개`);

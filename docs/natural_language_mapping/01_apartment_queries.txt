@@ -1,0 +1,58 @@
+아파트 관련 자연어 질문 처리 가이드
+
+## 아파트 이름 검색 패턴
+
+### 사용자 표현 방식
+- "마곡엠밸리7단지"
+- "마곡엠밸리 7단지" 
+- "래미안"
+- "래미안아파트"
+- "힐스테이트"
+- "푸르지오"
+- "디에이치"
+- "롯데캐슬"
+
+### 데이터베이스 처리
+**테이블**: oi.apt_info
+**컬럼**: apt_nm (아파트명)
+**검색 방법**: ILIKE '%{아파트명}%' 사용하여 부분 일치 검색
+**결과**: apt_info의 id 컬럼으로 아파트 고유 식별자 획득
+
+### SQL 패턴
+```sql
+-- 1단계: 아파트명으로 ID 찾기
+SELECT id FROM oi.apt_info WHERE apt_nm ILIKE '%마곡엠밸리%';
+
+-- 2단계: 해당 ID로 거래 정보 검색
+WHERE apt_id = (SELECT id FROM oi.apt_info WHERE apt_nm ILIKE '%마곡엠밸리%')
+```
+
+## 아파트 정보 관련 테이블 구조
+
+### oi.apt_info (아파트 기본정보)
+- **id**: 아파트 고유 식별자 (기본키)
+- **apt_nm**: 아파트명 (사용자가 검색하는 이름)
+- **jibun_address**: 지번 주소
+- **lon, lat**: 경도, 위도 좌표
+
+### 거래 테이블과의 연결
+- oi.apt_deal_trade_raw: apt_id가 아닌 aptnm 컬럼으로 직접 아파트명 저장
+- oi.apt_deal_rent_raw: apt_id가 아닌 aptnm 컬럼으로 직접 아파트명 저장
+
+**중요**: 실거래 테이블들(trade_raw, rent_raw)은 apt_info와 직접 JOIN하지 않고, aptnm 컬럼을 직접 사용하여 검색
+
+### 올바른 SQL 패턴
+```sql
+-- 매매 거래 검색 시
+SELECT * FROM oi.apt_deal_trade_raw 
+WHERE aptnm ILIKE '%마곡엠밸리%';
+
+-- 전월세 거래 검색 시  
+SELECT * FROM oi.apt_deal_rent_raw
+WHERE aptnm ILIKE '%마곡엠밸리%';
+```
+
+## 주요 주의사항
+1. 아파트명 검색 시 대소문자 구분하지 않음 (ILIKE 사용)
+2. 부분 일치로 검색하여 "7단지", "아파트" 등의 접미사 무시
+3. 띄어쓰기 변형도 고려하여 유연한 검색 지원

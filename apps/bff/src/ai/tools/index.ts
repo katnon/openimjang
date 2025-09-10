@@ -28,6 +28,11 @@ import { isochroneSearchSchema } from '../schemas/geo/isochroneSearch.schema';
 import { transformCoordinatesSchema } from '../schemas/geo/transformCoordinates.schema';
 import { normalizeKoreanAddressSchema } from '../schemas/geo/normalizeKoreanAddress.schema';
 
+// 신규 RAG + Function Calling 통합 스키마 import
+import { generateSelectQuerySchema } from '../schemas/database/generateSelectQuery.schema';
+import { executeQuerySchema } from '../schemas/database/executeQuery.schema';
+import { displayOnMapSchema } from '../schemas/visualization/displayOnMap.schema';
+
 // 모든 스키마를 OpenAI Tool 형식으로 변환
 const createTool = (schema: any): OpenAITool => ({
   type: "function",
@@ -60,7 +65,12 @@ export const tools: OpenAITool[] = [
   createTool(getNearbyByCoordsSchema),
   createTool(isochroneSearchSchema),
   createTool(transformCoordinatesSchema),
-  createTool(normalizeKoreanAddressSchema)
+  createTool(normalizeKoreanAddressSchema),
+  
+  // 신규 RAG + Function Calling 통합 함수들
+  createTool(generateSelectQuerySchema),
+  createTool(executeQuerySchema),
+  createTool(displayOnMapSchema)
 ];
 
 // 중복 이름 검사

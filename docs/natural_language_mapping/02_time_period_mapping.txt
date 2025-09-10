@@ -1,0 +1,108 @@
+시간 기간 표현 매핑 가이드
+
+## 자연어 시간 표현을 SQL 조건으로 변환
+
+### 상대적 기간 표현
+
+#### "최근 N개월"
+**사용자 표현**: "최근 3개월", "최근 6개월", "최근 1년"
+**SQL 변환**: 
+```sql
+-- dealyear, dealmonth, dealday 컬럼 조합 사용
+WHERE MAKE_DATE(dealyear, dealmonth, dealday) >= CURRENT_DATE - INTERVAL '3 months'
+```
+
+#### "최근 N년"  
+**사용자 표현**: "최근 1년", "최근 2년"
+**SQL 변환**:
+```sql
+WHERE MAKE_DATE(dealyear, dealmonth, dealday) >= CURRENT_DATE - INTERVAL '1 year'
+```
+
+### 절대적 기간 표현
+
+#### 특정 연도
+**사용자 표현**: "2024년", "2023년도"
+**SQL 변환**:
+```sql
+WHERE dealyear = 2024
+```
+
+#### 특정 연월
+**사용자 표현**: "2024년 3월", "작년 12월"
+**SQL 변환**:
+```sql
+WHERE dealyear = 2024 AND dealmonth = 3
+```
+
+#### 특정 분기
+**사용자 표현**: "2024년 1분기", "올해 상반기"
+**SQL 변환**:
+```sql
+-- 1분기 (1-3월)
+WHERE dealyear = 2024 AND dealmonth BETWEEN 1 AND 3
+
+-- 상반기 (1-6월)
+WHERE dealyear = 2024 AND dealmonth BETWEEN 1 AND 6
+```
+
+## 거래 날짜 관련 컬럼 구조
+
+### oi.apt_deal_trade_raw & oi.apt_deal_rent_raw
+- **dealyear**: 거래 연도 (integer)
+- **dealmonth**: 거래 월 (integer)  
+- **dealday**: 거래 일 (integer)
+- **cdealday**: 거래일자 문자열 (YYYYMMDD 형식)
+
+### 날짜 조건 구성 방법
+
+#### 권장 방식: MAKE_DATE 함수 사용
+```sql
+WHERE MAKE_DATE(dealyear, dealmonth, dealday) >= '2024-01-01'
+WHERE MAKE_DATE(dealyear, dealmonth, dealday) BETWEEN '2024-01-01' AND '2024-12-31'
+```
+
+#### 대안 방식: 개별 컬럼 조건
+```sql
+WHERE dealyear = 2024 AND dealmonth >= 6  -- 2024년 6월 이후
+WHERE dealyear >= 2023  -- 2023년 이후
+```
+
+## 자주 사용되는 기간 패턴
+
+### "최신", "최근" 표현
+**사용자 의도**: 가장 최근의 거래 데이터
+**SQL 처리**: ORDER BY + LIMIT 활용
+```sql
+ORDER BY dealyear DESC, dealmonth DESC, dealday DESC LIMIT 1
+```
+
+### "지난", "작년" 표현  
+**사용자 표현**: "작년 거래량", "지난해"
+**SQL 변환**:
+```sql
+WHERE dealyear = EXTRACT(YEAR FROM CURRENT_DATE) - 1
+```
+
+### "올해", "금년" 표현
+**사용자 표현**: "올해 매매가", "금년 거래"
+**SQL 변환**:
+```sql
+WHERE dealyear = EXTRACT(YEAR FROM CURRENT_DATE)
+```
+
+## 기간 조건 조합 예시
+
+### 복합 조건
+```sql
+-- 마곡엠밸리 최근 6개월 매매 거래
+SELECT AVG(dealamount) 
+FROM oi.apt_deal_trade_raw 
+WHERE aptnm ILIKE '%마곡엠밸리%' 
+  AND MAKE_DATE(dealyear, dealmonth, dealday) >= CURRENT_DATE - INTERVAL '6 months';
+
+-- 2024년 전체 전월세 거래량
+SELECT COUNT(*) 
+FROM oi.apt_deal_rent_raw 
+WHERE dealyear = 2024;
+```

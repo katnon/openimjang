@@ -2,7 +2,7 @@ import { ToolSchema } from '../../tools/types';
 
 export const searchRealEstateDealsSchema: ToolSchema = {
   name: "searchRealEstateDeals",
-  description: "특정 아파트의 실거래 데이터를 검색합니다. 아파트명 또는 ID가 필요하며, 거래 유형(매매/전세/월세)과 면적별로 필터링 가능합니다.",
+  description: "특정 아파트의 실거래 데이터를 검색합니다. 아파트명 또는 ID가 필요하며, 거래 유형(매매/전세/월세)과 면적별로 필터링 가능합니다. apartmentName 또는 aptId 중 하나는 반드시 제공해야 합니다.",
   parameters: {
     type: "object",
     properties: {
@@ -29,11 +29,7 @@ export const searchRealEstateDealsSchema: ToolSchema = {
         enum: ["3개월", "6개월", "1년", "3년", "전체"]
       }
     },
-    anyOf: [
-      { required: ["apartmentName"] },
-      { required: ["aptId"] }
-    ],
     additionalProperties: false
   },
-  strict: true
+  strict: false
 } as const;

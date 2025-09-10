@@ -1,0 +1,147 @@
+데이터베이스 컬럼의 한국어 의미 매핑
+
+## 주요 테이블별 컬럼 의미
+
+### oi.apt_info (아파트 기본정보)
+- **id**: 아파트 고유 식별자
+- **apt_nm**: 아파트명, 단지명
+- **jibun_address**: 지번 주소  
+- **lon**: 경도 (longitude)
+- **lat**: 위도 (latitude)
+- **created_at**: 데이터 생성일
+- **updated_at**: 데이터 수정일
+
+### oi.apt_deal_trade_raw (아파트 매매 실거래)
+
+#### 위치 정보
+- **sggcd**: 시군구 코드
+- **umdcd**: 읍면동 코드  
+- **umdnm**: 읍면동명
+- **aptnm**: 아파트명
+- **jibun**: 지번
+
+#### 거래 정보  
+- **dealamount**: 거래금액 (만원 단위)
+- **dealyear**: 거래 연도
+- **dealmonth**: 거래 월
+- **dealday**: 거래 일
+- **cdealday**: 계약일 (YYYYMMDD 형식)
+
+#### 부동산 정보
+- **excluusear**: 전용면적 (㎡)
+- **floor**: 층수
+- **buildyear**: 건축년도 (준공년도)
+- **aptdong**: 아파트 동 정보
+
+#### 거래 상세
+- **cdealtype**: 거래 구분 (매매 유형)
+- **dealinggbn**: 거래 구분
+- **rgstdate**: 등록일자
+
+### oi.apt_deal_rent_raw (아파트 전월세 실거래)
+
+#### 임대료 정보
+- **deposit**: 보증금 (만원 단위)
+- **monthlyrent**: 월세 (만원 단위, 0이면 전세)
+
+#### 공통 정보 (매매와 동일)
+- **aptnm**: 아파트명
+- **excluusear**: 전용면적 (㎡)  
+- **floor**: 층수
+- **dealyear, dealmonth, dealday**: 거래일자
+
+## 한국어 질문과 컬럼 매핑
+
+### 가격/금액 관련
+**사용자 표현 → 해당 컬럼**
+- "가격", "금액", "거래가" → dealamount  
+- "보증금", "전세금" → deposit
+- "월세", "임대료" → monthlyrent
+- "평당 가격" → dealamount / excluusear
+
+### 면적 관련  
+**사용자 표현 → 해당 컬럼**
+- "면적", "넓이", "크기" → excluusear
+- "평", "평수" → excluusear / 3.3058
+- "소형", "중형", "대형" → excluusear 기준 구간
+
+### 시간 관련
+**사용자 표현 → 해당 컬럼**  
+- "언제", "시기" → dealyear, dealmonth, dealday
+- "연도", "년도" → dealyear
+- "월", "달" → dealmonth  
+- "계약일", "거래일" → cdealday 또는 MAKE_DATE(dealyear, dealmonth, dealday)
+
+### 위치 관련
+**사용자 표현 → 해당 컬럼**
+- "어디", "위치", "동네" → umdnm
+- "주소" → jibun_address (apt_info 테이블)
+- "좌표" → lon, lat (apt_info 테이블)
+
+### 건물 정보
+**사용자 표현 → 해당 컬럼**  
+- "몇 층", "층수" → floor
+- "언제 지었", "건축연도" → buildyear
+- "몇 동", "동" → aptdong
+
+## 집계 함수와 자연어 매핑
+
+### 통계 관련 표현
+**사용자 표현 → SQL 함수**
+- "평균" → AVG()
+- "최대", "최고", "가장 비싼" → MAX()  
+- "최소", "최저", "가장 싼" → MIN()
+- "합계", "총" → SUM()
+- "개수", "건수", "얼마나 많은" → COUNT()
+
+### 정렬 관련 표현
+**사용자 표현 → ORDER BY**
+- "비싼 순", "높은 순" → ORDER BY dealamount DESC
+- "싼 순", "낮은 순" → ORDER BY dealamount ASC  
+- "최신 순", "최근 순" → ORDER BY dealyear DESC, dealmonth DESC, dealday DESC
+- "오래된 순" → ORDER BY dealyear ASC, dealmonth ASC, dealday ASC
+
+## 조건 표현 매핑
+
+### 비교 조건
+**사용자 표현 → SQL 조건**
+- "이상", "넘는", "초과" → > 또는 >=
+- "이하", "미만", "안 넘는" → < 또는 <=  
+- "사이", "~에서 ~까지" → BETWEEN
+- "같은", "동일한" → =
+- "다른", "제외" → != 또는 NOT
+
+### 포함 조건  
+**사용자 표현 → SQL 조건**
+- "포함", "들어간", "있는" → LIKE '%...%' 또는 ILIKE '%...%'
+- "시작하는" → LIKE '...%'
+- "끝나는" → LIKE '%...'
+
+## 단위 변환 공식
+
+### 면적 변환
+```sql
+-- ㎡ → 평
+excluusear / 3.3058 AS area_in_pyeong
+
+-- 평 → ㎡  
+(평수 * 3.3058) AS area_in_sqm
+```
+
+### 금액 변환
+```sql
+-- 만원 → 억원
+dealamount / 10000.0 AS price_in_eogun
+
+-- 만원 → 원
+dealamount * 10000 AS price_in_won
+```
+
+### 평당 단가 계산
+```sql  
+-- 평당 매매가 (만원/평)
+ROUND(dealamount / (excluusear / 3.3058), 0) AS price_per_pyeong
+
+-- ㎡당 매매가 (만원/㎡)  
+ROUND(dealamount / excluusear, 0) AS price_per_sqm
+```
