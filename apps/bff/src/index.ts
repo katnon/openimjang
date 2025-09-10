@@ -12,6 +12,9 @@ import poi from './routes/poi';
 // import { aiRoute } from './routes/ai';  // ⚠️ LEGACY - 새로운 AI 모듈로 대체됨
 import apiAiToolsRoute from './routes/apiAiTools';
 import aiChatRoute from './routes/aiChat';
+import aiAskRoute from './routes/aiAsk';
+import aiHybridRoute from './routes/aiHybrid';
+import embeddingRoute from './routes/embedding';
 import swaggerRoute from './routes/swagger';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
@@ -34,6 +37,9 @@ app.route('/api/poi', poi);
 // app.route('/api/ai', aiRoute);  // ⚠️ LEGACY - 새로운 AI 모듈로 대체됨
 app.route('/api/ai', apiAiToolsRoute);  // AI Functions 전용 라우터
 app.route('/api/ai-new', aiChatRoute);  // 새로운 표준 패턴 테스트용
+app.route('/api/ai', aiAskRoute);       // 🆕 RAG 기반 질의응답 라우터
+app.route('/api/ai', aiHybridRoute);    // 🆕 하이브리드 RAG+Functions 라우터
+app.route('/api/embedding', embeddingRoute); // 🆕 임베딩 관리 라우터
 app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);

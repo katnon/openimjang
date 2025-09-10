@@ -6,6 +6,7 @@ import axios from "axios";
 import { chatbotService } from "@/services/chatbotService";
 import type { ChatMessage, ChatSession, ChatSessionType } from "@/types/chatbot";
 import ReactMarkdown from 'react-markdown';
+import { useResizable } from "@/hooks/useResizable";
 
 type ChatbotSidebarProps = {
     contextData?: {
@@ -29,9 +30,20 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [showHistory, setShowHistory] = useState(false);
     const [showDropdown, setShowDropdown] = useState(false);
-    const [attachedApartment, setAttachedApartment] = useState<{id: number; name: string; address: string; lat: number; lon: number} | null>(null);
+    const [attachedApartment, setAttachedApartment] = useState<{ id: number; name: string; address: string; lat: number; lon: number } | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // 리사이즈 기능
+    const { width, height, resizeHandle } = useResizable({
+        initialWidth: 400, // 기본 사이드바 너비
+        initialHeight: typeof window !== 'undefined' ? window.innerHeight * 0.7 : 500,
+        minWidth: 300,
+        minHeight: 400,
+        maxWidth: typeof window !== 'undefined' ? window.innerWidth * 0.6 : 800,
+        maxHeight: typeof window !== 'undefined' ? window.innerHeight * 0.9 : 800,
+        direction: 'top-left' // 우측 하단 위치에서 좌측 상단으로 확장
+    });
 
     // 메시지 자동 스크롤
     const scrollToBottom = () => {
@@ -74,14 +86,14 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                 try {
                     console.log('🔍 프로필 로드 시도 중... User UID:', user.uid);
                     const profileDoc = await getDoc(doc(db, 'users', user.uid, 'profile', 'basic'));
-                    
+
                     if (profileDoc.exists()) {
                         const profileData = profileDoc.data();
                         setUserProfile(profileData);
                         console.log('✅ 사용자 프로필 로드됨:', profileData);
                     } else {
                         console.log('📝 사용자 프로필이 없음 - 온보딩이 완료되지 않았을 수 있습니다');
-                        
+
                         // 임시 테스트용 더미 데이터
                         const dummyProfile = {
                             purpose: ['매매', '투자'],
@@ -93,7 +105,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                             familyType: '신혼부부',
                             priorities: ['교통', '교육환경']
                         };
-                        
+
                         console.log('🧪 테스트용 더미 프로필 사용:', dummyProfile);
                         setUserProfile(dummyProfile);
                     }
@@ -125,12 +137,12 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
 
         try {
             setIsLoadingHistory(true);
-            
+
             // 활성 세션 확인
             let activeSession = await chatbotService.getActiveSession(user.uid);
-            
+
             // 컨텍스트가 변경되었거나 활성 세션이 없으면 새 세션 생성
-            const needNewSession = !activeSession || 
+            const needNewSession = !activeSession ||
                 (contextData && (
                     activeSession.type !== contextData.type ||
                     activeSession.contextData?.apartmentId !== contextData.aptId?.toString()
@@ -156,14 +168,14 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
 
             if (activeSession) {
                 setCurrentSession(activeSession);
-                
+
                 // 기존 메시지가 있으면 로드, 없으면 환영 메시지 추가
                 if (activeSession.messages.length > 0) {
                     setMessages(activeSession.messages);
                 } else {
                     const welcomeMessage = createWelcomeMessage();
                     setMessages([welcomeMessage]);
-                    
+
                     // 환영 메시지를 Firebase에 저장
                     await chatbotService.addMessage(user.uid, activeSession.id, welcomeMessage);
                 }
@@ -217,10 +229,10 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
 
         try {
             setIsLoadingHistory(true);
-            
+
             // 세션 활성화
             await chatbotService.activateSession(user.uid, sessionId);
-            
+
             // 세션 데이터 로드
             const session = await chatbotService.getChatSession(user.uid, sessionId);
             if (session) {
@@ -298,7 +310,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
             };
 
             setMessages(prev => [...prev, assistantMessage]);
-            
+
             // Firebase에 어시스턴트 메시지 저장
             await chatbotService.addMessage(user.uid, currentSession.id, assistantMessage);
 
@@ -316,7 +328,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                 timestamp: new Date()
             };
             setMessages(prev => [...prev, errorMessage]);
-            
+
             // 에러 메시지도 Firebase에 저장
             await chatbotService.addMessage(user.uid, currentSession.id, errorMessage);
         } finally {
@@ -332,9 +344,9 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
     };
 
     const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('ko-KR', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        return date.toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit'
         });
     };
 
@@ -354,10 +366,24 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                 <span className="text-2xl">🤖</span>
             </button>
 
-            {/* 사이드바 - 스마트폰 비율 */}
-            <div className={`fixed bottom-0 right-4 bg-white shadow-2xl rounded-t-xl transition-all duration-300 z-50 border border-gray-200 ${
-                isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
-            }`} style={{ width: '360px', height: '50vh' }}>
+            {/* 사이드바 - 리사이즈 가능 */}
+            <div className={`fixed bottom-0 right-4 bg-white shadow-2xl rounded-t-xl transition-all duration-300 z-50 border border-gray-200 ${isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+                } relative`} style={{
+                    width: `${width}px`,
+                    height: `${height}px`
+                }}>
+                {/* 리사이즈 핸들 - 좌측 상단 */}
+                <div
+                    className={`absolute top-0 left-0 w-6 h-6 cursor-nw-resize z-10 ${resizeHandle.isDragging ? 'bg-[#3D7D7B]' : 'bg-gray-300 hover:bg-[#14E3DC]'
+                        } rounded-tl-xl opacity-60 hover:opacity-100 transition-all duration-200`}
+                    onMouseDown={resizeHandle.onMouseDown}
+                    title="크기 조절"
+                >
+                    {/* 리사이즈 아이콘 */}
+                    <div className="absolute top-1 left-1 text-white text-xs">
+                        ⤡
+                    </div>
+                </div>
                 <div className="h-full flex flex-col">
                     {/* 헤더 */}
                     <div className="px-4 py-3 border-b border-gray-200 bg-primary-50 rounded-t-xl">
@@ -368,13 +394,13 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                     <h2 className="text-lg font-bold text-gray-800">임장봇</h2>
                                     {currentSession && (
                                         <p className="text-xs text-gray-600">
-                                            {currentSession.type === 'apartment' && currentSession.contextData?.apartmentName && 
+                                            {currentSession.type === 'apartment' && currentSession.contextData?.apartmentName &&
                                                 `${currentSession.contextData.apartmentName} 관련 대화`
                                             }
-                                            {currentSession.type === 'memo' && 
+                                            {currentSession.type === 'memo' &&
                                                 '임장 메모 분석 대화'
                                             }
-                                            {currentSession.type === 'general' && 
+                                            {currentSession.type === 'general' &&
                                                 '일반 상담 대화'
                                             }
                                         </p>
@@ -431,7 +457,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                         ✕
                                     </button>
                                 </div>
-                                
+
                                 {isLoadingHistory ? (
                                     <div className="flex justify-center py-4">
                                         <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-primary-500"></div>
@@ -447,11 +473,10 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                                 <button
                                                     key={session.id}
                                                     onClick={() => loadPreviousSession(session.id)}
-                                                    className={`w-full text-left p-2 rounded-lg transition-colors ${
-                                                        currentSession?.id === session.id
-                                                            ? 'bg-primary-100 border border-primary-300'
-                                                            : 'hover:bg-gray-100'
-                                                    }`}
+                                                    className={`w-full text-left p-2 rounded-lg transition-colors ${currentSession?.id === session.id
+                                                        ? 'bg-primary-100 border border-primary-300'
+                                                        : 'hover:bg-gray-100'
+                                                        }`}
                                                 >
                                                     <div className="font-medium text-xs text-gray-800 truncate">
                                                         {session.title}
@@ -470,7 +495,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                 )}
                             </div>
                         )}
-                        
+
                         {/* 메인 채팅 영역 */}
                         <div className={`${showHistory ? 'w-2/3' : 'w-full'} flex flex-col`}>
                             <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -480,11 +505,10 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                         className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                     >
                                         <div
-                                            className={`max-w-[85%] p-3 rounded-lg ${
-                                                message.role === 'user'
-                                                    ? 'bg-primary-500 text-white'
-                                                    : 'bg-gray-100 text-gray-800'
-                                            }`}
+                                            className={`max-w-[85%] p-3 rounded-lg ${message.role === 'user'
+                                                ? 'bg-primary-500 text-white'
+                                                : 'bg-gray-100 text-gray-800'
+                                                }`}
                                         >
                                             <div className="text-sm leading-relaxed">
                                                 {message.role === 'assistant' ? (
@@ -497,9 +521,8 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                                     <div className="whitespace-pre-wrap">{message.content}</div>
                                                 )}
                                             </div>
-                                            <div className={`text-xs mt-1 opacity-70 ${
-                                                message.role === 'user' ? 'text-white' : 'text-gray-500'
-                                            }`}>
+                                            <div className={`text-xs mt-1 opacity-70 ${message.role === 'user' ? 'text-white' : 'text-gray-500'
+                                                }`}>
                                                 {formatTime(message.timestamp)}
                                             </div>
                                         </div>
@@ -543,7 +566,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                 </div>
                             </div>
                         )}
-                        
+
                         <div className="flex gap-2">
                             <div className="relative dropdown-container">
                                 <button
@@ -600,16 +623,15 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                             <button
                                 onClick={sendMessage}
                                 disabled={isLoading || !inputValue.trim()}
-                                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                                    isLoading || !inputValue.trim()
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        : 'bg-primary-500 text-white hover:bg-primary-600'
-                                }`}
+                                className={`px-4 py-2 text-sm rounded-lg transition-colors ${isLoading || !inputValue.trim()
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-primary-500 text-white hover:bg-primary-600'
+                                    }`}
                             >
                                 {isLoading ? '전송 중...' : '전송'}
                             </button>
                         </div>
-                        
+
                         <div className="text-xs text-gray-500 mt-2 text-center">
                             임장봇이 생성한 답변은 참고용으로만 사용하시고, 중요한 결정은 전문가와 상담하세요.
                         </div>

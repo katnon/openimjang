@@ -8,6 +8,16 @@ export interface ChatMessage {
         type: 'apartment' | 'memo' | 'image';
         data: any;
     }[];
+    // RAG 및 하이브리드 모드 관련 정보
+    sources?: string[];
+    metadata?: {
+        ragSources?: string[];
+        ragDocuments?: number;
+        ragRelevanceScore?: number;
+        functionsExecuted?: string[];
+        toolCallsCount?: number;
+        processingMode?: 'RAG-only' | 'RAG+Functions' | 'Functions-only';
+    };
 }
 
 export type ChatSessionType = 'general' | 'apartment' | 'memo';

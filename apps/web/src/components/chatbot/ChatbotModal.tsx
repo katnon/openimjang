@@ -6,6 +6,7 @@ import axios from "axios";
 import { chatbotService } from "@/services/chatbotService";
 import type { ChatMessage, ChatSession, ChatSessionType } from "@/types/chatbot";
 import ReactMarkdown from 'react-markdown';
+import { useResizable } from "@/hooks/useResizable";
 
 type ChatbotModalProps = {
     isOpen: boolean;
@@ -35,6 +36,17 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
     const [attachedMemo, setAttachedMemo] = useState<{id: string; title: string; content: string} | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // 리사이즈 기능
+    const { width, height, resizeHandle } = useResizable({
+        initialWidth: 672, // max-w-2xl 상당 (32rem = 512px, 실제로는 더 큼)
+        initialHeight: typeof window !== 'undefined' ? window.innerHeight * 0.8 : 600, // 80vh
+        minWidth: 400,
+        minHeight: 300,
+        maxWidth: typeof window !== 'undefined' ? window.innerWidth * 0.9 : 1200,
+        maxHeight: typeof window !== 'undefined' ? window.innerHeight * 0.9 : 800,
+        direction: 'top-left'
+    });
 
     // 메시지 자동 스크롤
     const scrollToBottom = () => {
@@ -274,8 +286,8 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
             // Firebase에 사용자 메시지 저장
             await chatbotService.addMessage(user.uid, currentSession.id, userMessage);
 
-            // 새로운 /api/ai/chat-with-data 엔드포인트 사용
-            console.log('🔍 임장봇 요청 전송 데이터:', {
+            // 새로운 하이브리드 RAG+Functions 엔드포인트 사용
+            console.log('🔍 임장봇 하이브리드 요청 전송 데이터:', {
                 message: userMessage.content,
                 apartmentId: currentSession.contextData?.apartmentId,
                 memoData: currentSession.contextData?.memoContent ? {
@@ -289,7 +301,7 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
                 }))
             });
 
-            const response = await axios.post('/api/ai/chat-with-data', {
+            const response = await axios.post('/api/ai/chat', {
                 message: userMessage.content,
                 apartmentId: attachedApartment?.id || currentSession.contextData?.apartmentId,
                 memoData: attachedMemo ? {
@@ -314,7 +326,10 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
                 content: response.data.reply,
-                timestamp: new Date()
+                timestamp: new Date(),
+                // RAG 소스와 메타데이터 추가
+                sources: response.data.metadata?.ragSources,
+                metadata: response.data.metadata
             };
 
             setMessages(prev => [...prev, assistantMessage]);
@@ -363,7 +378,31 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-2xl h-[80vh] flex flex-col">
+            <div 
+                className="bg-white rounded-xl flex flex-col relative"
+                style={{ 
+                    width: `${width}px`, 
+                    height: `${height}px` 
+                }}
+            >
+                {/* 리사이즈 핸들 - 좌측 상단 */}
+                <div 
+                    className={`absolute top-2 left-2 w-8 h-8 cursor-nw-resize z-[9999] ${
+                        resizeHandle.isDragging ? 'bg-[#3D7D7B]' : 'bg-[#14E3DC]'
+                    } rounded-lg shadow-lg border-2 border-white`}
+                    onMouseDown={resizeHandle.onMouseDown}
+                    title="크기 조절 (드래그하세요)"
+                    style={{ 
+                        visibility: 'visible',
+                        display: 'block',
+                        pointerEvents: 'auto'
+                    }}
+                >
+                    {/* 리사이즈 아이콘 */}
+                    <div className="flex items-center justify-center w-full h-full text-white text-sm font-bold">
+                        ⤡
+                    </div>
+                </div>
                 {/* 헤더 */}
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -506,21 +545,59 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
                                     {formatTime(message.timestamp)}
                                 </div>
                                 
-                                {/* 출처 표시 */}
-                                {message.sources && message.sources.length > 0 && (
+                                {/* RAG 소스 및 처리 모드 표시 */}
+                                {message.role === 'assistant' && message.metadata && (
                                     <div className="mt-2 pt-2 border-t border-gray-200">
-                                        <div className="text-xs text-gray-500 mb-1">참고 자료:</div>
-                                        {message.sources.map((source, index) => (
-                                            <a
-                                                key={index}
-                                                href={source}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-xs text-blue-600 hover:underline block"
-                                            >
-                                                🔗 {source}
-                                            </a>
-                                        ))}
+                                        {/* 처리 모드 표시 */}
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="text-xs text-gray-500">처리 모드:</div>
+                                            <div className={`text-xs px-2 py-1 rounded-full ${
+                                                message.metadata.processingMode === 'RAG+Functions' 
+                                                    ? 'bg-blue-100 text-blue-700' 
+                                                    : 'bg-green-100 text-green-700'
+                                            }`}>
+                                                {message.metadata.processingMode === 'RAG+Functions' 
+                                                    ? '🔍+⚡ 검색+실시간' 
+                                                    : '🔍 검색전용'
+                                                }
+                                            </div>
+                                        </div>
+                                        
+                                        {/* RAG 소스 표시 */}
+                                        {message.sources && message.sources.length > 0 && (
+                                            <div className="mb-1">
+                                                <div className="text-xs text-gray-500 mb-1">참고 자료:</div>
+                                                {message.sources.map((source, index) => (
+                                                    <div key={index} className="text-xs text-blue-600 block">
+                                                        📚 {source}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        
+                                        {/* 실행된 함수 표시 */}
+                                        {message.metadata.functionsExecuted && message.metadata.functionsExecuted.length > 0 && (
+                                            <div className="mb-1">
+                                                <div className="text-xs text-gray-500 mb-1">실행된 기능:</div>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {message.metadata.functionsExecuted.map((func: string, index: number) => (
+                                                        <span key={index} className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                                                            ⚡ {func}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* 상세 정보 */}
+                                        <div className="text-xs text-gray-400">
+                                            {message.metadata.ragDocuments > 0 && 
+                                                `검색 문서 ${message.metadata.ragDocuments}개 • `
+                                            }
+                                            {message.metadata.ragRelevanceScore > 0 && 
+                                                `관련도 ${(message.metadata.ragRelevanceScore * 100).toFixed(0)}%`
+                                            }
+                                        </div>
                                     </div>
                                 )}
                             </div>

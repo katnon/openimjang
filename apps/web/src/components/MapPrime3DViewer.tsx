@@ -4,6 +4,7 @@ import { useWindowView } from "@/hooks/useWindowView";
 import { useFirstPersonLook } from "@/hooks/useFirstPersonLook";
 import { useWalkingMode } from "@/hooks/useWalkingMode";
 import { useShadeAnalysis, type SeasonPreset } from "@/hooks/useShadeAnalysis";
+import { useResizable } from "@/hooks/useResizable";
 
 declare global {
     interface Window {
@@ -63,6 +64,17 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
     const [hasShadeResult, setHasShadeResult] = useState(false);
     // ✅ 마지막 음영분석 옵션 저장 (계절 변경 시 재실행용)
     const [lastShadeOptions, setLastShadeOptions] = useState<any>(null);
+
+    // 리사이즈 기능
+    const { width, height, resizeHandle } = useResizable({
+        initialWidth: 320, // w-80 (20rem = 320px)
+        initialHeight: 240, // h-60 (15rem = 240px)
+        minWidth: 200,
+        minHeight: 150,
+        maxWidth: typeof window !== 'undefined' ? window.innerWidth * 0.6 : 800,
+        maxHeight: typeof window !== 'undefined' ? window.innerHeight * 0.6 : 600,
+        direction: 'bottom-left'
+    });
 
     // ✅ 카메라 이동 함수 (MapPrime3D API 사용)
     const flyToLocation = (lat: number, lon: number) => {
@@ -367,12 +379,29 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
             <div
                 className={`fixed bg-white border shadow-lg transition-all duration-300 ${isFull
                     ? "inset-4 z-[9999]" // 확대 시 전체 화면
-                    : "w-80 h-60 top-20 right-12 z-50" // TopBar(h-16) 아래 + 우측 버튼 왼쪽
+                    : "top-20 right-12 z-50" // TopBar(h-16) 아래 + 우측 버튼 왼쪽
                     }`}
                 style={{
                     borderRadius: isFull ? '12px' : '8px',
+                    width: isFull ? 'auto' : `${width}px`,
+                    height: isFull ? 'auto' : `${height}px`,
                 }}
             >
+                {/* 리사이즈 핸들 - 좌측 하단 (축소 모드에서만 표시) */}
+                {!isFull && (
+                    <div 
+                        className={`absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize z-10 ${
+                            resizeHandle.isDragging ? 'bg-[#3D7D7B]' : 'bg-gray-300 hover:bg-[#14E3DC]'
+                        } rounded-bl-lg opacity-60 hover:opacity-100 transition-all duration-200`}
+                        onMouseDown={resizeHandle.onMouseDown}
+                        title="크기 조절"
+                    >
+                        {/* 리사이즈 아이콘 */}
+                        <div className="absolute bottom-1 left-1 text-white text-xs">
+                            ⤢
+                        </div>
+                    </div>
+                )}
                 {/* 기본 제어 버튼들 (항상 표시) */}
                 <div className={`absolute flex gap-2 z-10 ${isFull
                     ? "top-4 right-4"
