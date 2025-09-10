@@ -1,0 +1,252 @@
+oi	ai_smart_summary	1	apt_id	integer	NO	
+oi	ai_smart_summary	2	apt_nm	character varying	NO	
+oi	ai_smart_summary	3	jibun_address	text	NO	
+oi	ai_smart_summary	4	summary	text	NO	
+oi	ai_smart_summary	5	user_id	character varying	NO	
+oi	ai_smart_summary	6	created_at	timestamp without time zone	YES	CURRENT_TIMESTAMP
+oi	ai_smart_summary	7	updated_at	timestamp without time zone	YES	CURRENT_TIMESTAMP
+oi	apt_building_info	1	id	integer	NO	nextval('oi.apt_building_info_id_seq'::regclass)
+oi	apt_building_info	2	apt_id	integer	YES	
+oi	apt_building_info	3	type	character varying	NO	
+oi	apt_building_info	4	dongnm	character varying	YES	
+oi	apt_building_info	5	bldnm	character varying	YES	
+oi	apt_building_info	6	platplc	text	YES	
+oi	apt_building_info	7	platarea	numeric	YES	
+oi	apt_building_info	8	archarea	numeric	YES	
+oi	apt_building_info	9	totarea	numeric	YES	
+oi	apt_building_info	10	grndflrcnt	integer	YES	
+oi	apt_building_info	11	ugrndflrcnt	integer	YES	
+oi	apt_building_info	12	mainpurpscdnm	character varying	YES	
+oi	apt_building_info	13	strctcdnm	character varying	YES	
+oi	apt_building_info	14	roofcdnm	character varying	YES	
+oi	apt_building_info	15	hhldcnt	integer	YES	
+oi	apt_building_info	16	mainbldcnt	integer	YES	
+oi	apt_building_info	17	atchbldcnt	integer	YES	
+oi	apt_building_info	18	totpkngcnt	integer	YES	
+oi	apt_building_info	19	useaprday	date	YES	
+oi	apt_building_info	20	raw_data	jsonb	YES	
+oi	apt_building_info	21	created_at	timestamp without time zone	YES	now()
+oi	apt_deal_all	1	id	integer	NO	nextval('oi.apt_deal_all_id_seq'::regclass)
+oi	apt_deal_all	2	apt_nm	text	NO	
+oi	apt_deal_all	3	apt_dong	text	YES	
+oi	apt_deal_all	4	jibun_address	text	NO	
+oi	apt_deal_all	5	exclu_use_ar	numeric	YES	
+oi	apt_deal_all	6	floor	integer	YES	
+oi	apt_deal_all	7	deal_year	integer	NO	
+oi	apt_deal_all	8	deal_month	integer	NO	
+oi	apt_deal_all	9	deal_day	integer	NO	
+oi	apt_deal_all	10	deal_amount	integer	YES	
+oi	apt_deal_all	11	deposit	integer	YES	
+oi	apt_deal_all	12	monthly_rent	integer	YES	
+oi	apt_deal_all	13	created_at	timestamp without time zone	YES	now()
+oi	apt_deal_all	14	updated_at	timestamp without time zone	YES	now()
+oi	apt_deal_rent_raw	1	id	integer	NO	nextval('oi.apt_deal_rent_raw_id_seq'::regclass)
+oi	apt_deal_rent_raw	2	sggcd	text	YES	
+oi	apt_deal_rent_raw	3	umdnm	text	YES	
+oi	apt_deal_rent_raw	4	aptnm	text	YES	
+oi	apt_deal_rent_raw	5	jibun	text	YES	
+oi	apt_deal_rent_raw	6	excluusear	numeric	YES	
+oi	apt_deal_rent_raw	7	dealyear	integer	YES	
+oi	apt_deal_rent_raw	8	dealmonth	integer	YES	
+oi	apt_deal_rent_raw	9	dealday	integer	YES	
+oi	apt_deal_rent_raw	10	deposit	integer	YES	
+oi	apt_deal_rent_raw	11	monthlyrent	integer	YES	
+oi	apt_deal_rent_raw	12	floor	integer	YES	
+oi	apt_deal_rent_raw	13	buildyear	integer	YES	
+oi	apt_deal_rent_raw	14	contractterm	text	YES	
+oi	apt_deal_rent_raw	15	contracttype	text	YES	
+oi	apt_deal_rent_raw	16	userrright	text	YES	
+oi	apt_deal_rent_raw	17	predeposit	integer	YES	
+oi	apt_deal_rent_raw	18	premonthlyrent	integer	YES	
+oi	apt_deal_rent_raw	19	created_at	timestamp without time zone	YES	now()
+oi	apt_deal_rent_raw	20	updated_at	timestamp without time zone	YES	now()
+oi	apt_deal_trade_raw	1	id	integer	NO	nextval('oi.apt_deal_trade_raw_id_seq'::regclass)
+oi	apt_deal_trade_raw	2	sggcd	character varying	YES	
+oi	apt_deal_trade_raw	3	umdcd	character varying	YES	
+oi	apt_deal_trade_raw	4	landcd	character varying	YES	
+oi	apt_deal_trade_raw	5	bonbun	character varying	YES	
+oi	apt_deal_trade_raw	6	bubun	character varying	YES	
+oi	apt_deal_trade_raw	7	roadnm	character varying	YES	
+oi	apt_deal_trade_raw	8	roadnmsggcd	character varying	YES	
+oi	apt_deal_trade_raw	9	roadnmcd	character varying	YES	
+oi	apt_deal_trade_raw	10	roadnmseq	character varying	YES	
+oi	apt_deal_trade_raw	11	roadnmbascd	character varying	YES	
+oi	apt_deal_trade_raw	12	roadnmbonbun	character varying	YES	
+oi	apt_deal_trade_raw	13	roadnmbubun	character varying	YES	
+oi	apt_deal_trade_raw	14	umdnm	character varying	YES	
+oi	apt_deal_trade_raw	15	aptnm	character varying	YES	
+oi	apt_deal_trade_raw	16	jibun	character varying	YES	
+oi	apt_deal_trade_raw	17	excluusear	numeric	YES	
+oi	apt_deal_trade_raw	18	dealyear	integer	YES	
+oi	apt_deal_trade_raw	19	dealmonth	integer	YES	
+oi	apt_deal_trade_raw	20	dealday	integer	YES	
+oi	apt_deal_trade_raw	21	dealamount	integer	YES	
+oi	apt_deal_trade_raw	22	floor	integer	YES	
+oi	apt_deal_trade_raw	23	buildyear	integer	YES	
+oi	apt_deal_trade_raw	24	aptseq	character varying	YES	
+oi	apt_deal_trade_raw	25	cdealtype	character varying	YES	
+oi	apt_deal_trade_raw	26	cdealday	character varying	YES	
+oi	apt_deal_trade_raw	27	dealinggbn	character varying	YES	
+oi	apt_deal_trade_raw	28	estateagentsggnm	character varying	YES	
+oi	apt_deal_trade_raw	29	rgstdate	character varying	YES	
+oi	apt_deal_trade_raw	30	aptdong	character varying	YES	
+oi	apt_deal_trade_raw	31	slergbn	character varying	YES	
+oi	apt_deal_trade_raw	32	buyergbn	character varying	YES	
+oi	apt_deal_trade_raw	33	landleaseholdgbn	character varying	YES	
+oi	apt_deal_trade_raw	34	created_at	timestamp without time zone	YES	now()
+oi	apt_deal_trade_raw	35	updated_at	timestamp without time zone	YES	now()
+oi	apt_deal_trade_raw	36	roadnmbcd	character varying	YES	
+oi	apt_info	1	id	integer	NO	nextval('oi.apt_info_id_seq'::regclass)
+oi	apt_info	2	apt_nm	text	NO	
+oi	apt_info	4	jibun_address	text	YES	
+oi	apt_info	6	lon	double precision	YES	
+oi	apt_info	7	lat	double precision	YES	
+oi	apt_info	8	created_at	timestamp without time zone	YES	now()
+oi	apt_info	9	updated_at	timestamp without time zone	YES	now()
+oi	landuse_included	1	gid	integer	YES	
+oi	landuse_included	2	geom	USER-DEFINED	YES	
+oi	landuse_included	3	code	text	YES	
+oi	landuse_included	4	pnu	text	YES	
+oi	landuse_included	5	pnu_sgg	text	YES	
+oi	landuse_included	6	pnu_umd	text	YES	
+oi	landuse_included	7	pnu_landcd	text	YES	
+oi	landuse_included	8	pnu_bonbun	text	YES	
+oi	landuse_included	9	pnu_bubun	text	YES	
+oi	legal_dong	1	code	character varying	NO	
+oi	legal_dong	2	sido	character varying	YES	
+oi	legal_dong	3	sigungu	character varying	YES	
+oi	legal_dong	4	eupmyeondong	character varying	YES	
+oi	legal_dong	5	ri	character varying	YES	
+oi	old_apt_deal_all	1	id	integer	YES	
+oi	old_apt_deal_all	2	apt_nm	text	YES	
+oi	old_apt_deal_all	3	apt_dong	text	YES	
+oi	old_apt_deal_all	4	jibun_address	text	YES	
+oi	old_apt_deal_all	5	exclu_use_ar	numeric	YES	
+oi	old_apt_deal_all	6	floor	integer	YES	
+oi	old_apt_deal_all	7	deal_year	integer	YES	
+oi	old_apt_deal_all	8	deal_month	integer	YES	
+oi	old_apt_deal_all	9	deal_day	integer	YES	
+oi	old_apt_deal_all	10	deal_amount	integer	YES	
+oi	old_apt_deal_all	11	deposit	integer	YES	
+oi	old_apt_deal_all	12	monthly_rent	integer	YES	
+oi	old_apt_deal_all	13	created_at	timestamp without time zone	YES	
+oi	old_apt_deal_all	14	updated_at	timestamp without time zone	YES	
+oi	old_apt_deal_rent_raw	1	id	integer	YES	
+oi	old_apt_deal_rent_raw	2	sggcd	text	YES	
+oi	old_apt_deal_rent_raw	3	umdnm	text	YES	
+oi	old_apt_deal_rent_raw	4	aptnm	text	YES	
+oi	old_apt_deal_rent_raw	5	jibun	text	YES	
+oi	old_apt_deal_rent_raw	6	excluusear	numeric	YES	
+oi	old_apt_deal_rent_raw	7	dealyear	integer	YES	
+oi	old_apt_deal_rent_raw	8	dealmonth	integer	YES	
+oi	old_apt_deal_rent_raw	9	dealday	integer	YES	
+oi	old_apt_deal_rent_raw	10	deposit	integer	YES	
+oi	old_apt_deal_rent_raw	11	monthlyrent	integer	YES	
+oi	old_apt_deal_rent_raw	12	floor	integer	YES	
+oi	old_apt_deal_rent_raw	13	buildyear	integer	YES	
+oi	old_apt_deal_rent_raw	14	contractterm	text	YES	
+oi	old_apt_deal_rent_raw	15	contracttype	text	YES	
+oi	old_apt_deal_rent_raw	16	userrright	text	YES	
+oi	old_apt_deal_rent_raw	17	predeposit	integer	YES	
+oi	old_apt_deal_rent_raw	18	premonthlyrent	integer	YES	
+oi	old_apt_deal_rent_raw	19	created_at	timestamp without time zone	YES	
+oi	old_apt_deal_rent_raw	20	updated_at	timestamp without time zone	YES	
+oi	old_apt_deal_trade_raw	1	id	integer	YES	
+oi	old_apt_deal_trade_raw	2	sggcd	character varying	YES	
+oi	old_apt_deal_trade_raw	3	umdcd	character varying	YES	
+oi	old_apt_deal_trade_raw	4	landcd	character varying	YES	
+oi	old_apt_deal_trade_raw	5	bonbun	character varying	YES	
+oi	old_apt_deal_trade_raw	6	bubun	character varying	YES	
+oi	old_apt_deal_trade_raw	7	roadnm	character varying	YES	
+oi	old_apt_deal_trade_raw	8	roadnmsggcd	character varying	YES	
+oi	old_apt_deal_trade_raw	9	roadnmcd	character varying	YES	
+oi	old_apt_deal_trade_raw	10	roadnmseq	character varying	YES	
+oi	old_apt_deal_trade_raw	11	roadnmbascd	character varying	YES	
+oi	old_apt_deal_trade_raw	12	roadnmbonbun	character varying	YES	
+oi	old_apt_deal_trade_raw	13	roadnmbubun	character varying	YES	
+oi	old_apt_deal_trade_raw	14	umdnm	character varying	YES	
+oi	old_apt_deal_trade_raw	15	aptnm	character varying	YES	
+oi	old_apt_deal_trade_raw	16	jibun	character varying	YES	
+oi	old_apt_deal_trade_raw	17	excluusear	numeric	YES	
+oi	old_apt_deal_trade_raw	18	dealyear	integer	YES	
+oi	old_apt_deal_trade_raw	19	dealmonth	integer	YES	
+oi	old_apt_deal_trade_raw	20	dealday	integer	YES	
+oi	old_apt_deal_trade_raw	21	dealamount	integer	YES	
+oi	old_apt_deal_trade_raw	22	floor	integer	YES	
+oi	old_apt_deal_trade_raw	23	buildyear	integer	YES	
+oi	old_apt_deal_trade_raw	24	aptseq	character varying	YES	
+oi	old_apt_deal_trade_raw	25	cdealtype	character varying	YES	
+oi	old_apt_deal_trade_raw	26	cdealday	character varying	YES	
+oi	old_apt_deal_trade_raw	27	dealinggbn	character varying	YES	
+oi	old_apt_deal_trade_raw	28	estateagentsggnm	character varying	YES	
+oi	old_apt_deal_trade_raw	29	rgstdate	character varying	YES	
+oi	old_apt_deal_trade_raw	30	aptdong	character varying	YES	
+oi	old_apt_deal_trade_raw	31	slergbn	character varying	YES	
+oi	old_apt_deal_trade_raw	32	buyergbn	character varying	YES	
+oi	old_apt_deal_trade_raw	33	landleaseholdgbn	character varying	YES	
+oi	old_apt_deal_trade_raw	34	created_at	timestamp without time zone	YES	
+oi	old_apt_deal_trade_raw	35	updated_at	timestamp without time zone	YES	
+oi	old_apt_deal_trade_raw	36	roadnmbcd	character varying	YES	
+public	al_d002_11_20250804	1	gid	integer	NO	nextval('al_d002_11_20250804_gid_seq'::regclass)
+public	al_d002_11_20250804	2	a0	integer	YES	
+public	al_d002_11_20250804	3	a1	character varying	YES	
+public	al_d002_11_20250804	4	a2	character varying	YES	
+public	al_d002_11_20250804	5	a3	character varying	YES	
+public	al_d002_11_20250804	6	a4	character varying	YES	
+public	al_d002_11_20250804	7	a5	character varying	YES	
+public	al_d002_11_20250804	8	a6	date	YES	
+public	al_d002_11_20250804	9	a7	character varying	YES	
+public	al_d002_11_20250804	10	geom	USER-DEFINED	YES	
+public	al_d154_11_20250830	1	gid	integer	NO	nextval('al_d154_11_20250830_gid_seq'::regclass)
+public	al_d154_11_20250830	2	a0	character varying	YES	
+public	al_d154_11_20250830	3	a1	character varying	YES	
+public	al_d154_11_20250830	4	a2	character varying	YES	
+public	al_d154_11_20250830	5	a3	character varying	YES	
+public	al_d154_11_20250830	6	a4	character varying	YES	
+public	al_d154_11_20250830	7	a5	character varying	YES	
+public	al_d154_11_20250830	8	a6	character varying	YES	
+public	al_d154_11_20250830	9	a7	character varying	YES	
+public	al_d154_11_20250830	10	a8	character varying	YES	
+public	al_d154_11_20250830	11	a9	character varying	YES	
+public	al_d154_11_20250830	12	a10	character varying	YES	
+public	al_d154_11_20250830	13	a11	date	YES	
+public	al_d154_11_20250830	14	a12	character varying	YES	
+public	al_d154_11_20250830	15	geom	USER-DEFINED	YES	
+public	geography_columns	1	f_table_catalog	name	YES	
+public	geography_columns	2	f_table_schema	name	YES	
+public	geography_columns	3	f_table_name	name	YES	
+public	geography_columns	4	f_geography_column	name	YES	
+public	geography_columns	5	coord_dimension	integer	YES	
+public	geography_columns	6	srid	integer	YES	
+public	geography_columns	7	type	text	YES	
+public	geometry_columns	1	f_table_catalog	character varying	YES	
+public	geometry_columns	2	f_table_schema	name	YES	
+public	geometry_columns	3	f_table_name	name	YES	
+public	geometry_columns	4	f_geometry_column	name	YES	
+public	geometry_columns	5	coord_dimension	integer	YES	
+public	geometry_columns	6	srid	integer	YES	
+public	geometry_columns	7	type	character varying	YES	
+public	landuse_code	1	code	character varying	NO	
+public	landuse_code	2	name	character varying	YES	
+public	landuse_code	3	description	text	YES	
+public	seoul_bldg	1	gid	integer	NO	nextval('seoul_bldg_gid_seq'::regclass)
+public	seoul_bldg	2	eqb_man_sn	double precision	YES	
+public	seoul_bldg	3	opert_de	character varying	YES	
+public	seoul_bldg	4	sig_cd	character varying	YES	
+public	seoul_bldg	5	geom	USER-DEFINED	YES	
+public	spatial_ref_sys	1	srid	integer	NO	
+public	spatial_ref_sys	2	auth_name	character varying	YES	
+public	spatial_ref_sys	3	auth_srid	integer	YES	
+public	spatial_ref_sys	4	srtext	character varying	YES	
+public	spatial_ref_sys	5	proj4text	character varying	YES	
+public	tl_spbd_eqb_11_202508	1	gid	integer	NO	nextval('tl_spbd_eqb_11_202508_gid_seq'::regclass)
+public	tl_spbd_eqb_11_202508	2	eqb_man_sn	double precision	YES	
+public	tl_spbd_eqb_11_202508	3	opert_de	character varying	YES	
+public	tl_spbd_eqb_11_202508	4	sig_cd	character varying	YES	
+public	tl_spbd_eqb_11_202508	5	geom	USER-DEFINED	YES	
+public	v_landuse_included	1	gid	integer	YES	
+public	v_landuse_included	2	geom	USER-DEFINED	YES	
+public	v_landuse_included	3	code	text	YES	
+public	v_landuse_included_agg	1	gid	integer	YES	
+public	v_landuse_included_agg	2	geom	USER-DEFINED	YES	
+public	v_landuse_included_agg	3	code	text	YES	

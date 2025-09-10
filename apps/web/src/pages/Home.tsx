@@ -15,6 +15,7 @@ import { db } from "@/firebase";
 import UserOnboardingModal from "@/components/onboarding/UserOnboardingModal";
 import UserProfileModal from "@/components/profile/UserProfileModal";
 import ChatbotModal from "@/components/chatbot/ChatbotModal";
+import ChatbotSidebar from "@/components/chatbot/ChatbotSidebar";
 import type { POIItem } from "@/types/poi";
 
 type AptInfo = {
@@ -158,10 +159,6 @@ export default function Home() {
                 onOpenAuth={() => setShowAuth(true)}
                 onOpenMyImjang={() => setShowMyImjang(true)}
                 onOpenProfile={() => setShowProfile(true)}
-                onOpenChatbot={() => {
-                    setChatbotContext({ type: 'general' });
-                    setShowChatbot(true);
-                }}
             />
 
             {/* 지도 */}
@@ -215,6 +212,7 @@ export default function Home() {
                     setChatbotContext(contextData);
                     setShowChatbot(true);
                 }}
+                onWriteMemo={() => setShowMemoModal(true)}
             />
 
             {/* 3D 팝업 */}
@@ -231,19 +229,6 @@ export default function Home() {
                 selectedApt={selectedApt}
             />
 
-            {/* 임장 하기 버튼 (로그인 + 아파트 선택 시에만 표시) */}
-            {user && selectedApt && (
-                <button
-                    onClick={() => setShowMemoModal(true)}
-                    className="fixed bottom-6 right-6 bg-[#14e3dc] hover:bg-[#12d4cc] text-white px-4 py-3 rounded-lg shadow-lg transition-colors z-40 flex items-center gap-2"
-                    title="임장 메모 작성"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span className="font-medium">임장 하기</span>
-                </button>
-            )}
 
             {/* 메모 작성/수정 모달 */}
             <MemoCreateModal
@@ -317,7 +302,7 @@ export default function Home() {
                 onClose={() => setShowProfile(false)}
             />
 
-            {/* 챗봇 모달 */}
+            {/* 챗봇 모달 (기존 유지) */}
             <ChatbotModal
                 isOpen={showChatbot}
                 onClose={() => {
@@ -326,6 +311,9 @@ export default function Home() {
                 }}
                 contextData={chatbotContext}
             />
+
+            {/* 새로운 임장봇 사이드바 */}
+            <ChatbotSidebar />
         </div>
     );
 }

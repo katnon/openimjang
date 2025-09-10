@@ -1,0 +1,13 @@
+                                                                    "public.tl_spbd_eqb_11_202508" Å×ÀÌºí
+  ÇÊ\xB5å¸í   |           ÇüÅÂ           | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF |                       ÃÊ\xB1â°ª                       | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+------------+------------------------+-------------+-----------+----------------------------------------------------+--------------------+-------+------------------+--------------
+ gid        | integer                |             | not null  | nextval('tl_spbd_eqb_11_202508_gid_seq'::regclass) | plain              |       |                  | 
+ eqb_man_sn | double precision       |             |           |                                                    | plain              |       |                  | 
+ opert_de   | character varying(14)  |             |           |                                                    | extended           |       |                  | 
+ sig_cd     | character varying(5)   |             |           |                                                    | extended           |       |                  | 
+ geom       | geometry(MultiPolygon) |             |           |                                                    | main               |       |                  | 
+ÀÎµ¦½ºµé:
+    "tl_spbd_eqb_11_202508_pkey" PRIMARY KEY, btree (gid)
+    "tl_spbd_eqb_11_202508_geom_idx" gist (geom)
+Á¢±Ù ¹æ¹ý: heap
+

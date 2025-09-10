@@ -1,0 +1,41 @@
+                                                     "oi.old_apt_deal_trade_raw" Å×ÀÌºí
+     ÇÊ\xB5å¸í      |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF | ÃÊ\xB1â°ª | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+------------------+-----------------------------+-------------+-----------+--------+--------------------+-------+------------------+--------------
+ id               | integer                     |             |           |        | plain              |       |                  | 
+ sggcd            | character varying(5)        |             |           |        | extended           |       |                  | 
+ umdcd            | character varying(5)        |             |           |        | extended           |       |                  | 
+ landcd           | character varying(1)        |             |           |        | extended           |       |                  | 
+ bonbun           | character varying(4)        |             |           |        | extended           |       |                  | 
+ bubun            | character varying(4)        |             |           |        | extended           |       |                  | 
+ roadnm           | character varying(100)      |             |           |        | extended           |       |                  | 
+ roadnmsggcd      | character varying(5)        |             |           |        | extended           |       |                  | 
+ roadnmcd         | character varying(7)        |             |           |        | extended           |       |                  | 
+ roadnmseq        | character varying(2)        |             |           |        | extended           |       |                  | 
+ roadnmbascd      | character varying(1)        |             |           |        | extended           |       |                  | 
+ roadnmbonbun     | character varying(5)        |             |           |        | extended           |       |                  | 
+ roadnmbubun      | character varying(5)        |             |           |        | extended           |       |                  | 
+ umdnm            | character varying(60)       |             |           |        | extended           |       |                  | 
+ aptnm            | character varying(100)      |             |           |        | extended           |       |                  | 
+ jibun            | character varying(20)       |             |           |        | extended           |       |                  | 
+ excluusear       | numeric(10,4)               |             |           |        | main               |       |                  | 
+ dealyear         | integer                     |             |           |        | plain              |       |                  | 
+ dealmonth        | integer                     |             |           |        | plain              |       |                  | 
+ dealday          | integer                     |             |           |        | plain              |       |                  | 
+ dealamount       | integer                     |             |           |        | plain              |       |                  | 
+ floor            | integer                     |             |           |        | plain              |       |                  | 
+ buildyear        | integer                     |             |           |        | plain              |       |                  | 
+ aptseq           | character varying(20)       |             |           |        | extended           |       |                  | 
+ cdealtype        | character varying(1)        |             |           |        | extended           |       |                  | 
+ cdealday         | character varying(8)        |             |           |        | extended           |       |                  | 
+ dealinggbn       | character varying(10)       |             |           |        | extended           |       |                  | 
+ estateagentsggnm | character varying(100)      |             |           |        | extended           |       |                  | 
+ rgstdate         | character varying(8)        |             |           |        | extended           |       |                  | 
+ aptdong          | character varying(400)      |             |           |        | extended           |       |                  | 
+ slergbn          | character varying(100)      |             |           |        | extended           |       |                  | 
+ buyergbn         | character varying(100)      |             |           |        | extended           |       |                  | 
+ landleaseholdgbn | character varying(1)        |             |           |        | extended           |       |                  | 
+ created_at       | timestamp without time zone |             |           |        | plain              |       |                  | 
+ updated_at       | timestamp without time zone |             |           |        | plain              |       |                  | 
+ roadnmbcd        | character varying(1)        |             |           |        | extended           |       |                  | 
+Á¢±Ù ¹æ¹ý: heap
+

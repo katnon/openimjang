@@ -25,9 +25,10 @@ type SummaryCardProps = {
     onFavoriteToggle?: (apt: { id: number; apt_nm: string; jibun_address: string; lat: number; lon: number }) => void; // 즐겨찾기 토글 콜백
     isFavorited?: boolean; // 즐겨찾기 상태
     onOpenChatbot?: (contextData: { aptId: number; aptName: string; aptAddress: string; type: 'apartment' }) => void; // 챗봇 열기 콜백
+    onWriteMemo?: () => void; // 임장하기 (메모 작성) 콜백
 };
 
-export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot }: SummaryCardProps) {
+export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot, onWriteMemo }: SummaryCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("실거래가");
     const [pnuData, setPnuData] = useState<PNUData | null>(null);
@@ -114,19 +115,44 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                         <>
                             <div className="flex items-start justify-between mb-2">
                                 <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h2 className="text-lg font-semibold text-gray-800">
-                                            {selectedApt.apt_nm || "아파트명 없음"}
-                                        </h2>
-                                        <button
-                                            onClick={handleFavoriteClick}
-                                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                            title={isFavorited ? "즐겨찾기 해제" : "즐겨찾기 등록"}
-                                        >
-                                            <svg className="w-5 h-5" fill={isFavorited ? "#FCD34D" : "none"} stroke={isFavorited ? "#FCD34D" : "#6B7280"} viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                            </svg>
-                                        </button>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2">
+                                            <h2 className="text-lg font-semibold text-gray-800">
+                                                {selectedApt.apt_nm || "아파트명 없음"}
+                                            </h2>
+                                            <button
+                                                onClick={handleFavoriteClick}
+                                                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                                title={isFavorited ? "즐겨찾기 해제" : "즐겨찾기 등록"}
+                                            >
+                                                <svg className="w-5 h-5" fill={isFavorited ? "#FCD34D" : "none"} stroke={isFavorited ? "#FCD34D" : "#6B7280"} viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                                </svg>
+                                            </button>
+                                            {onWriteMemo && (
+                                                <button
+                                                    onClick={onWriteMemo}
+                                                    className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                                    title="임장하기"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                        {onOpenChatbot && (
+                                            <button
+                                                onClick={handleChatbotClick}
+                                                className="px-3 py-1.5 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center"
+                                                style={{ backgroundColor: '#14E3DC' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#12D4CC'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#14E3DC'}
+                                                title="임장봇으로 질문하기"
+                                            >
+                                                🤖
+                                            </button>
+                                        )}
                                     </div>
                                     <div className="space-y-1 mb-2">
                                         <p className="text-sm text-gray-600">
@@ -157,15 +183,6 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 >
                                     자세히 보기
                                 </button>
-                                {onOpenChatbot && (
-                                    <button
-                                        onClick={handleChatbotClick}
-                                        className="px-3 py-2 bg-secondary-100 hover:bg-secondary-200 text-secondary-700 text-sm font-medium rounded-lg transition-colors flex items-center justify-center"
-                                        title="임장봇으로 질문하기"
-                                    >
-                                        🏠
-                                    </button>
-                                )}
                             </div>
                         </>
                     ) : point ? (
@@ -203,15 +220,29 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                                     </svg>
                                 </button>
+                                {onWriteMemo && (
+                                    <button
+                                        onClick={onWriteMemo}
+                                        className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                        title="임장하기"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
                             <div className="flex items-center gap-2">
                                 {onOpenChatbot && (
                                     <button
                                         onClick={handleChatbotClick}
-                                        className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                                        className="px-3 py-1.5 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                                        style={{ backgroundColor: '#14E3DC' }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#12D4CC'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#14E3DC'}
                                         title="임장봇으로 질문하기"
                                     >
-                                        🏠 임장봇
+                                        🤖 임장봇
                                     </button>
                                 )}
                                 <button

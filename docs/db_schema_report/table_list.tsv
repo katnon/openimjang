@@ -1,0 +1,17 @@
+oi	ai_smart_summary
+oi	apt_building_info
+oi	apt_deal_all
+oi	apt_deal_rent_raw
+oi	apt_deal_trade_raw
+oi	apt_info
+oi	landuse_included
+oi	legal_dong
+oi	old_apt_deal_all
+oi	old_apt_deal_rent_raw
+oi	old_apt_deal_trade_raw
+public	al_d002_11_20250804
+public	al_d154_11_20250830
+public	landuse_code
+public	seoul_bldg
+public	spatial_ref_sys
+public	tl_spbd_eqb_11_202508

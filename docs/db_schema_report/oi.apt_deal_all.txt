@@ -1,0 +1,21 @@
+                                                                           "oi.apt_deal_all" Å×ÀÌºí
+    ÇÊ\xB5å¸í    |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF |                   ÃÊ\xB1â°ª                    | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+---------------+-----------------------------+-------------+-----------+---------------------------------------------+--------------------+-------+------------------+--------------
+ id            | integer                     |             | not null  | nextval('oi.apt_deal_all_id_seq'::regclass) | plain              |       |                  | 
+ apt_nm        | text                        |             | not null  |                                             | extended           |       |                  | 
+ apt_dong      | text                        |             |           |                                             | extended           |       |                  | 
+ jibun_address | text                        |             | not null  |                                             | extended           |       |                  | 
+ exclu_use_ar  | numeric(10,2)               |             |           |                                             | main               |       |                  | 
+ floor         | integer                     |             |           |                                             | plain              |       |                  | 
+ deal_year     | integer                     |             | not null  |                                             | plain              |       |                  | 
+ deal_month    | integer                     |             | not null  |                                             | plain              |       |                  | 
+ deal_day      | integer                     |             | not null  |                                             | plain              |       |                  | 
+ deal_amount   | integer                     |             |           |                                             | plain              |       |                  | 
+ deposit       | integer                     |             |           |                                             | plain              |       |                  | 
+ monthly_rent  | integer                     |             |           |                                             | plain              |       |                  | 
+ created_at    | timestamp without time zone |             |           | now()                                       | plain              |       |                  | 
+ updated_at    | timestamp without time zone |             |           | now()                                       | plain              |       |                  | 
+ÀÎµ¦½ºµé:
+    "apt_deal_all_pkey" PRIMARY KEY, btree (id)
+Á¢±Ù ¹æ¹ý: heap
+

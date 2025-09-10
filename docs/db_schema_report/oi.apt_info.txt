@@ -1,0 +1,17 @@
+                                                                           "oi.apt_info" Å×ÀÌºí
+    ÇÊ\xB5å¸í    |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF |                 ÃÊ\xB1â°ª                  | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+---------------+-----------------------------+-------------+-----------+-----------------------------------------+--------------------+-------+------------------+--------------
+ id            | integer                     |             | not null  | nextval('oi.apt_info_id_seq'::regclass) | plain              |       |                  | 
+ apt_nm        | text                        |             | not null  |                                         | extended           |       |                  | 
+ jibun_address | text                        |             |           |                                         | extended           |       |                  | 
+ lon           | double precision            |             |           |                                         | plain              |       |                  | 
+ lat           | double precision            |             |           |                                         | plain              |       |                  | 
+ created_at    | timestamp without time zone |             |           | now()                                   | plain              |       |                  | 
+ updated_at    | timestamp without time zone |             |           | now()                                   | plain              |       |                  | 
+ÀÎµ¦½ºµé:
+    "apt_info_pkey" PRIMARY KEY, btree (id)
+´ÙÀ½¿¡¼­ ÂüÁ¶µÊ:
+    TABLE "oi.ai_smart_summary" CONSTRAINT "ai_smart_summary_apt_id_fkey" FOREIGN KEY (apt_id) REFERENCES oi.apt_info(id) ON DELETE CASCADE
+    TABLE "oi.apt_building_info" CONSTRAINT "apt_building_info_apt_id_fkey" FOREIGN KEY (apt_id) REFERENCES oi.apt_info(id)
+Á¢±Ù ¹æ¹ý: heap
+

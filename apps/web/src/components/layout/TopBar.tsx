@@ -9,7 +9,6 @@ type TopBarProps = {
     onOpenAuth?: () => void;
     onOpenMyImjang?: () => void;
     onOpenProfile?: () => void;
-    onOpenChatbot?: () => void;
 };
 
 export type AptInfo = {
@@ -21,7 +20,7 @@ export type AptInfo = {
     lat: number;
 };
 
-const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, onOpenMyImjang, onOpenProfile, onOpenChatbot }) => {
+const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, onOpenMyImjang, onOpenProfile }) => {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
     const [query, setQuery] = useState("");
@@ -205,15 +204,6 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                         </button>
                     )}
                     
-                    {user && onOpenChatbot && (
-                        <button
-                            onClick={onOpenChatbot}
-                            className="px-4 py-2 text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 rounded-lg transition-colors flex items-center gap-2"
-                        >
-                            🏠 임장봇
-                        </button>
-                    )}
-                    
                     {user ? (
                         /* 로그인된 상태 */
                         <div className="relative">
@@ -268,6 +258,15 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                     >
                                         설정
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowUserMenu(false);
+                                            window.open('http://localhost:8787/api/docs/docs', '_blank');
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    >
+                                        API 문서
                                     </button>
                                     <hr className="my-1" />
                                     <button

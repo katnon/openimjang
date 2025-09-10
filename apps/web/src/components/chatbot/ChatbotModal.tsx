@@ -369,7 +369,7 @@ export default function ChatbotModal({ isOpen, onClose, contextData }: ChatbotMo
                     <div className="flex items-center gap-4">
                         <div>
                             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                🏠 임장봇
+                                🤖 임장봇
                             </h2>
                             {currentSession && (
                                 <p className="text-sm text-gray-600 mt-1">

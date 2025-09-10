@@ -1045,12 +1045,79 @@ aiRoute.post("/chat-with-data", async (c) => {
 });
 
 // Function Calling 핸들러들
+
+// 아파트 이름으로 ID를 찾는 헬퍼 함수
+async function findApartmentByName(apartmentName: string) {
+    try {
+        console.log(`🔍 아파트 이름으로 ID 검색: ${apartmentName}`);
+        
+        const apartments = await (db
+            .selectFrom("oi.apt_info" as any)
+            .select(["id", "apt_nm", "jibun_address"]) as any)
+            .where("apt_nm", "like", `%${apartmentName}%`)
+            .limit(10)
+            .execute();
+
+        if (apartments.length === 0) {
+            return { error: `'${apartmentName}' 이름의 아파트를 찾을 수 없습니다.` };
+        }
+
+        if (apartments.length === 1) {
+            console.log(`✅ 아파트 발견: ${apartments[0].apt_nm} (ID: ${apartments[0].id})`);
+            return { 
+                success: true, 
+                apartment: apartments[0],
+                aptId: apartments[0].id 
+            };
+        }
+
+        // 여러 개 발견된 경우
+        console.log(`🔍 여러 아파트 발견: ${apartments.length}개`);
+        return {
+            multiple: true,
+            apartments: apartments.map((apt: any) => ({
+                id: apt.id,
+                name: apt.apt_nm,
+                address: apt.jibun_address
+            }))
+        };
+
+    } catch (error) {
+        console.error("❌ 아파트 이름 검색 오류:", error);
+        return { error: "아파트 검색 중 오류가 발생했습니다." };
+    }
+}
+
 async function handleSearchRealEstateDeals(args: any, contextAptId?: number) {
-    const { aptId: requestedAptId, dealType, area } = args;
-    const targetAptId = requestedAptId || contextAptId;
+    const { aptId: requestedAptId, aptName, dealType, area } = args;
+    let targetAptId = requestedAptId || contextAptId;
+    
+    // aptId가 없지만 aptName이 있는 경우 아파트 이름으로 ID 찾기
+    if (!targetAptId && aptName) {
+        console.log(`📍 아파트 이름으로 ID 검색: ${aptName}`);
+        const nameSearchResult = await findApartmentByName(aptName);
+        
+        if (nameSearchResult.error) {
+            return nameSearchResult;
+        }
+        
+        if (nameSearchResult.multiple) {
+            return {
+                error: "여러 아파트가 검색되었습니다. 더 구체적인 이름을 입력해주세요.",
+                suggestions: nameSearchResult.apartments.map((apt: any) => 
+                    `${apt.name} (${apt.address})`
+                ).join(", ")
+            };
+        }
+        
+        if (nameSearchResult.success) {
+            targetAptId = nameSearchResult.aptId;
+            console.log(`✅ 아파트 ID 매핑 완료: ${aptName} → ${targetAptId}`);
+        }
+    }
     
     if (!targetAptId) {
-        return { error: "아파트 ID가 필요합니다." };
+        return { error: "아파트 ID 또는 아파트 이름이 필요합니다." };
     }
 
     try {

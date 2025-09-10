@@ -1,0 +1,14 @@
+                                                 "public.spatial_ref_sys" Å×ÀÌºí
+  ÇÊ\xB5å¸í  |           ÇüÅÂ            | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF | ÃÊ\xB1â°ª | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+-----------+-------------------------+-------------+-----------+--------+--------------------+-------+------------------+--------------
+ srid      | integer                 |             | not null  |        | plain              |       |                  | 
+ auth_name | character varying(256)  |             |           |        | extended           |       |                  | 
+ auth_srid | integer                 |             |           |        | plain              |       |                  | 
+ srtext    | character varying(2048) |             |           |        | extended           |       |                  | 
+ proj4text | character varying(2048) |             |           |        | extended           |       |                  | 
+ÀÎµ¦½ºµé:
+    "spatial_ref_sys_pkey" PRIMARY KEY, btree (srid)
+Ã¼Å© Á¦¾à Á¶°Ç:
+    "spatial_ref_sys_srid_check" CHECK (srid > 0 AND srid <= 998999)
+Á¢±Ù ¹æ¹ý: heap
+

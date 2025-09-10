@@ -1,0 +1,18 @@
+                                                                     "public.al_d002_11_20250804" Å×ÀÌºí
+ ÇÊ\xB5å¸í |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF |                      ÃÊ\xB1â°ª                      | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+---------+-----------------------------+-------------+-----------+--------------------------------------------------+--------------------+-------+------------------+--------------
+ gid     | integer                     |             | not null  | nextval('al_d002_11_20250804_gid_seq'::regclass) | plain              |       |                  | 
+ a0      | integer                     |             |           |                                                  | plain              |       |                  | 
+ a1      | character varying(19)       |             |           |                                                  | extended           |       |                  | 
+ a2      | character varying(10)       |             |           |                                                  | extended           |       |                  | 
+ a3      | character varying(254)      |             |           |                                                  | extended           |       |                  | 
+ a4      | character varying(10)       |             |           |                                                  | extended           |       |                  | 
+ a5      | character varying(200)      |             |           |                                                  | extended           |       |                  | 
+ a6      | date                        |             |           |                                                  | plain              |       |                  | 
+ a7      | character varying(5)        |             |           |                                                  | extended           |       |                  | 
+ geom    | geometry(MultiPolygon,5186) |             |           |                                                  | main               |       |                  | 
+ÀÎµ¦½ºµé:
+    "al_d002_11_20250804_pkey" PRIMARY KEY, btree (gid)
+    "al_d002_11_20250804_geom_idx" gist (geom)
+Á¢±Ù ¹æ¹ý: heap
+

@@ -1,0 +1,23 @@
+                                                                     "public.al_d154_11_20250830" Å×ÀÌºí
+ ÇÊ\xB5å¸í |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF |                      ÃÊ\xB1â°ª                      | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+---------+-----------------------------+-------------+-----------+--------------------------------------------------+--------------------+-------+------------------+--------------
+ gid     | integer                     |             | not null  | nextval('al_d154_11_20250830_gid_seq'::regclass) | plain              |       |                  | 
+ a0      | character varying(19)       |             |           |                                                  | extended           |       |                  | 
+ a1      | character varying(10)       |             |           |                                                  | extended           |       |                  | 
+ a2      | character varying(254)      |             |           |                                                  | extended           |       |                  | 
+ a3      | character varying(1)        |             |           |                                                  | extended           |       |                  | 
+ a4      | character varying(20)       |             |           |                                                  | extended           |       |                  | 
+ a5      | character varying(10)       |             |           |                                                  | extended           |       |                  | 
+ a6      | character varying(200)      |             |           |                                                  | extended           |       |                  | 
+ a7      | character varying(254)      |             |           |                                                  | extended           |       |                  | 
+ a8      | character varying(254)      |             |           |                                                  | extended           |       |                  | 
+ a9      | character varying(254)      |             |           |                                                  | extended           |       |                  | 
+ a10     | character varying(254)      |             |           |                                                  | extended           |       |                  | 
+ a11     | date                        |             |           |                                                  | plain              |       |                  | 
+ a12     | character varying(5)        |             |           |                                                  | extended           |       |                  | 
+ geom    | geometry(MultiPolygon,5186) |             |           |                                                  | main               |       |                  | 
+ÀÎµ¦½ºµé:
+    "al_d154_11_20250830_pkey" PRIMARY KEY, btree (gid)
+    "al_d154_11_20250830_geom_idx" gist (geom)
+Á¢±Ù ¹æ¹ý: heap
+

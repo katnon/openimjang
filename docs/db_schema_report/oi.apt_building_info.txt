@@ -1,0 +1,30 @@
+                                                                           "oi.apt_building_info" Å×ÀÌºí
+    ÇÊ\xB5å¸í    |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF |                      ÃÊ\xB1â°ª                      | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+---------------+-----------------------------+-------------+-----------+--------------------------------------------------+--------------------+-------+------------------+--------------
+ id            | integer                     |             | not null  | nextval('oi.apt_building_info_id_seq'::regclass) | plain              |       |                  | 
+ apt_id        | integer                     |             |           |                                                  | plain              |       |                  | 
+ type          | character varying(10)       |             | not null  |                                                  | extended           |       |                  | 
+ dongnm        | character varying(100)      |             |           |                                                  | extended           |       |                  | 
+ bldnm         | character varying(200)      |             |           |                                                  | extended           |       |                  | 
+ platplc       | text                        |             |           |                                                  | extended           |       |                  | 
+ platarea      | numeric                     |             |           |                                                  | main               |       |                  | 
+ archarea      | numeric                     |             |           |                                                  | main               |       |                  | 
+ totarea       | numeric                     |             |           |                                                  | main               |       |                  | 
+ grndflrcnt    | integer                     |             |           |                                                  | plain              |       |                  | 
+ ugrndflrcnt   | integer                     |             |           |                                                  | plain              |       |                  | 
+ mainpurpscdnm | character varying(200)      |             |           |                                                  | extended           |       |                  | 
+ strctcdnm     | character varying(200)      |             |           |                                                  | extended           |       |                  | 
+ roofcdnm      | character varying(200)      |             |           |                                                  | extended           |       |                  | 
+ hhldcnt       | integer                     |             |           |                                                  | plain              |       |                  | 
+ mainbldcnt    | integer                     |             |           |                                                  | plain              |       |                  | 
+ atchbldcnt    | integer                     |             |           |                                                  | plain              |       |                  | 
+ totpkngcnt    | integer                     |             |           |                                                  | plain              |       |                  | 
+ useaprday     | date                        |             |           |                                                  | plain              |       |                  | 
+ raw_data      | jsonb                       |             |           |                                                  | extended           |       |                  | 
+ created_at    | timestamp without time zone |             |           | now()                                            | plain              |       |                  | 
+ÀÎµ¦½ºµé:
+    "apt_building_info_pkey" PRIMARY KEY, btree (id)
+ÂüÁ¶Å° Á¦¾à Á¶°Ç:
+    "apt_building_info_apt_id_fkey" FOREIGN KEY (apt_id) REFERENCES oi.apt_info(id)
+Á¢±Ù ¹æ¹ý: heap
+

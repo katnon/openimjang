@@ -1,0 +1,19 @@
+                                                       "oi.old_apt_deal_all" Å×ÀÌºí
+    ÇÊ\xB5å¸í    |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF | ÃÊ\xB1â°ª | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+---------------+-----------------------------+-------------+-----------+--------+--------------------+-------+------------------+--------------
+ id            | integer                     |             |           |        | plain              |       |                  | 
+ apt_nm        | text                        |             |           |        | extended           |       |                  | 
+ apt_dong      | text                        |             |           |        | extended           |       |                  | 
+ jibun_address | text                        |             |           |        | extended           |       |                  | 
+ exclu_use_ar  | numeric(10,2)               |             |           |        | main               |       |                  | 
+ floor         | integer                     |             |           |        | plain              |       |                  | 
+ deal_year     | integer                     |             |           |        | plain              |       |                  | 
+ deal_month    | integer                     |             |           |        | plain              |       |                  | 
+ deal_day      | integer                     |             |           |        | plain              |       |                  | 
+ deal_amount   | integer                     |             |           |        | plain              |       |                  | 
+ deposit       | integer                     |             |           |        | plain              |       |                  | 
+ monthly_rent  | integer                     |             |           |        | plain              |       |                  | 
+ created_at    | timestamp without time zone |             |           |        | plain              |       |                  | 
+ updated_at    | timestamp without time zone |             |           |        | plain              |       |                  | 
+Á¢±Ù ¹æ¹ý: heap
+

@@ -414,14 +414,67 @@ export async function fetchHistogram(params: {
 }
 
 /**
- * 아파트명으로 apt_info_id 조회
+ * 아파트명으로 apt_info_id 조회 (개선된 버전)
  */
 export async function findApartmentByName(apartmentName: string): Promise<{ id: number; name: string } | null> {
-  const result = await db
+  // 1) 정확한 이름 매칭 시도
+  let result = await db
+    .selectFrom('oi.apt_info')
+    .select(['id', 'apt_nm as name'])
+    .where('apt_nm', '=', apartmentName)
+    .executeTakeFirst();
+
+  if (result) {
+    console.log(`✅ 정확한 이름 매칭 성공: ${apartmentName} → ${result.id}`);
+    return result;
+  }
+
+  // 2) 부분 매칭 시도 (LIKE 검색)
+  const candidates = await db
     .selectFrom('oi.apt_info')
     .select(['id', 'apt_nm as name'])
     .where('apt_nm', 'like', `%${apartmentName}%`)
-    .executeTakeFirst();
+    .limit(5)
+    .execute();
 
-  return result || null;
+  if (candidates.length === 0) {
+    console.log(`❌ 아파트 검색 결과 없음: ${apartmentName}`);
+    return null;
+  }
+
+  if (candidates.length === 1) {
+    console.log(`✅ 유일한 후보 발견: ${apartmentName} → ${candidates[0].name} (${candidates[0].id})`);
+    return candidates[0];
+  }
+
+  // 3) 여러 후보가 있는 경우 - 가장 유사한 것 선택
+  // 입력값과 가장 유사한 길이의 이름을 우선 선택
+  const bestMatch = candidates.reduce((best, current) => {
+    const bestScore = Math.abs(best.name.length - apartmentName.length);
+    const currentScore = Math.abs(current.name.length - apartmentName.length);
+    return currentScore < bestScore ? current : best;
+  });
+
+  console.log(`🔍 여러 후보 중 최적 매칭: ${apartmentName} → ${bestMatch.name} (${bestMatch.id})`);
+  console.log(`   기타 후보들: ${candidates.filter(c => c.id !== bestMatch.id).map(c => c.name).join(', ')}`);
+  
+  return bestMatch;
+}
+
+/**
+ * 아파트명으로 여러 후보 검색 (사용자 선택용)
+ */
+export async function findApartmentCandidates(apartmentName: string): Promise<Array<{ id: number; name: string; address?: string }>> {
+  const candidates = await db
+    .selectFrom('oi.apt_info')
+    .select(['id', 'apt_nm as name', 'jibun_address as address'])
+    .where('apt_nm', 'like', `%${apartmentName}%`)
+    .limit(10)
+    .execute();
+
+  return candidates.map(c => ({
+    id: c.id,
+    name: c.name,
+    address: c.address || undefined
+  }));
 }

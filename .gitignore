@@ -14,6 +14,9 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+.env.development
+.env.test
 
 # Logs
 npm-debug.log*
@@ -93,3 +96,8 @@ temp/
 
 # Bun
 .bun
+
+# never commit env
+.env
+.env.*
+apps/bff/.env*

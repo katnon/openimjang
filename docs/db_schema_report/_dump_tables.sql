@@ -1,0 +1,36 @@
+﻿\o C:/OpenImjang/docs/db_schema_report/oi.ai_smart_summary.txt
+\d+ oi.ai_smart_summary
+\o C:/OpenImjang/docs/db_schema_report/oi.apt_building_info.txt
+\d+ oi.apt_building_info
+\o C:/OpenImjang/docs/db_schema_report/oi.apt_deal_all.txt
+\d+ oi.apt_deal_all
+\o C:/OpenImjang/docs/db_schema_report/oi.apt_deal_rent_raw.txt
+\d+ oi.apt_deal_rent_raw
+\o C:/OpenImjang/docs/db_schema_report/oi.apt_deal_trade_raw.txt
+\d+ oi.apt_deal_trade_raw
+\o C:/OpenImjang/docs/db_schema_report/oi.apt_info.txt
+\d+ oi.apt_info
+\o C:/OpenImjang/docs/db_schema_report/oi.landuse_included.txt
+\d+ oi.landuse_included
+\o C:/OpenImjang/docs/db_schema_report/oi.legal_dong.txt
+\d+ oi.legal_dong
+\o C:/OpenImjang/docs/db_schema_report/oi.old_apt_deal_all.txt
+\d+ oi.old_apt_deal_all
+\o C:/OpenImjang/docs/db_schema_report/oi.old_apt_deal_rent_raw.txt
+\d+ oi.old_apt_deal_rent_raw
+\o C:/OpenImjang/docs/db_schema_report/oi.old_apt_deal_trade_raw.txt
+\d+ oi.old_apt_deal_trade_raw
+\o C:/OpenImjang/docs/db_schema_report/public.al_d002_11_20250804.txt
+\d+ public.al_d002_11_20250804
+\o C:/OpenImjang/docs/db_schema_report/public.al_d154_11_20250830.txt
+\d+ public.al_d154_11_20250830
+\o C:/OpenImjang/docs/db_schema_report/public.landuse_code.txt
+\d+ public.landuse_code
+\o C:/OpenImjang/docs/db_schema_report/public.seoul_bldg.txt
+\d+ public.seoul_bldg
+\o C:/OpenImjang/docs/db_schema_report/public.spatial_ref_sys.txt
+\d+ public.spatial_ref_sys
+\o C:/OpenImjang/docs/db_schema_report/public.tl_spbd_eqb_11_202508.txt
+\d+ public.tl_spbd_eqb_11_202508
+\o
+

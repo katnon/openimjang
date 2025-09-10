@@ -35,17 +35,33 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
     let targetAptName = apartmentName;
     
     if (!targetAptId && apartmentName) {
+      console.log(`🔍 아파트명으로 ID 검색 시도: "${apartmentName}"`);
       const aptInfo = await findApartmentByName(apartmentName);
       if (aptInfo) {
         targetAptId = aptInfo.id;
         targetAptName = aptInfo.name;
+        console.log(`✅ 아파트 매핑 성공: "${apartmentName}" → "${aptInfo.name}" (ID: ${aptInfo.id})`);
+      } else {
+        console.log(`❌ 아파트 검색 실패: "${apartmentName}"`);
+        return {
+          success: false,
+          error: `"${apartmentName}" 이름의 아파트를 찾을 수 없습니다. 정확한 아파트명을 확인해주세요.`,
+          suggestions: '아파트명을 정확히 입력하거나, 일부 키워드로도 검색 가능합니다.',
+          dataSchema: {
+            dealAmount: '매매가 (만원 단위)',
+            deposit: '보증금 (만원 단위)', 
+            monthlyRent: '월세 (만원 단위)',
+            exclusiveArea: '전용면적 (㎡)',
+            note: '예: dealAmount 50000 = 5억원'
+          }
+        };
       }
     }
 
     if (!targetAptId && !apartmentName) {
       return {
         success: false,
-        error: '아파트 ID 또는 아파트명이 필요합니다.',
+        error: '아파트 ID 또는 아파트명이 필요합니다. 예: "마곡엠밸리7단지"',
         dataSchema: {
           dealAmount: '매매가 (만원 단위)',
           deposit: '보증금 (만원 단위)', 

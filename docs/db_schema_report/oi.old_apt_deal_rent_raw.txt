@@ -1,0 +1,25 @@
+                                                     "oi.old_apt_deal_rent_raw" Å×ÀÌºí
+    ÇÊ\xB5å¸í     |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF | ÃÊ\xB1â°ª | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+----------------+-----------------------------+-------------+-----------+--------+--------------------+-------+------------------+--------------
+ id             | integer                     |             |           |        | plain              |       |                  | 
+ sggcd          | text                        |             |           |        | extended           |       |                  | 
+ umdnm          | text                        |             |           |        | extended           |       |                  | 
+ aptnm          | text                        |             |           |        | extended           |       |                  | 
+ jibun          | text                        |             |           |        | extended           |       |                  | 
+ excluusear     | numeric                     |             |           |        | main               |       |                  | 
+ dealyear       | integer                     |             |           |        | plain              |       |                  | 
+ dealmonth      | integer                     |             |           |        | plain              |       |                  | 
+ dealday        | integer                     |             |           |        | plain              |       |                  | 
+ deposit        | integer                     |             |           |        | plain              |       |                  | 
+ monthlyrent    | integer                     |             |           |        | plain              |       |                  | 
+ floor          | integer                     |             |           |        | plain              |       |                  | 
+ buildyear      | integer                     |             |           |        | plain              |       |                  | 
+ contractterm   | text                        |             |           |        | extended           |       |                  | 
+ contracttype   | text                        |             |           |        | extended           |       |                  | 
+ userrright     | text                        |             |           |        | extended           |       |                  | 
+ predeposit     | integer                     |             |           |        | plain              |       |                  | 
+ premonthlyrent | integer                     |             |           |        | plain              |       |                  | 
+ created_at     | timestamp without time zone |             |           |        | plain              |       |                  | 
+ updated_at     | timestamp without time zone |             |           |        | plain              |       |                  | 
+Á¢±Ù ¹æ¹ý: heap
+

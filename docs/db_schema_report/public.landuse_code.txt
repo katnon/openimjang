@@ -1,0 +1,10 @@
+                                                   "public.landuse_code" Å×ÀÌºí
+   ÇÊ\xB5å¸í   |           ÇüÅÂ           | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF | ÃÊ\xB1â°ª | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+-------------+------------------------+-------------+-----------+--------+--------------------+-------+------------------+--------------
+ code        | character varying(10)  |             | not null  |        | extended           |       |                  | 
+ name        | character varying(200) |             |           |        | extended           |       |                  | 
+ description | text                   |             |           |        | extended           |       |                  | 
+ÀÎµ¦½ºµé:
+    "landuse_code_pkey" PRIMARY KEY, btree (code)
+Á¢±Ù ¹æ¹ý: heap
+

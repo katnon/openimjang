@@ -1,0 +1,20 @@
+                                                            "oi.ai_smart_summary" Å×ÀÌºí
+    ÇÊ\xB5å¸í    |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF |      ÃÊ\xB1â°ª       | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+---------------+-----------------------------+-------------+-----------+-------------------+--------------------+-------+------------------+--------------
+ apt_id        | integer                     |             | not null  |                   | plain              |       |                  | 
+ apt_nm        | character varying(255)      |             | not null  |                   | extended           |       |                  | 
+ jibun_address | text                        |             | not null  |                   | extended           |       |                  | 
+ summary       | text                        |             | not null  |                   | extended           |       |                  | 
+ user_id       | character varying(255)      |             | not null  |                   | extended           |       |                  | 
+ created_at    | timestamp without time zone |             |           | CURRENT_TIMESTAMP | plain              |       |                  | 
+ updated_at    | timestamp without time zone |             |           | CURRENT_TIMESTAMP | plain              |       |                  | 
+ÀÎµ¦½ºµé:
+    "ai_smart_summary_pkey" PRIMARY KEY, btree (apt_id)
+    "idx_ai_summary_created_at" btree (created_at)
+    "idx_ai_summary_user_id" btree (user_id)
+ÂüÁ¶Å° Á¦¾à Á¶°Ç:
+    "ai_smart_summary_apt_id_fkey" FOREIGN KEY (apt_id) REFERENCES oi.apt_info(id) ON DELETE CASCADE
+Æ®¸®°Åµé:
+    update_ai_smart_summary_updated_at BEFORE UPDATE ON oi.ai_smart_summary FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+Á¢±Ù ¹æ¹ý: heap
+

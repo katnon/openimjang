@@ -1,0 +1,14 @@
+                                                     "oi.landuse_included" Å×ÀÌºí
+  ÇÊ\xB5å¸í   |             ÇüÅÂ              | Á¤\xB7Ä±ÔÄ\xA2 | NULLÇã\xBF | ÃÊ\xB1â°ª | \xBD\xBAÅä\xB8\xAEÁö | \xBEÐÃ | Åë\xB0è¼öÁý\xB7\xAE | \xBC\xB3\xB8 
+------------+-----------------------------+-------------+-----------+--------+--------------------+-------+------------------+--------------
+ gid        | integer                     |             |           |        | plain              |       |                  | 
+ geom       | geometry(MultiPolygon,5186) |             |           |        | main               |       |                  | 
+ code       | text                        |             |           |        | extended           |       |                  | 
+ pnu        | text                        |             |           |        | extended           |       |                  | 
+ pnu_sgg    | text                        |             |           |        | extended           |       |                  | 
+ pnu_umd    | text                        |             |           |        | extended           |       |                  | 
+ pnu_landcd | text                        |             |           |        | extended           |       |                  | 
+ pnu_bonbun | text                        |             |           |        | extended           |       |                  | 
+ pnu_bubun  | text                        |             |           |        | extended           |       |                  | 
+Á¢±Ù ¹æ¹ý: heap
+
