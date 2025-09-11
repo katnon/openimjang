@@ -8,11 +8,14 @@ const openai = new OpenAI({
 
 interface GenerateSelectQueryArgs {
   question: string;
+  systemHints?: string;             // 추가 시스템 힌트
+  maxRows?: number;                 // 최대 행 수 제한
+  requireColumns?: string[];        // 필수 포함 컬럼
 }
 
 export async function generateSelectQuery(args: GenerateSelectQueryArgs) {
   try {
-    const { question } = args;
+    const { question, systemHints, maxRows, requireColumns = [] } = args;
     
     console.log('🔍 RAG 기반 SQL 생성 요청:', { question });
     
@@ -90,7 +93,10 @@ ${schemaContext}
 **응답 형식:**
 - 순수 SQL 쿼리만 반환 (설명이나 코멘트 없이)
 - 반드시 스키마.테이블명 형식 사용
-- 세미콜론(;)으로 끝내기`;
+- 세미콜론(;)으로 끝내기
+${maxRows ? `- LIMIT ${maxRows} 이하로 제한` : ''}
+${requireColumns.length ? `- 다음 컬럼들을 반드시 포함: ${requireColumns.join(', ')}` : ''}
+${systemHints ? `\n**추가 지시사항:**\n${systemHints}` : ''}`;
 
     const response = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -117,7 +123,10 @@ ${schemaContext}
       generatedSQL = lines.slice(1, -1).join('\n').trim();
     }
     
-    console.log('🔧 처리된 SQL:', { generatedSQL: generatedSQL?.slice(0, 100) });
+    console.log('🔧 처리된 SQL 전문:');
+    console.log('━'.repeat(80));
+    console.log(generatedSQL);
+    console.log('━'.repeat(80));
     
     if (!generatedSQL) {
       return {

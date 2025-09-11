@@ -1,10 +1,10 @@
-import { fetchHistogram, findApartmentByName } from '../repo/dealsRepo';
+import { orchestrateSelect, parsePeriodToSqlInterval } from './utils/sqlOrchestrator';
 
 interface GetDealDistributionParams {
   apartmentName?: string;
-  aptId?: number;
+  aptId?: number;                         // 힌트로만 사용
   distributionType?: '가격대별' | '면적별' | '층별' | '전체';
-  period?: '6개월' | '1년' | '2년' | '3년';
+  period?: string;                        // "6개월", "1년", "2년", "3년"
   dealType?: '매매' | '전세' | '월세' | '전체';
 }
 
@@ -21,30 +21,21 @@ export async function getDealDistribution(args: GetDealDistributionParams): Prom
   } = args;
 
   try {
-    console.log('📊 거래 분포 분석:', { apartmentName, aptId, distributionType, period, dealType });
+    console.log('📊 거래 분포 분석 (RAG 오케스트레이션):', { apartmentName, aptId, distributionType, period, dealType });
 
-    // 아파트 정보 조회
-    let targetAptId = aptId;
-    let targetAptName = apartmentName;
-    
-    if (!targetAptId && apartmentName) {
-      const aptInfo = await findApartmentByName(apartmentName);
-      if (aptInfo) {
-        targetAptId = aptInfo.id;
-        targetAptName = aptInfo.name;
-      }
-    }
-
-    if (!targetAptId && !apartmentName) {
+    if (!apartmentName) {
       return {
         success: false,
-        error: '아파트 ID 또는 아파트명이 필요합니다.'
+        error: '아파트명이 필요합니다.',
+        dataSchema: {
+          range: '구간 범위',
+          count: '해당 구간의 거래 건수',
+          note: '가격: 만원 단위, 면적: ㎡, 층: 층수'
+        }
       };
     }
 
-    // 기간을 YYYYMM 형식으로 변환
-    const { fromYM, toYM } = parsePeriodToYM(period);
-
+    const interval = parsePeriodToSqlInterval(period) ?? period;
     const distributions: any = {};
 
     // 분포 유형에 따라 데이터 조회
@@ -53,30 +44,83 @@ export async function getDealDistribution(args: GetDealDistributionParams): Prom
       : [distributionType];
 
     for (const type of typesToAnalyze) {
-      const bucketBy = type === '가격대별' ? '가격' : type === '면적별' ? '면적' : '층';
-      const bucketSize = getBucketSize(bucketBy);
-
       try {
-        const histogram = await fetchHistogram({
-          apartmentName,
-          aptId: targetAptId,
-          bucketBy,
-          bucketSize,
-          dealType: dealType === '전체' ? '매매' : dealType,
-          fromYM,
-          toYM
+        const conds: string[] = [];
+        conds.push(`아파트 "${apartmentName}"`);
+        conds.push(`${dealType} 거래`);
+        conds.push(`최근 ${period}(${interval})`);
+        const what = conds.join(', ');
+
+        let question = '';
+        let groupByField = '';
+        let bucketSize = '';
+
+        switch (type) {
+          case '가격대별':
+            question = `${what} 조건의 거래를 가격대별로 분포 분석해줘. 5천만원 단위로 구간을 나눠서 각 구간별 거래건수를 집계해.`;
+            groupByField = 'price_range';
+            bucketSize = '5000만원';
+            break;
+          case '면적별':
+            question = `${what} 조건의 거래를 전용면적별로 분포 분석해줘. 10㎡ 단위로 구간을 나눠서 각 구간별 거래건수를 집계해.`;
+            groupByField = 'area_range';
+            bucketSize = '10㎡';
+            break;
+          case '층별':
+            question = `${what} 조건의 거래를 층별로 분포 분석해줘. 5층 단위로 구간을 나눠서 각 구간별 거래건수를 집계해.`;
+            groupByField = 'floor_range';
+            bucketSize = '5층';
+            break;
+        }
+
+        question += ' 스키마/컬럼은 RAG 문서에 맞춰 자동 선택.';
+
+        const hints: string[] = [
+          'oi.apt_deal_trade_raw(dealamount, excluusear, floor, dealyear, dealmonth, dealday, aptnm, ...)',
+        ];
+        if (aptId) {
+          hints.push(`apartment id (hint): ${aptId}`);
+        }
+
+        const { success, sql, rows, rowCount, error } = await orchestrateSelect({
+          question,
+          forceSchemaHints: hints,
+          requireColumns: ['count'],
+          safety: { maxRows: 100, readOnly: true },
         });
 
+        if (!success || !rows || rows.length === 0) {
+          distributions[type] = {
+            bucketBy: type,
+            bucketSize,
+            distribution: [],
+            totalCount: 0,
+            error: error || `${type} 분포 데이터가 없습니다.`
+          };
+          continue;
+        }
+
+        // 결과 포맷팅
+        const formattedDistribution = rows.map((item: any) => ({
+          range: item.range || item.bucket || item.group,
+          count: item.count || item.deal_count,
+          _raw: item
+        }));
+
+        const totalCount = formattedDistribution.reduce((sum, item) => sum + (item.count || 0), 0);
+        const summary = analyzeSimpleDistribution(formattedDistribution);
+
         distributions[type] = {
-          bucketBy,
+          bucketBy: type,
           bucketSize,
-          distribution: histogram,
-          totalCount: histogram.reduce((sum, item) => sum + item.count, 0),
-          summary: analyzeBuckets(histogram, bucketBy)
+          distribution: formattedDistribution,
+          totalCount,
+          summary,
+          sql // 디버깅용
         };
-      } catch (error) {
+      } catch (error: any) {
         distributions[type] = {
-          error: `${type} 분포 데이터를 가져올 수 없습니다.`
+          error: `${type} 분포 데이터 처리 오류: ${error.message}`
         };
       }
     }
@@ -84,7 +128,7 @@ export async function getDealDistribution(args: GetDealDistributionParams): Prom
     return {
       success: true,
       searchConditions: {
-        apartmentName: targetAptName,
+        apartmentName,
         distributionType,
         period,
         dealType
@@ -93,12 +137,12 @@ export async function getDealDistribution(args: GetDealDistributionParams): Prom
       dataSchema: {
         range: '구간 범위',
         count: '해당 구간의 거래 건수',
-        note: '가격: 만원 단위, 면적: ㎡, 층: 층수'
+        note: '가격: 만원 단위, 면적: ㎡, 층: 층수, AI가 자연어로 생성한 분포 분석 결과'
       }
     };
 
   } catch (error: any) {
-    console.error('❌ getDealDistribution 오류:', error);
+    console.error('❌ getDealDistribution 오케스트레이션 오류:', error);
     return {
       success: false,
       error: error.message || '거래 분포 분석 중 오류가 발생했습니다.'
@@ -107,73 +151,27 @@ export async function getDealDistribution(args: GetDealDistributionParams): Prom
 }
 
 /**
- * 분포 유형에 따른 버킷 크기 결정
+ * 간단한 분포 분석
  */
-function getBucketSize(bucketBy: string): number {
-  switch (bucketBy) {
-    case '가격':
-      return 5000; // 5천만원 단위
-    case '면적':
-      return 10;   // 10㎡ 단위
-    case '층':
-      return 5;    // 5층 단위
-    default:
-      return 1;
-  }
-}
-
-/**
- * 버킷 분석
- */
-function analyzeBuckets(histogram: any[], bucketBy: string): any {
-  if (histogram.length === 0) {
+function analyzeSimpleDistribution(distribution: any[]): any {
+  if (distribution.length === 0) {
     return { message: '분석할 데이터가 없습니다.' };
   }
 
   // 가장 빈번한 구간 찾기
-  const maxCountBucket = histogram.reduce((max, bucket) => 
-    bucket.count > max.count ? bucket : max
+  const maxCountBucket = distribution.reduce((max, bucket) => 
+    (bucket.count || 0) > (max.count || 0) ? bucket : max
   );
 
   // 분포 특성 분석
-  const totalCount = histogram.reduce((sum, bucket) => sum + bucket.count, 0);
-  const nonZeroBuckets = histogram.filter(bucket => bucket.count > 0);
+  const totalCount = distribution.reduce((sum, bucket) => sum + (bucket.count || 0), 0);
+  const nonZeroBuckets = distribution.filter(bucket => (bucket.count || 0) > 0);
   
   return {
     mostFrequentRange: maxCountBucket.range,
-    mostFrequentCount: maxCountBucket.count,
+    mostFrequentCount: maxCountBucket.count || 0,
     distributionSpread: nonZeroBuckets.length,
-    averageCountPerBucket: Math.round(totalCount / nonZeroBuckets.length),
-    concentrationRate: Math.round((maxCountBucket.count / totalCount) * 100)
+    averageCountPerBucket: nonZeroBuckets.length > 0 ? Math.round(totalCount / nonZeroBuckets.length) : 0,
+    concentrationRate: totalCount > 0 ? Math.round(((maxCountBucket.count || 0) / totalCount) * 100) : 0
   };
-}
-
-/**
- * 기간 문자열을 YYYYMM으로 변환
- */
-function parsePeriodToYM(period: string): { fromYM: number; toYM: number } {
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth() + 1;
-  const currentYM = currentYear * 100 + currentMonth;
-
-  let monthsAgo = 12;
-
-  if (period.includes('개월')) {
-    const match = period.match(/(\d+)개월/);
-    if (match) {
-      monthsAgo = parseInt(match[1]);
-    }
-  } else if (period.includes('년')) {
-    const match = period.match(/(\d+)년/);
-    if (match) {
-      monthsAgo = parseInt(match[1]) * 12;
-    }
-  }
-
-  const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - monthsAgo);
-  const fromYM = startDate.getFullYear() * 100 + (startDate.getMonth() + 1);
-
-  return { fromYM, toYM: currentYM };
 }

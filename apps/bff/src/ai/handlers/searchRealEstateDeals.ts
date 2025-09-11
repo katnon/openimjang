@@ -1,166 +1,199 @@
-import { fetchDeals, findApartmentByName } from '../repo/dealsRepo';
+import { orchestrateSelect, parsePeriodToSqlInterval } from './utils/sqlOrchestrator';
+import { findBestApartmentMatch, generateSmartQuestion, normalizeApartmentName } from './database/normalizeApartmentName';
 
 interface SearchRealEstateDealsParams {
-  aptId?: number;
-  apartmentName?: string;
-  dealType?: '매매' | '전세' | '월세' | '전월세';
-  area?: number;
-  period?: string;
-  areaRange?: number[];
+  apartmentName?: string;                  // "마곡엠밸리", "신당 현대" 등
+  region?: string;                         // "강서구", "신당동" 등
+  dealType?: '매매' | '전세' | '월세' | '전체';
+  period?: string;                         // "3개월" 등
+  area?: number;                           // 특정 전용면적
+  areaRange?: [number, number];
+  priceRange?: [number, number];           // 만원 단위 가정
   limit?: number;
+  userProfile?: any;                       // 사용자 프로필 (개인화)
 }
 
 /**
  * 특정 아파트의 실거래 데이터를 검색합니다.
  */
 export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): Promise<any> {
-  const { 
-    aptId, 
-    apartmentName, 
-    dealType = '전체', 
-    area, 
-    period = '최근 1년',
+  const {
+    apartmentName,
+    region,
+    dealType = '매매',
+    period,
+    area,
     areaRange,
-    limit = 50 
+    priceRange,
+    limit = 50,
+    userProfile,
   } = args;
 
   try {
-    console.log('🔍 실거래가 검색:', { aptId, apartmentName, dealType, area, period });
+    console.log('🔍 실거래가 검색 (RAG 오케스트레이션):', { 
+      apartmentName, region, dealType, period, area, areaRange, priceRange, limit 
+    });
 
-    // 기간 파싱
-    const { fromYM, toYM } = parsePeriod(period);
-
-    // 아파트명으로 ID 조회 (aptId가 없는 경우)
-    let targetAptId = aptId;
-    let targetAptName = apartmentName;
+    // 1️⃣ 아파트명 정규화 (있는 경우만)
+    let finalApartmentName = apartmentName;
+    let searchHints: string[] = [];
     
-    if (!targetAptId && apartmentName) {
-      console.log(`🔍 아파트명으로 ID 검색 시도: "${apartmentName}"`);
-      const aptInfo = await findApartmentByName(apartmentName);
-      if (aptInfo) {
-        targetAptId = aptInfo.id;
-        targetAptName = aptInfo.name;
-        console.log(`✅ 아파트 매핑 성공: "${apartmentName}" → "${aptInfo.name}" (ID: ${aptInfo.id})`);
+    if (apartmentName) {
+      const normalizedApt = await findBestApartmentMatch(apartmentName, region);
+      
+      if (normalizedApt) {
+        finalApartmentName = normalizedApt.aptName;
+        searchHints.push(`apartment_id: ${normalizedApt.aptId}`);
+        console.log('✅ 아파트명 정규화 성공:', {
+          입력: apartmentName,
+          정규화: finalApartmentName,
+          점수: normalizedApt.score.toFixed(3)
+        });
       } else {
-        console.log(`❌ 아파트 검색 실패: "${apartmentName}"`);
-        return {
-          success: false,
-          error: `"${apartmentName}" 이름의 아파트를 찾을 수 없습니다. 정확한 아파트명을 확인해주세요.`,
-          suggestions: '아파트명을 정확히 입력하거나, 일부 키워드로도 검색 가능합니다.',
-          dataSchema: {
-            dealAmount: '매매가 (만원 단위)',
-            deposit: '보증금 (만원 단위)', 
-            monthlyRent: '월세 (만원 단위)',
-            exclusiveArea: '전용면적 (㎡)',
-            note: '예: dealAmount 50000 = 5억원'
-          }
-        };
+        const candidates = await normalizeApartmentName(apartmentName, region);
+        if (candidates && candidates.length > 1) {
+          return {
+            success: false,
+            error: '여러 아파트가 검색되었습니다.',
+            suggestions: generateSmartQuestion(candidates, apartmentName),
+            candidates: candidates.map(c => ({ aptId: c.aptId, aptName: c.aptName, region: c.region }))
+          };
+        }
+        console.log('⚠️ 아파트명 정규화 실패, 원본 이름 사용:', apartmentName);
       }
     }
 
-    if (!targetAptId && !apartmentName) {
+    const conds: string[] = [];
+    if (finalApartmentName) conds.push(`아파트 "${finalApartmentName}"`);
+    if (region) conds.push(`${region}`);
+    conds.push(`${dealType} 거래`);
+
+    if (period) {
+      const interval = parsePeriodToSqlInterval(period) ?? period;
+      conds.push(`최근 ${period}(${interval})`);
+    }
+    if (area) conds.push(`전용면적 ${area}㎡ 근처`);
+    if (areaRange) conds.push(`전용면적 ${areaRange[0]}~${areaRange[1]}㎡`);
+    if (priceRange) conds.push(`거래금액 ${priceRange[0]}~${priceRange[1]}만원`);
+    const what = conds.join(', ');
+
+    const question = [
+      `${what} 조건에 맞는 거래 목록을 최신순으로 ${limit}건 이내로 조회해줘.`,
+      `반드시 날짜, 거래금액(deal_amount), 보증금(deposit), 월세(monthly_rent), 전용면적(exclu_use_ar), 층(floor) 컬럼을 포함해.`,
+      `거래유형 구분: deal_amount 존재=매매, deal_amount 없음+monthly_rent=0=전세, deal_amount 없음+monthly_rent>0=월세.`,
+      `oi.apt_deal_all 테이블을 사용해서 스키마/컬럼 자동 선택.`,
+    ].join(' ');
+
+    const { success, sql, rows, rowCount, error } = await orchestrateSelect({
+      question,
+      forceSchemaHints: [
+        'oi.apt_deal_all(deal_amount, deposit, monthly_rent, exclu_use_ar, floor, deal_year, deal_month, deal_day, apt_nm, ...)',
+        '거래유형: deal_amount 존재=매매, deal_amount 없음+monthly_rent=0=전세, deal_amount 없음+monthly_rent>0=월세',
+        ...searchHints
+      ],
+      requireColumns: ['exclu_use_ar', 'floor'],
+      userProfile,
+      safety: { maxRows: limit, readOnly: true },
+    });
+
+    if (!success) {
       return {
         success: false,
-        error: '아파트 ID 또는 아파트명이 필요합니다. 예: "마곡엠밸리7단지"',
+        error: error || '실거래 데이터 검색에 실패했습니다.',
         dataSchema: {
           dealAmount: '매매가 (만원 단위)',
           deposit: '보증금 (만원 단위)', 
           monthlyRent: '월세 (만원 단위)',
           exclusiveArea: '전용면적 (㎡)',
-          note: '예: dealAmount 50000 = 5억원'
-        }
-      };
-    }
-
-    // 면적 필터 설정
-    let areaMin: number | undefined;
-    let areaMax: number | undefined;
-    
-    if (area) {
-      // ±5㎡ 오차 허용
-      areaMin = area - 5;
-      areaMax = area + 5;
-    } else if (areaRange && areaRange.length === 2) {
-      areaMin = areaRange[0];
-      areaMax = areaRange[1];
-    }
-
-    // 거래 유형 정규화
-    const normalizedDealType = dealType === '전월세' ? '전체' : dealType;
-
-    // 데이터 조회
-    const deals = await fetchDeals({
-      aptId: targetAptId,
-      apartmentName: apartmentName,
-      dealType: normalizedDealType,
-      fromYM,
-      toYM,
-      areaMin,
-      areaMax,
-      limit
-    });
-
-    if (deals.length === 0) {
-      return {
-        success: true,
-        message: '해당 조건의 실거래 데이터가 없습니다.',
-        searchConditions: {
-          apartmentName: targetAptName,
-          dealType: normalizedDealType,
-          period,
-          area: area ? `${area}㎡ (±5㎡)` : undefined,
-          areaRange: areaRange ? `${areaRange[0]}~${areaRange[1]}㎡` : undefined
-        },
-        deals: [],
-        totalCount: 0,
-        dataSchema: {
-          dealAmount: '매매가 (만원 단위)',
-          deposit: '보증금 (만원 단위)',
-          monthlyRent: '월세 (만원 단위)',
-          exclusiveArea: '전용면적 (㎡)',
+          dealType: 'deal_amount 존재=매매, deal_amount 없음+monthly_rent=0=전세, deal_amount 없음+monthly_rent>0=월세',
           note: '30000 = 3억원'
         }
       };
     }
 
-    // 결과 포맷팅
-    const formattedDeals = deals.map(deal => ({
-      dealDate: `${deal.dealYear}.${String(deal.dealMonth).padStart(2, '0')}.${String(deal.dealDay).padStart(2, '0')}`,
-      dealType: deal.dealType,
-      dealAmount: deal.dealAmount,
-      deposit: deal.deposit, 
-      monthlyRent: deal.monthlyRent,
-      exclusiveArea: deal.exclusiveArea,
-      floor: deal.floor,
-      apartmentName: deal.apartmentName || targetAptName,
-      // 가독성을 위한 추가 필드
-      dealAmountFormatted: deal.dealAmount ? `${Math.floor(deal.dealAmount / 10000)}억${deal.dealAmount % 10000 ? Math.floor((deal.dealAmount % 10000) / 1000) + '천' : ''}` : undefined,
-      pricePerSqm: deal.dealAmount ? Math.round(deal.dealAmount * 10000 / deal.exclusiveArea) : undefined
-    }));
+    if (!rows || rows.length === 0) {
+      return {
+        success: true,
+        message: '해당 조건의 실거래 데이터가 없습니다.',
+        searchConditions: {
+          apartmentName,
+          region,
+          dealType,
+          period,
+          area: area ? `${area}㎡` : undefined,
+          areaRange: areaRange ? `${areaRange[0]}~${areaRange[1]}㎡` : undefined,
+          priceRange: priceRange ? `${priceRange[0]}~${priceRange[1]}만원` : undefined
+        },
+        deals: [],
+        totalCount: 0,
+        sql, // 디버깅용
+        dataSchema: {
+          dealAmount: '매매가 (만원 단위)',
+          deposit: '보증금 (만원 단위)',
+          monthlyRent: '월세 (만원 단위)',
+          exclusiveArea: '전용면적 (㎡)',
+          dealType: 'deal_amount 존재=매매, deal_amount 없음+monthly_rent=0=전세, deal_amount 없음+monthly_rent>0=월세',
+          note: '30000 = 3억원'
+        }
+      };
+    }
+
+    // 결과 포맷팅 (AI가 반환한 원본 데이터를 표준화)
+    const formattedDeals = rows.map((deal: any, index: number) => {
+      // 거래유형 자동 판단 (사용자 요청이 '전체'인 경우 필요)
+      let actualDealType = dealType;
+      if (dealType === '전체') {
+        if (deal.deal_amount || deal.dealamount) {
+          actualDealType = '매매';
+        } else if (deal.monthly_rent === 0 || deal.monthlyrent === 0) {
+          actualDealType = '전세';
+        } else if ((deal.monthly_rent && deal.monthly_rent > 0) || (deal.monthlyrent && deal.monthlyrent > 0)) {
+          actualDealType = '월세';
+        }
+      }
+      
+      return {
+        id: index + 1,
+        dealDate: deal.dealdate || deal.deal_date || `${deal.deal_year || deal.dealyear}.${deal.deal_month || deal.dealmonth}.${deal.deal_day || deal.dealday}`,
+        dealType: actualDealType,
+        dealAmount: deal.deal_amount || deal.dealamount,
+        deposit: deal.deposit,
+        monthlyRent: deal.monthly_rent || deal.monthlyrent,
+        exclusiveArea: deal.exclu_use_ar || deal.excluusear || deal.exclusive_area,
+        floor: deal.floor,
+        apartmentName: deal.apt_nm || deal.aptnm || deal.apartment_name || apartmentName,
+        region: deal.region || region,
+        // 원본 데이터 보존
+        _raw: deal
+      };
+    });
 
     return {
       success: true,
       searchConditions: {
-        apartmentName: targetAptName,
-        dealType: normalizedDealType,
+        apartmentName,
+        region,
+        dealType,
         period,
-        area: area ? `${area}㎡ (±5㎡)` : undefined,
-        areaRange: areaRange ? `${areaRange[0]}~${areaRange[1]}㎡` : undefined
+        area: area ? `${area}㎡` : undefined,
+        areaRange: areaRange ? `${areaRange[0]}~${areaRange[1]}㎡` : undefined,
+        priceRange: priceRange ? `${priceRange[0]}~${priceRange[1]}만원` : undefined
       },
       deals: formattedDeals,
-      totalCount: deals.length,
+      totalCount: formattedDeals.length,
+      sql, // 생성된 SQL 쿼리 (디버깅용)
       dataSchema: {
         dealAmount: '매매가 (만원 단위)',
         deposit: '보증금 (만원 단위)', 
         monthlyRent: '월세 (만원 단위)',
         exclusiveArea: '전용면적 (㎡)',
-        pricePerSqm: '평단가 (원/㎡)',
-        note: '30000 = 3억원, 500 = 5천만원'
+        dealType: 'deal_amount 존재=매매, deal_amount 없음+deposit만=전세, deal_amount 없음+deposit+monthly_rent=월세',
+        note: '30000 = 3억원, AI가 자연어로 생성한 SQL 결과 (oi.apt_deal_all 테이블)'
       }
     };
 
   } catch (error: any) {
-    console.error('❌ searchRealEstateDeals 오류:', error);
+    console.error('❌ searchRealEstateDeals 오케스트레이션 오류:', error);
     return {
       success: false,
       error: error.message || '실거래 데이터 검색 중 오류가 발생했습니다.'
@@ -168,33 +201,3 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
   }
 }
 
-/**
- * 기간 문자열을 YYYYMM 정수로 파싱
- */
-function parsePeriod(period: string): { fromYM: number; toYM: number } {
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth() + 1;
-  const currentYM = currentYear * 100 + currentMonth;
-
-  let monthsAgo = 12; // 기본값: 1년
-
-  if (period.includes('개월')) {
-    const match = period.match(/(\d+)개월/);
-    if (match) {
-      monthsAgo = parseInt(match[1]);
-    }
-  } else if (period.includes('년')) {
-    const match = period.match(/(\d+)년/);
-    if (match) {
-      monthsAgo = parseInt(match[1]) * 12;
-    }
-  }
-
-  // 시작 날짜 계산
-  const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - monthsAgo);
-  const fromYM = startDate.getFullYear() * 100 + (startDate.getMonth() + 1);
-
-  return { fromYM, toYM: currentYM };
-}

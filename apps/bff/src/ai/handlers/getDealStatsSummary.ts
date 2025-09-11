@@ -1,100 +1,92 @@
-import { fetchStatsSummary, findApartmentByName } from '../repo/dealsRepo';
+import { orchestrateSelect, parsePeriodToSqlInterval } from './utils/sqlOrchestrator';
 
 interface GetDealStatsSummaryParams {
-  apartmentName?: string;
-  aptId?: number;
-  period?: '1개월' | '3개월' | '6개월' | '1년' | '2년' | '3년';
+  apartmentName?: string;             // 특정 아파트 통계면 지정
+  aptId?: number;                     // 있으면 함께 힌트로 주되 강제 사용 X
   dealType?: '매매' | '전세' | '월세' | '전체';
-  includeFloorAnalysis?: boolean;
+  period?: string;                    // "3개월", "90일", "1년" 등
 }
 
 /**
  * 특정 아파트의 거래 통계 요약을 제공합니다.
  */
 export async function getDealStatsSummary(args: GetDealStatsSummaryParams): Promise<any> {
-  const { 
-    apartmentName, 
-    aptId, 
-    period = '1년', 
-    dealType = '전체',
-    includeFloorAnalysis = false 
-  } = args;
+  const { apartmentName, aptId, dealType = '매매', period = '3개월' } = args;
 
   try {
-    console.log('📊 거래 통계 요약:', { apartmentName, aptId, period, dealType });
+    console.log('📊 거래 통계 요약 (RAG 오케스트레이션):', { apartmentName, aptId, dealType, period });
 
-    // 아파트 정보 조회
-    let targetAptId = aptId;
-    let targetAptName = apartmentName;
-    
-    if (!targetAptId && apartmentName) {
-      const aptInfo = await findApartmentByName(apartmentName);
-      if (aptInfo) {
-        targetAptId = aptInfo.id;
-        targetAptName = aptInfo.name;
-      }
+    const interval = parsePeriodToSqlInterval(period) ?? '3 months';
+
+    const who = apartmentName
+      ? `아파트 "${apartmentName}"의 `
+      : `해당 지역/조건의 `;
+    const question = [
+      `${who}최근 ${period}(${interval}) ${dealType} 거래의 통계를 구해줘.`,
+      `평균/최소/최대 거래금액, 거래 건수, (가능하면) 면적 구간별 평균도 요약해.`,
+      `날짜 필터는 현재 날짜 기준으로 ${interval} 이내.`,
+      `스키마/컬럼은 RAG 문서에 맞춰 자동 선택.`,
+    ].join(' ');
+
+    const hints: string[] = [
+      'oi.apt_deal_trade_raw(dealamount, excluusear, floor, dealyear, dealmonth, dealday, aptnm, ...)',
+    ];
+    if (aptId) {
+      // 강제는 아니고 힌트로만
+      hints.push(`apartment id (hint): ${aptId}`);
     }
 
-    if (!targetAptId && !apartmentName) {
-      return {
-        success: false,
-        error: '아파트 ID 또는 아파트명이 필요합니다.'
-      };
-    }
-
-    // 기간을 YYYYMM 형식으로 변환
-    const { fromYM, toYM } = parsePeriodToYM(period);
-
-    // 통계 데이터 조회
-    const stats = await fetchStatsSummary({
-      apartmentName,
-      aptId: targetAptId,
-      dealType: dealType === '전체' ? '매매' : dealType, // 현재 매매만 지원
-      fromYM,
-      toYM
+    const { success, sql, rows, rowCount, error } = await orchestrateSelect({
+      question,
+      forceSchemaHints: hints,
+      requireColumns: ['dealamount'],
+      safety: { maxRows: 10000, readOnly: true },
     });
 
-    if (stats.sampleCount === 0) {
+    if (!success) {
       return {
-        success: true,
-        message: '해당 조건의 거래 통계 데이터가 없습니다.',
-        stats: null,
-        searchConditions: {
-          apartmentName: targetAptName,
-          period,
-          dealType
+        success: false,
+        error: error || '거래 통계 요약에 실패했습니다.',
+        dataSchema: {
+          min: '최저 거래가 (만원 단위)',
+          max: '최고 거래가 (만원 단위)', 
+          avg: '평균 거래가 (만원 단위)',
+          sampleCount: '총 거래 건수',
+          note: '30000 = 3억원'
         }
       };
+    }
+
+    // (선택) 간단 요약 형태로 재구성
+    let summary: any = undefined;
+    if (success && Array.isArray(rows)) {
+      // rows가 이미 집계형(AVG/MIN/MAX/COUNT)일 가능성이 높음.
+      // 못 알아보는 경우에도 그대로 rows 반환.
+      summary = rows[0] ?? null;
     }
 
     return {
       success: true,
       searchConditions: {
-        apartmentName: targetAptName,
+        apartmentName,
         period,
         dealType
       },
-      stats: {
-        ...stats,
-        // 포맷된 값들 추가
-        minFormatted: stats.min ? formatAmount(stats.min) : undefined,
-        maxFormatted: stats.max ? formatAmount(stats.max) : undefined,
-        avgFormatted: stats.avg ? formatAmount(stats.avg) : undefined,
-        priceRange: stats.min && stats.max ? `${formatAmount(stats.min)} ~ ${formatAmount(stats.max)}` : undefined,
-        periodSummary: `${period} 동안 총 ${stats.sampleCount}건의 거래`
-      },
+      stats: summary,
+      rows, // 원본 집계 결과
+      rowCount,
+      sql, // 생성된 SQL 쿼리 (디버깅용)
       dataSchema: {
         min: '최저 거래가 (만원 단위)',
         max: '최고 거래가 (만원 단위)', 
         avg: '평균 거래가 (만원 단위)',
         sampleCount: '총 거래 건수',
-        unit: stats.unit,
-        note: '30000 = 3억원'
+        note: '30000 = 3억원, AI가 자연어로 생성한 집계 결과'
       }
     };
 
   } catch (error: any) {
-    console.error('❌ getDealStatsSummary 오류:', error);
+    console.error('❌ getDealStatsSummary 오케스트레이션 오류:', error);
     return {
       success: false,
       error: error.message || '거래 통계 요약 중 오류가 발생했습니다.'
@@ -102,53 +94,3 @@ export async function getDealStatsSummary(args: GetDealStatsSummaryParams): Prom
   }
 }
 
-/**
- * 기간 문자열을 YYYYMM으로 변환
- */
-function parsePeriodToYM(period: string): { fromYM: number; toYM: number } {
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth() + 1;
-  const currentYM = currentYear * 100 + currentMonth;
-
-  let monthsAgo = 12;
-
-  if (period.includes('개월')) {
-    const match = period.match(/(\d+)개월/);
-    if (match) {
-      monthsAgo = parseInt(match[1]);
-    }
-  } else if (period.includes('년')) {
-    const match = period.match(/(\d+)년/);
-    if (match) {
-      monthsAgo = parseInt(match[1]) * 12;
-    }
-  }
-
-  const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - monthsAgo);
-  const fromYM = startDate.getFullYear() * 100 + (startDate.getMonth() + 1);
-
-  return { fromYM, toYM: currentYM };
-}
-
-/**
- * 금액 포맷팅
- */
-function formatAmount(amount: number): string {
-  if (amount >= 10000) {
-    const billion = Math.floor(amount / 10000);
-    const remainder = amount % 10000;
-    const thousand = Math.floor(remainder / 1000);
-    
-    let result = `${billion}억`;
-    if (thousand > 0) {
-      result += `${thousand}천`;
-    }
-    return result;
-  } else if (amount >= 1000) {
-    const thousand = Math.floor(amount / 1000);
-    return `${thousand}천`;
-  }
-  return `${amount}`;
-}

@@ -16,7 +16,7 @@ export function validateOrThrow(schema: ToolSchema, data: unknown): void {
   console.log('🔍 Validation Debug:', {
     functionName: schema.name,
     inputData: data,
-    expectedEnum: schema.parameters.properties?.dealType?.enum
+    expectedEnum: schema.parameters?.properties?.dealType?.enum
   });
   
   const validate = ajv.compile(schema.parameters);
