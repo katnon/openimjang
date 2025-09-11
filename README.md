@@ -86,49 +86,137 @@ graph TB
     style DD fill:#85c1e5,color:#000
 ```
 
-### 🎯 모듈형 AI 시스템 아키텍처
+### 🎯 새로운 구조화된 AI 시스템 아키텍처 (v2.0)
+
+OpenImjang AI 시스템은 "척하면 척" 대화가 가능한 구조화된 4단계 아키텍처로 진화했습니다:
 
 ```mermaid
 graph TB
-    subgraph "AI Function Calling Pipeline"
-        A[사용자 질문] --> B[GPT-4o-mini<br/>Function Calling]
-        B --> C[Tool Call 루프<br/>최대 6회 제한]
-        C --> D[Ajv Schema 검증<br/>파라미터 유효성]
-        D --> E[동적 Handler 로딩<br/>필요시에만 Import]
-        E --> F[Repository 호출<br/>데이터 추상화 계층]
-        F --> G[캐시 확인/저장<br/>응답 최적화]
-        G --> H[구조화 응답<br/>JSON 표준화]
-        H --> C
-        C --> I[최종 답변 생성]
+    subgraph "🧠 Phase 1: Memory System (Slots)"
+        A1[사용자 입력] --> A2[Intent 분석<br/>category + subcategory]
+        A2 --> A3[Slot 추출<br/>apartmentName, dealType, area, period]
+        A3 --> A4[ConversationSlots<br/>세션 메모리 관리]
+        A4 --> A5[UserProfile<br/>온보딩 기반 개인화]
     end
-    
-    subgraph "Function Categories"
-        J["부동산 함수군 12개<br/>실거래/가격동향/통계"] --> E
-        K["지리정보 함수군 8개<br/>지오코딩/좌표변환/법정동"] --> E
+
+    subgraph "📋 Phase 2: Planning System (Planner)"
+        B1[PlanContext 생성<br/>slots + intent + profile] --> B2[ActionPlanner<br/>실행 전략 수립]
+        B2 --> B3[Dependency Graph<br/>위상정렬 최적화]
+        B3 --> B4[ExecutionPlan<br/>순서화된 액션 리스트]
+        B4 --> B5[ActionExecutor<br/>핸들러 기반 실행]
     end
-    
-    subgraph "Repository Layer"
-        L[DealsRepo<br/>실거래 데이터] --> M[PostGIS 공간쿼리<br/>Kysely ORM]
-        N[GeoRepo<br/>지리정보 서비스] --> O[V-World API<br/>카카오 API 연동]
+
+    subgraph "❓ Phase 3: Clarification System (Clarify Policy)"
+        C1[누락/애매 정보 감지] --> C2[ClarifyPolicy<br/>질문 전략 엔진]
+        C2 --> C3[Template System<br/>상황별 질문 생성]
+        C3 --> C4[ApartmentMatcher<br/>부분일치 후보 검색]
+        C4 --> C5[ResponseHandler<br/>사용자 응답 처리]
     end
-    
-    subgraph "💾 Performance Layer"
-        P[메모리 캐시<br/>SHA256 키 기반] --> Q[TTL 정책<br/>지리:24h 검색:5m]
-        R[레이트 리밋<br/>IP/사용자/함수별] --> S[모니터링<br/>메트릭 수집]
+
+    subgraph "🔍 Phase 4: Quality Assurance (Critic Checklist)"
+        D1[ActionResult 검증] --> D2[CriticRules<br/>5가지 품질 규칙]
+        D2 --> D3[결과없음/데이터부족<br/>이상치/모순/컨텍스트]
+        D3 --> D4[RetryStrategy<br/>기간확장/조건완화]
+        D4 --> D5[QualityAssurance<br/>신뢰도 기반 결론]
     end
-    
-    F --> L
-    F --> N
-    G --> P
-    D --> R
-    E --> S
-    
-    style B fill:#10a37f,color:#fff
-    style D fill:#f39c12,color:#fff
-    style E fill:#9b59b6,color:#fff
-    style P fill:#3498db,color:#fff
-    style R fill:#e74c3c,color:#fff
+
+    A4 --> B1
+    B5 --> C1
+    C5 --> B1
+    B5 --> D1
+    D4 --> B1
+
+    style A1 fill:#e3f2fd,color:#000
+    style B1 fill:#f3e5f5,color:#000  
+    style C1 fill:#fff3e0,color:#000
+    style D1 fill:#e8f5e8,color:#000
 ```
+
+### 🔄 AI 대화 흐름 개선사항
+
+**기존 문제점:**
+- ❌ 매번 사용자가 모든 정보를 다시 입력해야 함
+- ❌ AI가 이전 대화 맥락을 기억하지 못함  
+- ❌ 부정확한 검색 결과에 대한 검증 부족
+- ❌ 애매한 질문에 대한 체계적 대응 부족
+
+**v2.0 개선사항:**
+- ✅ **세션 기반 메모리**: 한 번 입력한 정보는 계속 기억
+- ✅ **지능적 질문 생성**: 부족한 정보만 선별적으로 질문
+- ✅ **품질 검증 시스템**: 결과의 신뢰성을 자동 검증
+- ✅ **재시도 메커니즘**: 실패 시 조건을 완화하여 자동 재검색
+
+## 📁 AI 시스템 파일 구조 (v2.0 업데이트)
+
+```
+apps/bff/src/ai/
+├── 🧠 slots/                         # Phase 1: 메모리 시스템
+│   ├── types.ts                     # ConversationSlots, UserProfile 타입 정의
+│   ├── slotExtractor.ts             # 사용자 입력에서 슬롯 추출
+│   ├── slotValidator.ts             # 슬롯 유효성 검증
+│   └── sessionManager.ts            # 세션 기반 메모리 관리
+│
+├── 📋 planner/                      # Phase 2: 계획 시스템  
+│   ├── types.ts                     # PlanAction, PlanContext, ExecutionPlan 정의
+│   ├── actionPlanner.ts             # 액션 계획 수립 엔진
+│   ├── executor.ts                  # 액션 실행기 + Critic 통합
+│   └── dependencyResolver.ts        # 의존성 그래프 해결
+│
+├── ❓ clarify/                      # Phase 3: 명확화 시스템
+│   ├── types.ts                     # ClarifyReason, ClarifyContext, ClarifyQuestion
+│   ├── policy.ts                    # 질문 생성 정책 엔진
+│   ├── templates.ts                 # 슬롯별 질문 템플릿
+│   ├── matcher.ts                   # 아파트명 부분일치 검색 (Levenshtein)
+│   └── responseHandler.ts           # 사용자 응답 처리 및 세션 관리
+│
+├── 🔍 critic/                       # Phase 4: 품질 검증 시스템
+│   ├── types.ts                     # CriticResult, CriticRule, CriticContext
+│   ├── checklist.ts                 # 메인 체크리스트 엔진
+│   └── rules.ts                     # 5가지 검증 규칙 (결과없음/부족/이상치/모순/컨텍스트)
+│
+└── 🏠 handlers/                     # 기존 Function Calling 핸들러
+    ├── searchRealEstateDeals.ts     # 부동산 검색 (새 시스템과 브릿지)
+    ├── database/
+    │   └── normalizeApartmentName.ts # 아파트명 정규화 (Clarify와 연동)
+    └── ...기타 20개 함수들
+```
+
+### 🔗 시스템 통합 포인트
+
+1. **Session Bridge**: `apps/bff/src/routes/aiChat.ts`
+   - 기존 `/api/ai/planner-chat` 엔드포인트 확장
+   - Clarify 모드 세션 관리
+   - 4단계 플로우 오케스트레이션
+
+2. **Database Bridge**: `normalizeApartmentName.ts` ↔ `clarify/matcher.ts`  
+   - 기존 아파트명 검색 로직을 Clarify 시스템이 활용
+   - Fuzzy matching 결과를 정책 엔진으로 전달
+
+3. **Function Bridge**: `executor.ts` 핸들러들
+   - 기존 20개 함수들을 새로운 액션 시스템으로 래핑
+   - Critic 검증 결과에 따른 재시도 로직
+
+### 🧪 테스트 시스템
+
+새로운 AI 시스템은 체계적인 테스트 스크립트로 검증되었습니다:
+
+```bash
+# Clarify 정책 시스템 테스트 (6개 시나리오)
+cd apps/bff && bun scripts/test-clarify-policy.ts
+
+# Critic 체크리스트 시스템 테스트 (6개 시나리오)  
+cd apps/bff && bun scripts/test-critic-checklist.ts
+```
+
+**테스트 커버리지:**
+- ✅ 아파트명 누락/부분일치/애매함 처리
+- ✅ 거래유형/면적/기간 누락 시 질문 생성
+- ✅ 사용자 프로필 기반 개인화 질문
+- ✅ 결과 없음 감지 및 기간 확장
+- ✅ 데이터 부족 감지 및 조건 완화
+- ✅ 이상치 감지 및 신뢰도 분석
+- ✅ 모순 검증 및 일관성 체크
+- ✅ 재시도 권장사항 및 품질 보증
 
 ### 📱 데이터 흐름 아키텍처
 

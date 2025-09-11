@@ -6,6 +6,8 @@ import axios from "axios";
 import { chatbotService } from "@/services/chatbotService";
 import type { ChatMessage, ChatSession, ChatSessionType } from "@/types/chatbot";
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { useResizable } from "@/hooks/useResizable";
 
 type ChatbotSidebarProps = {
@@ -711,8 +713,72 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                                     )}
 
                                                     {message.role === 'assistant' ? (
-                                                        <div className="prose prose-sm max-w-none prose-headings:text-inherit prose-p:text-inherit prose-strong:text-inherit prose-em:text-inherit prose-code:text-inherit prose-pre:text-inherit prose-ul:text-inherit prose-ol:text-inherit prose-li:text-inherit">
-                                                            <ReactMarkdown>
+                                                        <div className="prose prose-sm max-w-none prose-headings:text-inherit prose-p:text-inherit prose-strong:text-inherit prose-em:text-inherit prose-code:text-inherit prose-pre:text-inherit prose-ul:text-inherit prose-ol:text-inherit prose-li:text-inherit prose-table:text-inherit prose-th:text-inherit prose-td:text-inherit">
+                                                            <ReactMarkdown 
+                                                                remarkPlugins={[remarkGfm]}
+                                                                rehypePlugins={[rehypeRaw]}
+                                                                components={{
+                                                                    table: ({ node, ...props }) => (
+                                                                        <div className="overflow-x-auto my-4">
+                                                                            <table className="min-w-full divide-y divide-gray-200 border border-gray-300 rounded-lg" {...props} />
+                                                                        </div>
+                                                                    ),
+                                                                    thead: ({ node, ...props }) => (
+                                                                        <thead className="bg-gray-50" {...props} />
+                                                                    ),
+                                                                    tbody: ({ node, ...props }) => (
+                                                                        <tbody className="bg-white divide-y divide-gray-200" {...props} />
+                                                                    ),
+                                                                    tr: ({ node, ...props }) => (
+                                                                        <tr className="hover:bg-gray-50" {...props} />
+                                                                    ),
+                                                                    th: ({ node, ...props }) => (
+                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 last:border-r-0" {...props} />
+                                                                    ),
+                                                                    td: ({ node, ...props }) => (
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200 last:border-r-0" {...props} />
+                                                                    ),
+                                                                    code: ({ node, inline, ...props }) => (
+                                                                        inline ? (
+                                                                            <code className="px-1 py-0.5 bg-gray-100 text-red-600 rounded text-xs font-mono" {...props} />
+                                                                        ) : (
+                                                                            <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto my-2">
+                                                                                <code className="text-sm font-mono" {...props} />
+                                                                            </pre>
+                                                                        )
+                                                                    ),
+                                                                    blockquote: ({ node, ...props }) => (
+                                                                        <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-600 my-2" {...props} />
+                                                                    ),
+                                                                    ul: ({ node, ...props }) => (
+                                                                        <ul className="list-disc list-inside my-2 space-y-1" {...props} />
+                                                                    ),
+                                                                    ol: ({ node, ...props }) => (
+                                                                        <ol className="list-decimal list-inside my-2 space-y-1" {...props} />
+                                                                    ),
+                                                                    li: ({ node, ...props }) => (
+                                                                        <li className="ml-2" {...props} />
+                                                                    ),
+                                                                    h1: ({ node, ...props }) => (
+                                                                        <h1 className="text-xl font-bold my-3" {...props} />
+                                                                    ),
+                                                                    h2: ({ node, ...props }) => (
+                                                                        <h2 className="text-lg font-bold my-2" {...props} />
+                                                                    ),
+                                                                    h3: ({ node, ...props }) => (
+                                                                        <h3 className="text-base font-bold my-2" {...props} />
+                                                                    ),
+                                                                    p: ({ node, ...props }) => (
+                                                                        <p className="my-1" {...props} />
+                                                                    ),
+                                                                    strong: ({ node, ...props }) => (
+                                                                        <strong className="font-semibold" {...props} />
+                                                                    ),
+                                                                    em: ({ node, ...props }) => (
+                                                                        <em className="italic" {...props} />
+                                                                    )
+                                                                }}
+                                                            >
                                                                 {message.content}
                                                             </ReactMarkdown>
                                                         </div>

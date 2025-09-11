@@ -1,10 +1,21 @@
-// apps/bff/src/routes/aiChat.ts - 새로운 표준 패턴 적용
+// apps/bff/src/routes/aiChat.ts - 새로운 표준 패턴 적용 + 슬롯 미들웨어 통합
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { authMiddleware } from '../middleware/auth';
+import { slotMiddleware, getSlotStatus, deleteSession } from '../middleware/sessionSlots';
 import { tools as functionTools } from '../ai/tools';
 import { handlers as functionHandlers } from '../ai/handlers';
 import { validateSchema } from '../ai/tools/validation';
+
+// 플래너 시스템 import
+import { 
+  defaultPlanner, 
+  defaultExecutor, 
+  registerBridgeHandlers, 
+  PlanContext, 
+  SystemCapabilities,
+  PlanConstraints 
+} from '../ai/planner';
 
 const aiChatRoute = new Hono();
 
@@ -13,15 +24,23 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-// POST /chat - 표준 tool_call 루프 패턴
-aiChatRoute.post('/chat', authMiddleware, async (c) => {
+// 플래너 시스템 초기화
+registerBridgeHandlers(defaultExecutor);
+console.log('🎯 플래너 시스템 초기화 완료');
+
+// POST /chat - 표준 tool_call 루프 패턴 + 슬롯 미들웨어
+aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
         console.log('🔍 챗봇 요청:', { message: message?.slice(0, 100) + '...' });
 
-        // 1) 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 포함)
-        const systemPrompt = createPersonalizedSystemPrompt(context?.userProfile, context?.messages);
+        // 1) 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 + 슬롯 정보 포함)
+        const systemPrompt = createPersonalizedSystemPrompt(
+            context?.userProfile || c.session?.userProfile, 
+            context?.messages || c.session?.messageHistory,
+            c.slots
+        );
         const messages: any[] = [
             { 
                 role: 'system', 
@@ -177,9 +196,9 @@ aiChatRoute.post('/chat', authMiddleware, async (c) => {
 });
 
 /**
- * 사용자 프로필과 대화 기록을 기반으로 개인화된 시스템 프롬프트를 생성합니다
+ * 사용자 프로필, 대화 기록, 슬롯 정보를 기반으로 개인화된 시스템 프롬프트를 생성합니다
  */
-function createPersonalizedSystemPrompt(userProfile: any, recentMessages?: any[]): string {
+function createPersonalizedSystemPrompt(userProfile: any, recentMessages?: any[], currentSlots?: any): string {
     let basePrompt = `당신은 OpenImjang 부동산 임장 분석 전문 AI 어시스턴트입니다.
 
 **역할과 목표:**
@@ -302,6 +321,14 @@ function createPersonalizedSystemPrompt(userProfile: any, recentMessages?: any[]
         console.log('ℹ️ 사용자 프로필 없음 - 일반 프롬프트 사용');
     }
 
+    // 슬롯 정보가 있는 경우 컨텍스트 추가 (새로운 기능)
+    if (currentSlots && Object.keys(currentSlots).length > 0) {
+        console.log('🎯 현재 슬롯 정보 기반 컨텍스트 추가:', Object.keys(currentSlots));
+        
+        const slotContext = createSlotContext(currentSlots);
+        basePrompt += slotContext;
+    }
+
     // 대화 기록이 있는 경우 컨텍스트 추가
     if (recentMessages && recentMessages.length > 0) {
         console.log('🗨️ 대화 기록 기반 컨텍스트 추가:', recentMessages.length + '개 메시지');
@@ -313,6 +340,69 @@ function createPersonalizedSystemPrompt(userProfile: any, recentMessages?: any[]
     }
 
     return basePrompt;
+}
+
+/**
+ * 현재 슬롯 정보를 기반으로 컨텍스트를 생성합니다 (새로운 슬롯 시스템)
+ */
+function createSlotContext(slots: any): string {
+    let slotContext = `
+
+🎯 **현재 대화 컨텍스트 (슬롯 기반) - 이 정보를 우선적으로 참조하세요:**`;
+
+    // 아파트 정보
+    if (slots.apartmentName) {
+        slotContext += `
+- **현재 아파트**: ${slots.apartmentName}`;
+        if (slots.complexNumber) {
+            slotContext += ` ${slots.complexNumber}`;
+        }
+    }
+
+    // 지역 정보
+    if (slots.region) {
+        slotContext += `
+- **지역**: ${slots.region}`;
+    }
+
+    // 거래 조건
+    if (slots.dealType) {
+        slotContext += `
+- **거래유형**: ${slots.dealType}`;
+    }
+
+    if (slots.area) {
+        slotContext += `
+- **면적**: ${slots.area}㎡`;
+    }
+
+    if (slots.areaRange) {
+        slotContext += `
+- **면적 범위**: ${slots.areaRange[0]}~${slots.areaRange[1]}㎡`;
+    }
+
+    if (slots.priceRange) {
+        slotContext += `
+- **가격 범위**: ${slots.priceRange[0]}~${slots.priceRange[1]}만원`;
+    }
+
+    if (slots.period) {
+        slotContext += `
+- **기간**: ${slots.period}`;
+    }
+
+    slotContext += `
+
+**슬롯 기반 참조 해석 가이드:**
+1. "그 아파트", "거기" → ${slots.apartmentName || '(아파트명 없음)'}
+2. "그 단지" → ${slots.complexNumber || '(단지 정보 없음)'}
+3. "그 지역" → ${slots.region || '(지역 정보 없음)'}
+4. "그 크기", "같은 면적" → ${slots.area ? slots.area + '㎡' : '(면적 정보 없음)'}
+5. 사용자가 불완전한 정보를 제공하면 위 슬롯 정보로 자동 보완하여 함수 호출
+
+**중요**: 사용자가 "그 아파트"나 "거기" 등의 지시어를 사용하면, 반드시 위 슬롯 정보를 참조하여 구체적인 값으로 치환한 후 함수를 호출하세요.`;
+
+    return slotContext;
 }
 
 /**
@@ -428,15 +518,189 @@ function shouldInjectUserProfile(functionName: string): boolean {
     return functionsNeedingProfile.includes(functionName);
 }
 
+// POST /planner-chat - 플래너 기반 대화 처리 (새로운 방식)
+aiChatRoute.post('/planner-chat', authMiddleware, slotMiddleware, async (c) => {
+    try {
+        const { message, context } = await c.req.json();
+        
+        console.log('🎯 플래너 기반 챗봇 요청:', { message: message?.slice(0, 100) + '...' });
+
+        // 0. Clarify 모드 확인 및 처리
+        const { clarifyResponseHandler } = await import('../ai/clarify/responseHandler');
+        
+        if (clarifyResponseHandler.isInClarifyMode(c.session)) {
+            const pendingField = c.session.pendingClarify?.field;
+            
+            console.log('🤔 Clarify 모드 - 응답 처리:', { field: pendingField });
+            
+            const clarifyResult = await clarifyResponseHandler.processUserResponse(
+                message,
+                pendingField,
+                c.slots || {},
+                context?.userProfile || c.session?.userProfile
+            );
+
+            if (!clarifyResult.success) {
+                return c.json({
+                    success: false,
+                    error: clarifyResult.error || 'Clarify 응답 처리 실패'
+                }, 400);
+            }
+
+            // 슬롯 업데이트
+            if (clarifyResult.updatedSlots) {
+                // 슬롯 미들웨어를 통해 업데이트
+                Object.assign(c.slots || {}, clarifyResult.updatedSlots);
+            }
+
+            // 추가 Clarify가 필요한 경우
+            if (clarifyResult.needsMoreClarification && clarifyResult.nextClarifyField) {
+                // 다음 Clarify 질문 생성
+                const { defaultClarifyPolicy } = await import('../ai/clarify/policy');
+                const { ClarifyContext } = await import('../ai/clarify/types');
+                
+                const clarifyContext: ClarifyContext = {
+                    currentSlots: c.slots || {},
+                    reason: 'missing',
+                    userProfile: context?.userProfile || c.session?.userProfile
+                };
+
+                const nextQuestion = await defaultClarifyPolicy.generateQuestion(
+                    clarifyResult.nextClarifyField as any,
+                    clarifyContext
+                );
+
+                clarifyResponseHandler.setClarifyMode(
+                    c.session,
+                    clarifyResult.nextClarifyField,
+                    nextQuestion.question
+                );
+
+                return c.json({
+                    success: true,
+                    reply: nextQuestion.question,
+                    clarify: true,
+                    field: clarifyResult.nextClarifyField,
+                    suggestions: nextQuestion.suggestions,
+                    hint: nextQuestion.hint
+                });
+            } else {
+                // Clarify 완료 - 일반 플래너 진행
+                clarifyResponseHandler.clearClarifyMode(c.session);
+                console.log('✅ Clarify 완료 - 플래너 실행 계속');
+            }
+        }
+
+        // 1. 플랜 컨텍스트 생성
+        const planContext: PlanContext = {
+            question: message,
+            intent: { category: 'general', confidence: 0, entities: [], actions: [] }, // 플래너에서 분석
+            slots: c.slots || {},
+            userProfile: context?.userProfile || c.session?.userProfile,
+            sessionHistory: {
+                messageCount: c.session?.messageHistory?.length || 0,
+                lastQuestionTypes: [], // 추후 구현
+                completedActions: [],
+                failedActions: []
+            },
+            capabilities: getSystemCapabilities(),
+            constraints: getUserConstraints(c.user?.uid)
+        };
+
+        // 2. 플랜 생성
+        const plan = await defaultPlanner.createPlan(planContext);
+        
+        console.log('📋 생성된 플랜:', {
+            planId: plan.id,
+            totalSteps: plan.totalSteps,
+            actionTypes: plan.actions.map(a => a.type)
+        });
+
+        // 3. 플랜 실행
+        const results = [];
+        let clarifyRequired = false;
+
+        for (const action of plan.actions) {
+            console.log(`🔧 액션 실행: ${action.type} - ${action.name}`);
+            
+            const result = await defaultExecutor.executeAction(action, planContext, results);
+            results.push(result);
+
+            // Clarify가 필요한 경우 즉시 반환
+            if (result.success && result.data?.type === 'clarify_required') {
+                clarifyRequired = true;
+                
+                // Clarify 모드 설정
+                clarifyResponseHandler.setClarifyMode(
+                    c.session,
+                    result.data.field,
+                    result.data.message
+                );
+                
+                return c.json({
+                    success: true,
+                    reply: result.data.message,
+                    clarify: true,
+                    field: result.data.field,
+                    suggestions: result.data.suggestions,
+                    hint: result.data.hint,
+                    expectedResponseType: result.data.expectedResponseType,
+                    planId: plan.id,
+                    executedActions: results.length
+                });
+            }
+
+            // 실패한 액션은 로그만 남기고 계속 진행
+            if (!result.success) {
+                console.warn(`⚠️ 액션 실패: ${action.type} - ${result.error}`);
+            }
+        }
+
+        // 4. 최종 결과 반환
+        const finalResult = results[results.length - 1];
+        const finalMessage = generateFinalMessage(results, planContext);
+
+        return c.json({
+            success: true,
+            reply: finalMessage,
+            planId: plan.id,
+            executedActions: results.length,
+            successfulActions: results.filter(r => r.success).length,
+            results: results.map(r => ({
+                actionId: r.actionId,
+                success: r.success,
+                executionTime: r.executionTime
+            }))
+        });
+
+    } catch (error: any) {
+        console.error('❌ 플래너 기반 챗봇 처리 오류:', error);
+        return c.json({
+            success: false,
+            error: error.message || '플래너 처리 중 오류가 발생했습니다.'
+        }, 500);
+    }
+});
+
+// 슬롯 상태 조회 엔드포인트 (디버깅용)
+aiChatRoute.get('/slots', authMiddleware, getSlotStatus);
+
+// 세션 삭제 엔드포인트 (디버깅용)  
+aiChatRoute.delete('/sessions/:sessionId', authMiddleware, deleteSession);
+
 // TEST-ONLY: 인증 없이 테스트할 수 있는 엔드포인트 (개발용)
-aiChatRoute.post('/test-chat', async (c) => {
+aiChatRoute.post('/test-chat', slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
         console.log('🧪 테스트 챗봇 요청:', { message: message?.slice(0, 100) + '...' });
 
-        // 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 포함)
-        const systemPrompt = createPersonalizedSystemPrompt(context?.userProfile, context?.messages);
+        // 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 + 슬롯 정보 포함)
+        const systemPrompt = createPersonalizedSystemPrompt(
+            context?.userProfile || c.session?.userProfile, 
+            context?.messages || c.session?.messageHistory,
+            c.slots
+        );
         const messages: any[] = [
             { 
                 role: 'system', 
@@ -599,5 +863,107 @@ aiChatRoute.post('/test-chat', async (c) => {
         }, 500);
     }
 });
+
+/**
+ * 시스템 기능 정의
+ */
+function getSystemCapabilities(): SystemCapabilities {
+    return {
+        availableTools: [
+            'searchRealEstate', 'searchPOI', 'getBuildingInfo', 
+            'calculateStats', 'getPriceTrends', 'visualize'
+        ],
+        dataAccess: {
+            realEstate: true,
+            POI: true,
+            market: true,
+            geographic: true
+        },
+        analysisFeatures: {
+            statistics: true,
+            visualization: true,
+            prediction: false, // 추후 구현
+            comparison: true
+        },
+        externalServices: {
+            webSearch: false, // 추후 구현
+            maps: true,
+            weather: false // 추후 구현
+        }
+    };
+}
+
+/**
+ * 사용자별 제약 조건 생성
+ */
+function getUserConstraints(userId?: string): PlanConstraints {
+    return {
+        maxActions: 10,
+        maxDuration: 30000, // 30초
+        budgetLimits: {
+            apiCalls: 50,
+            computeTime: 10000
+        },
+        userPermissions: ['basic', 'data_access', 'analysis'], // 기본 권한
+        rateLimit: {
+            actionsPerMinute: 20,
+            dataQueryLimit: 10
+        }
+    };
+}
+
+/**
+ * 플랜 실행 결과를 기반으로 최종 메시지 생성
+ */
+function generateFinalMessage(results: any[], context: PlanContext): string {
+    const successfulResults = results.filter(r => r.success && r.data);
+    
+    if (successfulResults.length === 0) {
+        return '죄송합니다. 요청하신 정보를 처리하지 못했습니다.';
+    }
+
+    // 요약 결과가 있으면 우선 사용
+    const summaryResult = successfulResults.find(r => r.data?.summary);
+    if (summaryResult?.data?.summary) {
+        let message = summaryResult.data.summary;
+        
+        // 주요 인사이트 추가
+        if (summaryResult.data.keyInsights?.length > 0) {
+            message += '\n\n주요 포인트:\n';
+            summaryResult.data.keyInsights.forEach((insight: string, index: number) => {
+                message += `${index + 1}. ${insight}\n`;
+            });
+        }
+        
+        return message;
+    }
+
+    // 검색 결과가 있으면 기본 요약 생성
+    const searchResult = successfulResults.find(r => r.data?.deals || r.data?.pois);
+    if (searchResult?.data) {
+        const { question, slots } = context;
+        
+        if (searchResult.data.deals) {
+            const count = searchResult.data.deals.length;
+            let message = '';
+            
+            if (slots.apartmentName) {
+                message += `${slots.apartmentName}의 `;
+            }
+            if (slots.dealType) {
+                message += `${slots.dealType} `;
+            }
+            message += `정보를 찾았습니다. 총 ${count}건의 거래 데이터가 있습니다.`;
+            
+            return message;
+        }
+        
+        if (searchResult.data.pois) {
+            return `주변 편의시설 정보를 찾았습니다. 총 ${searchResult.data.pois.length}개의 시설이 있습니다.`;
+        }
+    }
+
+    return '요청하신 정보를 처리했습니다.';
+}
 
 export default aiChatRoute;
