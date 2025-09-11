@@ -4,10 +4,20 @@ import BuildingLandInfo from "./BuildingLandInfo";
 import NearbyInfoPanel from "./NearbyInfoPanel";
 import AiSummaryPanel from "./AiSummaryPanel";
 import type { POIItem } from "@/types/poi";
+import { useAuth } from "@/auth/AuthProvider";
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import { db } from "@/firebase";
 
 type PNUData = {
     pnu: string | null;
     error?: string;
+};
+
+type MemoPreview = {
+    id: string;
+    title: string;
+    createdAt: Date;
+    photoUrl?: string;
 };
 
 type SummaryCardProps = {
@@ -26,13 +36,17 @@ type SummaryCardProps = {
     isFavorited?: boolean; // 즐겨찾기 상태
     onOpenChatbot?: (contextData: { aptId: number; aptName: string; aptAddress: string; type: 'apartment' }) => void; // 챗봇 열기 콜백
     onWriteMemo?: () => void; // 임장하기 (메모 작성) 콜백
+    onOpenMyImjang?: () => void; // 내 임장 모달 열기 콜백
 };
 
-export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot, onWriteMemo }: SummaryCardProps) {
+export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot, onWriteMemo, onOpenMyImjang }: SummaryCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("실거래가");
     const [pnuData, setPnuData] = useState<PNUData | null>(null);
     const [isPnuLoading, setIsPnuLoading] = useState(false);
+    const [aptMemos, setAptMemos] = useState<MemoPreview[]>([]);
+    const [hasMoreMemos, setHasMoreMemos] = useState(false);
+    const { user } = useAuth();
 
     // ✅ 확장 상태 변경 시 부모에게 알림
     useEffect(() => {
@@ -65,6 +79,56 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
             setPnuData(null);
         }
     }, [selectedApt?.id]);
+
+    // 임장 메모 로딩
+    useEffect(() => {
+        const loadAptMemos = async () => {
+            if (!user || !selectedApt) {
+                setAptMemos([]);
+                setHasMoreMemos(false);
+                return;
+            }
+
+            try {
+                const memosRef = collection(db, 'users', user.uid, 'memos');
+                // 임시 해결책: 인덱스 없이 클라이언트에서 필터링
+                const q = query(
+                    memosRef,
+                    orderBy('createdAt', 'desc'),
+                    limit(20) // 더 많이 가져와서 클라이언트에서 필터링
+                );
+                
+                const snapshot = await getDocs(q);
+                const docs = snapshot.docs;
+                
+                // 클라이언트에서 아파트명으로 필터링
+                const filteredDocs = docs.filter(doc => {
+                    const data = doc.data();
+                    return data.aptName === selectedApt.apt_nm;
+                });
+                
+                setHasMoreMemos(filteredDocs.length >= 4);
+
+                // 상위 3개만 상태에 저장
+                const memosData = filteredDocs.slice(0, 3).map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        title: data.title || '(제목 없음)',
+                        createdAt: data.createdAt?.toDate() || new Date(),
+                        photoUrl: data.photoUrl || undefined
+                    };
+                });
+                setAptMemos(memosData);
+            } catch (error) {
+                console.error('메모 불러오기 오류:', error);
+                setAptMemos([]);
+                setHasMoreMemos(false);
+            }
+        };
+
+        loadAptMemos();
+    }, [user, selectedApt]);
 
     const tabs = [
         { id: "실거래가", label: "실거래가" },
@@ -175,6 +239,44 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                     경도: {selectedApt.lon?.toFixed(5) || "정보 없음"}
                                 </p>
                             </div>
+
+                            {/* 임장 메모 미리보기 */}
+                            {aptMemos.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <strong className="text-sm text-gray-800">📝 내 임장 메모</strong>
+                                        {hasMoreMemos && onOpenMyImjang && (
+                                            <button 
+                                                onClick={onOpenMyImjang} 
+                                                className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                                            >
+                                                전체 보기 →
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1">
+                                        {aptMemos.map(memo => (
+                                            <div key={memo.id} className="flex items-center gap-2 p-1">
+                                                {memo.photoUrl && (
+                                                    <img 
+                                                        src={memo.photoUrl} 
+                                                        alt="메모 사진" 
+                                                        className="w-6 h-6 object-cover rounded border"
+                                                    />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium text-gray-800 truncate">
+                                                        {memo.title}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {memo.createdAt.toLocaleDateString('ko-KR')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex gap-2 mt-3">
                                 <button

@@ -157,6 +157,7 @@ export function createSlotMiddleware(config: Partial<SlotMiddlewareConfig> = {})
       const body = await c.req.json().catch(() => ({}));
       const message = body.message as string;
       const requestedSessionId = body.sessionId as string;
+      const apartmentMetadata = body.context?.apartmentMetadata || {};
 
       if (!message) {
         if (finalConfig.debugMode) {
@@ -198,7 +199,37 @@ export function createSlotMiddleware(config: Partial<SlotMiddlewareConfig> = {})
       let slotUpdateCount = 0;
       if (extractionResult.confidence >= finalConfig.confidenceThreshold) {
         const previousSlots = { ...session.slots };
+        
+        // 기본 슬롯 병합
         session.slots = mergeSlots(session.slots, extractionResult.slots, resolvedReferences);
+        
+        // @멘션 메타데이터 병합 (아파트명이 있을 때만)
+        if (session.slots.apartmentName && apartmentMetadata[session.slots.apartmentName]) {
+          const metadata = apartmentMetadata[session.slots.apartmentName];
+          session.slots.apartmentMetadata = {
+            id: metadata.id,
+            address: metadata.address,
+            lat: metadata.lat,
+            lon: metadata.lon,
+            extractedAt: new Date()
+          };
+          
+          // 좌표 정보도 업데이트
+          if (metadata.lat && metadata.lon) {
+            session.slots.coordinates = {
+              lat: metadata.lat,
+              lng: metadata.lon
+            };
+          }
+          
+          if (finalConfig.debugMode) {
+            console.log(`🏠 아파트 메타데이터 저장됨: ${session.slots.apartmentName}`, {
+              id: metadata.id,
+              address: metadata.address,
+              coordinates: metadata.lat && metadata.lon ? [metadata.lat, metadata.lon] : null
+            });
+          }
+        }
         
         // 변경사항 카운트
         slotUpdateCount = countSlotChanges(previousSlots, session.slots);

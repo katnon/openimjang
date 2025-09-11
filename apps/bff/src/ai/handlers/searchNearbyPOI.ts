@@ -6,9 +6,14 @@ interface SearchNearbyPOIParams {
   contextAptData?: any; // 아파트 문맥 데이터
 }
 
+// POI 검색 결과 캐시 (메모리 기반, 5분 TTL)
+const poiCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5분
+
 /**
  * 특정 위치 주변의 POI(관심지점)를 검색합니다.
  * 카카오 Local API를 사용하여 외부 데이터를 검색합니다.
+ * 중복 요청 방지를 위한 캐시 시스템 포함
  */
 export async function searchNearbyPOI(args: SearchNearbyPOIParams): Promise<any> {
   const { lat: requestedLat, lng: requestedLng, poiType, radius = 1000, contextAptData } = args;
@@ -31,26 +36,32 @@ export async function searchNearbyPOI(args: SearchNearbyPOIParams): Promise<any>
     };
   }
 
+  // 캐시 키 생성 (좌표, POI 타입, 반경 기준)
+  const cacheKey = `${targetLat.toFixed(4)}_${targetLng.toFixed(4)}_${poiType || 'all'}_${radius}`;
+  
+  // 캐시된 결과 확인
+  const cached = poiCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    console.log(`✅ POI 검색 캐시 히트: ${cacheKey}`);
+    return { ...cached.data, fromCache: true };
+  }
+
   try {
     console.log(`🗺️ POI 검색: lat=${targetLat}, lng=${targetLng}, type=${poiType || '전체'}, radius=${radius}m`);
     
-    // POI 타입에 따른 카테고리 매핑 (카카오맵 API 카테고리 코드 기준)
+    // POI 타입에 따른 카테고리 매핑 (임장 핵심 요소)
     const categoryMap: { [key: string]: string[] } = {
-        "학교": ["SC4", "AC5"], // 학교, 학원
-        "병원": ["HP8"], // 병원
-        "마트": ["MT1"], // 대형마트
-        "지하철": ["SW8"], // 지하철역
-        "버스정류장": ["BK9"], // 은행 (버스정류장은 별도 API 필요)
-        "공원": ["PK6"], // 공원
-        "편의점": ["CS2"], // 편의점
-        "은행": ["BK9"] // 은행
+        "대중교통": ["SW8"], // 지하철역 (최우선)
+        "마트": ["MT1"], // 대형마트 (생활편의)
+        "병원": ["HP8"], // 병원 (응급상황)
+        "학교": ["SC4"] // 학교 (치안 참고용)
     };
 
     // 검색할 카테고리 결정
     let categories: string[] = [];
     if (!poiType || poiType === "전체") {
-        // 전체 검색시 주요 카테고리들
-        categories = ["SC4", "HP8", "MT1", "SW8", "PK6", "CS2", "BK9"];
+        // 전체 검색시: 대중교통 최우선, 학교는 치안 참고용으로만
+        categories = ["SW8", "MT1", "HP8", "SC4"];
     } else if (categoryMap[poiType]) {
         categories = categoryMap[poiType];
     } else {
@@ -62,7 +73,7 @@ export async function searchNearbyPOI(args: SearchNearbyPOIParams): Promise<any>
     }
 
     // 카카오 Local API를 사용하여 POI 검색
-    const KAKAO_REST_KEY = process.env.VITE_KAKAO_REST_API_KEY || process.env.KAKAO_REST_API_KEY;
+    const KAKAO_REST_KEY = process.env.KAKAO_REST_KEY;
     
     if (!KAKAO_REST_KEY) {
         return {
@@ -97,17 +108,21 @@ export async function searchNearbyPOI(args: SearchNearbyPOIParams): Promise<any>
 
     const results = await Promise.all(searchPromises);
     
-    // 결과 정리 및 포맷팅
+    // 결과 정리 및 포맷팅 (핵심만)
     let allPOIs: any[] = [];
     const categoryNames: { [key: string]: string } = {
-        "SC4": "학교",
-        "AC5": "학원", 
-        "HP8": "병원",
-        "MT1": "대형마트",
         "SW8": "지하철역",
-        "BK9": "은행",
-        "PK6": "공원",
-        "CS2": "편의점"
+        "MT1": "대형마트", 
+        "HP8": "병원",
+        "SC4": "학교"
+    };
+
+    // 카테고리별 우선순위 (임장 핵심)
+    const categoryPriority: { [key: string]: number } = {
+        "지하철역": 1, // 최우선
+        "대형마트": 2, // 생활편의
+        "병원": 3, // 응급상황
+        "학교": 4  // 치안 참고용 (낮은 우선순위)
     };
 
     results.forEach(({ category, documents }) => {
@@ -115,28 +130,34 @@ export async function searchNearbyPOI(args: SearchNearbyPOIParams): Promise<any>
             allPOIs.push({
                 name: poi.place_name,
                 category: categoryNames[category] || category,
-                address: poi.address_name,
-                roadAddress: poi.road_address_name,
                 distance: parseInt(poi.distance || 0),
-                x: parseFloat(poi.x),
-                y: parseFloat(poi.y),
-                phone: poi.phone || null,
-                url: poi.place_url || null,
-                _raw: poi
+                priority: categoryPriority[categoryNames[category]] || 99,
+                // 간소화: 전화번호, 상세주소, URL 제거
+                _compact: true
             });
         });
     });
 
-    // 거리순 정렬
-    allPOIs.sort((a, b) => a.distance - b.distance);
+    // 임장 우선순위 + 거리 기준 정렬 (대중교통 최우선)
+    allPOIs.sort((a, b) => {
+        // 1순위: 카테고리 우선순위 (대중교통 > 학교 > 기타)
+        if (a.priority !== b.priority) {
+            return a.priority - b.priority;
+        }
+        // 2순위: 거리 (같은 카테고리 내에서)
+        return a.distance - b.distance;
+    });
     
-    // 카테고리별 통계
+    // 카테고리별 통계 (간소화)
     const categoryStats: { [key: string]: number } = {};
     allPOIs.forEach(poi => {
         categoryStats[poi.category] = (categoryStats[poi.category] || 0) + 1;
     });
 
-    return {
+    // 대중교통 정보 별도 추출 (최우선 표시용)
+    const transportation = allPOIs.filter(poi => poi.category === '지하철역').slice(0, 3);
+
+    const result = {
         success: true,
         searchConditions: {
           location: { lat: targetLat, lng: targetLng },
@@ -145,20 +166,33 @@ export async function searchNearbyPOI(args: SearchNearbyPOIParams): Promise<any>
         },
         totalCount: allPOIs.length,
         categoryStats,
-        pois: allPOIs.slice(0, 30), // 최대 30개 결과만 반환
+        transportation, // 대중교통 별도 표시용
+        pois: allPOIs.slice(0, 20), // 최대 20개로 축소 (컴팩트)
         dataSchema: {
           name: 'POI 명칭',
-          category: 'POI 분류',
-          address: '주소',
-          roadAddress: '도로명 주소',
+          category: 'POI 분류 (대중교통 우선)',
           distance: '거리 (m)',
-          x: '경도',
-          y: '위도',
-          phone: '전화번호',
-          url: '상세 URL',
-          note: '카카오 Local API 기반 검색 결과'
+          priority: '임장 우선순위',
+          note: '컴팩트 버전 - 전화번호, 상세주소 생략'
         }
     };
+
+    // 결과를 캐시에 저장
+    poiCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    console.log(`💾 POI 검색 결과 캐시 저장: ${cacheKey}`);
+    
+    // 캐시 정리 (100개 이상이면 오래된 것부터 삭제)
+    if (poiCache.size > 100) {
+        const oldestKeys = Array.from(poiCache.entries())
+            .sort((a, b) => a[1].timestamp - b[1].timestamp)
+            .slice(0, 20)
+            .map(entry => entry[0]);
+        
+        oldestKeys.forEach(key => poiCache.delete(key));
+        console.log(`🧹 POI 캐시 정리: ${oldestKeys.length}개 항목 삭제`);
+    }
+
+    return result;
 
   } catch (error: any) {
       console.error("❌ POI 검색 오류:", error);

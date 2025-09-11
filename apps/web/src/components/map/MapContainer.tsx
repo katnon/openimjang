@@ -239,7 +239,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
             tempMarkerRef.current = null;
         }
 
-        // 새 임시 마커 생성
+        // 새 임시 마커 생성 (POI 호버용만 - @아파트명 클릭과는 무관)
         if (tempMarker) {
             const lat = parseFloat(tempMarker.y);
             const lng = parseFloat(tempMarker.x);
@@ -247,9 +247,14 @@ const MapContainer: React.FC<MapContainerProps> = ({
             if (!isNaN(lat) && !isNaN(lng)) {
                 const latlng = new window.kakao.maps.LatLng(lat, lng);
                 
-                // 기본 카카오 마커 사용 (빨간색)
+                // 커스텀 마커 이미지로 기본 핀 대신 사용
+                const imageSize = new window.kakao.maps.Size(24, 35);
+                const imageOption = { offset: new window.kakao.maps.Point(12, 35) };
+                const markerImage = new window.kakao.maps.MarkerImage("/icon-192.png", imageSize, imageOption);
+                
                 const marker = new window.kakao.maps.Marker({
                     position: latlng,
+                    image: markerImage,
                     title: tempMarker.place_name
                 });
 

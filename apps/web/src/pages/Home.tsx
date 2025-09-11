@@ -51,6 +51,14 @@ export default function Home() {
         photoUrl?: string;
     } | null>(null);
     const [showFavoritePins, setShowFavoritePins] = useState(true);
+    const [sidebarApartmentAttachment, setSidebarApartmentAttachment] = useState<{
+        id: number;
+        name: string;
+        address: string;
+        lat: number;
+        lon: number;
+    } | null>(null);
+    const [chatbotInitialMessage, setChatbotInitialMessage] = useState<string>('');
 
     // ✅ 지도 인스턴스 ref 추가
     const mapInstanceRef = useRef<kakao.maps.Map | null>(null);
@@ -145,6 +153,97 @@ export default function Home() {
         }
     };
 
+    // 지도 네비게이션 핸들러 (스마트 링크용)
+    const handleMapNavigate = async (data: { lat: number; lon: number; name: string; type: string }) => {
+        console.log('🗺️ 지도 네비게이션:', data);
+        
+        if (!mapInstanceRef.current) {
+            console.warn('⚠️ 지도 인스턴스가 없습니다.');
+            return;
+        }
+
+        const map = mapInstanceRef.current;
+        
+        // 지도 중심을 해당 위치로 이동
+        const newCenter = new kakao.maps.LatLng(data.lat, data.lon);
+        map.setCenter(newCenter);
+        map.setLevel(3); // 확대
+        
+        // 아파트인 경우 검색 API로 정확한 정보 가져와서 요약카드 표시
+        if (data.type === 'apartment') {
+            try {
+                const response = await fetch(`/api/search?q=${encodeURIComponent(data.name)}`);
+                const searchResults = await response.json();
+                
+                if (searchResults && searchResults.length > 0) {
+                    const apt = searchResults[0];
+                    setSelectedApt(apt);
+                    setPoint({ lat: apt.lat, lng: apt.lon });
+                    console.log('✅ 아파트 요약카드 표시:', apt.apt_nm);
+                    return; // 아파트인 경우 여기서 종료
+                }
+            } catch (error) {
+                console.error('❌ 아파트 정보 조회 오류:', error);
+            }
+        }
+        
+        // 아파트가 아니거나 아파트 조회 실패한 경우 임시 마커 표시
+        const markerPosition = new kakao.maps.LatLng(data.lat, data.lon);
+        const marker = new kakao.maps.Marker({
+            position: markerPosition,
+            title: data.name
+        });
+        marker.setMap(map);
+
+        // 아이콘에 따른 정보창 스타일링
+        const getIconForType = (type: string) => {
+            const icons: Record<string, string> = {
+                apartment: '🏢',
+                subway: '🚇',
+                bus_stop: '🚌',
+                school: '🏫',
+                hospital: '🏥',
+                mart: '🛒',
+                park: '🌳',
+                government: '🏛️',
+                bank: '🏦',
+                restaurant: '🍴'
+            };
+            return icons[type] || '📍';
+        };
+
+        // 정보창 표시
+        const icon = getIconForType(data.type);
+        const infoWindow = new kakao.maps.InfoWindow({
+            content: `
+                <div style="
+                    padding: 8px 12px; 
+                    font-size: 14px; 
+                    font-weight: 500;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                    border: none;
+                    min-width: 120px;
+                    text-align: center;
+                ">
+                    <div style="color: #1e40af; margin-bottom: 2px;">${icon}</div>
+                    <div style="color: #374151;">${data.name}</div>
+                </div>
+            `
+        });
+        infoWindow.open(map, marker);
+
+        // 5초 후 정보창과 마커 제거
+        setTimeout(() => {
+            infoWindow.close();
+            marker.setMap(null);
+        }, 5000);
+        
+        // point 상태도 업데이트
+        setPoint({ lat: data.lat, lng: data.lon });
+    };
+
     return (
         <div className="relative w-screen h-screen overflow-hidden bg-neutral-100">
             {/* 상단바 */}
@@ -209,10 +308,19 @@ export default function Home() {
                 onFavoriteToggle={handleFavoriteToggle}
                 isFavorited={selectedApt ? favorites.has(selectedApt.id) : false}
                 onOpenChatbot={(contextData) => {
+                    // 기존 모달 챗봇 열기
                     setChatbotContext(contextData);
                     setShowChatbot(true);
+                    
+                    // 새로운 사이드바 챗봇에 @아파트명 초기 메시지 설정
+                    if (selectedApt) {
+                        const initialMessage = `@${selectedApt.apt_nm} `;
+                        setChatbotInitialMessage(initialMessage);
+                        console.log('🤖 임장봇 버튼 - 초기 메시지 설정:', initialMessage);
+                    }
                 }}
                 onWriteMemo={() => setShowMemoModal(true)}
+                onOpenMyImjang={() => setShowMyImjang(true)}
             />
 
             {/* 3D 팝업 */}
@@ -313,7 +421,17 @@ export default function Home() {
             />
 
             {/* 새로운 임장봇 사이드바 */}
-            <ChatbotSidebar />
+            <ChatbotSidebar 
+                onMapNavigate={handleMapNavigate}
+                onAptSelected={(apt) => {
+                    setSelectedApt(apt);
+                    setPoint({ lat: apt.lat, lng: apt.lon });
+                }}
+                attachedApartment={sidebarApartmentAttachment}
+                onApartmentDetach={() => setSidebarApartmentAttachment(null)}
+                initialMessage={chatbotInitialMessage}
+                onInitialMessageUsed={() => setChatbotInitialMessage('')} // 사용된 초기 메시지 초기화
+            />
         </div>
     );
 }

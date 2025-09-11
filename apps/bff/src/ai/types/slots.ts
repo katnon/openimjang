@@ -25,6 +25,84 @@ export interface ConversationSlots {
   };
   legalDongCode?: string;           // 법정동 코드
   
+  // 아파트 메타데이터 (히든 슬롯)
+  apartmentMetadata?: {
+    id?: number;                    // DB ID
+    address?: string;               // 지번주소
+    roadAddress?: string;           // 도로명주소
+    lat?: number;                   // 위도
+    lon?: number;                   // 경도
+    dong?: string;                  // 동
+    complexCount?: number;          // 단지 수
+    buildYear?: number;             // 건축년도
+    extractedAt?: Date;             // 추출 시간
+  };
+  
+  // 실거래가 정보 (히든 슬롯)
+  realEstateDeals?: {
+    deals: Array<{
+      deal_year: number;
+      deal_month: number;
+      deal_day: number;
+      deal_amount: number | null;
+      deposit: number | null;
+      monthly_rent: number | null;
+      exclu_use_ar: number;
+      floor: number | null;
+    }>;
+    areas: number[];
+    loadedAt: Date;
+    params: {
+      area?: string;
+      period: string;
+      dealTypes: string[];
+    };
+  };
+  
+  // 건물/토지 정보 (히든 슬롯)
+  buildingLandInfo?: {
+    buildingInfo?: {
+      recap_info: any;
+      title_infos: any[];
+      total_count: number;
+    };
+    landuseInfo?: {
+      landuse_zones: Array<{
+        code: string;
+        name: string;
+        status: number;
+        displayText: string;
+      }>;
+    };
+    pnuInfo?: {
+      pnu: string | null;
+    };
+    loadedAt: Date;
+  };
+  
+  // 주변 편의시설 정보 (히든 슬롯)
+  poiInfo?: {
+    pois: Array<{
+      name: string;
+      category: string;
+      address: string;
+      roadAddress?: string;
+      distance: number;
+      x: number;
+      y: number;
+      phone?: string;
+      url?: string;
+    }>;
+    searchConditions: {
+      location: { lat: number; lng: number };
+      radius: number;
+      poiType: string;
+    };
+    categoryStats: { [key: string]: number };
+    totalCount: number;
+    loadedAt: Date;
+  };
+  
   // 메타 정보
   lastUpdated?: Date;               // 마지막 업데이트 시간
   confidence?: number;              // 추출 신뢰도 (0-1)

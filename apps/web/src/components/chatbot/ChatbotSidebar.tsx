@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useResizable } from "@/hooks/useResizable";
+// import { ApartmentText } from "@/components/ui/ApartmentBlock";
 
 type ChatbotSidebarProps = {
     contextData?: {
@@ -18,9 +19,15 @@ type ChatbotSidebarProps = {
         memoContent?: string;
         type?: 'general' | 'apartment' | 'memo';
     };
+    onMapNavigate?: (data: { lat: number; lon: number; name: string; type: string }) => void; // 지도 네비게이션 콜백
+    onAptSelected?: (apt: { id: number; apt_nm: string; jibun_address: string; lat: number; lon: number }) => void; // 아파트 선택 콜백 (팝업 표시용)
+    attachedApartment?: { id: number; name: string; address: string; lat: number; lon: number } | null; // 첨부된 아파트 정보
+    onApartmentDetach?: () => void; // 아파트 첨부 해제 콜백
+    initialMessage?: string; // 초기 메시지 (예: @아파트명)
+    onInitialMessageUsed?: () => void; // 초기 메시지 사용 완료 콜백
 };
 
-export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
+export default function ChatbotSidebar({ contextData, onMapNavigate, onAptSelected, attachedApartment, onApartmentDetach, initialMessage, onInitialMessageUsed }: ChatbotSidebarProps) {
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -32,8 +39,32 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [showHistory, setShowHistory] = useState(false);
     const [showDropdown, setShowDropdown] = useState(false);
-    const [attachedApartment, setAttachedApartment] = useState<{ id: number; name: string; address: string; lat: number; lon: number } | null>(null);
+    const [localAttachedApartment, setLocalAttachedApartment] = useState<{ id: number; name: string; address: string; lat: number; lon: number } | null>(null);
     const [attachedImages, setAttachedImages] = useState<{ id: string; file: File; preview: string }[]>([]);
+    const [apartmentDataStatus, setApartmentDataStatus] = useState<Record<string, { 
+        isLoading?: boolean; 
+        hasFullData?: boolean;
+        loadingSteps?: {
+            basic?: boolean;
+            nearby?: boolean; 
+            pnu?: boolean;
+            landuse?: boolean;
+            deals?: boolean;
+            building?: boolean;
+            areas?: boolean;
+        };
+    }>>({});
+    
+    // 아파트별 전체 데이터 저장
+    const [apartmentFullData, setApartmentFullData] = useState<Record<string, {
+        basic?: any;
+        nearby?: any;
+        pnu?: any;
+        landuse?: any;
+        deals?: any;
+        building?: any;
+        areas?: any;
+    }>>({});
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -81,6 +112,143 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [showDropdown]);
+
+    // 외부에서 전달받은 아파트 정보 동기화
+    useEffect(() => {
+        if (attachedApartment) {
+            setLocalAttachedApartment(attachedApartment);
+            setIsOpen(true); // 아파트가 첨부되면 사이드바 자동 열기
+        }
+    }, [attachedApartment]);
+
+    // 초기 메시지 설정 (예: @아파트명)
+    useEffect(() => {
+        if (initialMessage) {
+            setInputValue(initialMessage);
+            setIsOpen(true); // 초기 메시지가 있으면 사이드바 자동 열기
+            
+            // 입력창에 포커스
+            setTimeout(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus();
+                    // 커서를 맨 끝으로 이동
+                    const length = initialMessage.length;
+                    inputRef.current.setSelectionRange(length, length);
+                }
+            }, 100);
+
+            // 초기 메시지 사용 완료 알림
+            onInitialMessageUsed?.();
+        }
+    }, [initialMessage, onInitialMessageUsed]);
+
+    // 스마트 링크 및 @아파트 클릭 처리
+    useEffect(() => {
+        const handleLinkClick = async (event: MouseEvent) => {
+            const target = event.target as Element;
+            const link = target.closest('.oi-link');
+            const aptMention = target.closest('.apt-mention');
+            
+            if (link && onMapNavigate) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                const type = link.getAttribute('data-type') || '';
+                const name = link.getAttribute('data-name') || '';
+                const lat = parseFloat(link.getAttribute('data-lat') || '0');
+                const lon = parseFloat(link.getAttribute('data-lon') || '0');
+                const address = link.getAttribute('data-address') || '';
+                
+                console.log('🔗 스마트 링크 클릭:', { type, name, lat, lon, address });
+                
+                // 좌표가 있는 경우 바로 지도 이동
+                if (lat && lon) {
+                    onMapNavigate({ lat, lon, name, type });
+                } else {
+                    // 좌표가 없는 경우 카카오 API로 검색
+                    await handleLocationSearch(name, type);
+                }
+            } else if (aptMention) {
+                // @아파트명 클릭 처리
+                event.preventDefault();
+                event.stopPropagation();
+                
+                const aptName = aptMention.getAttribute('data-apt-name') || '';
+                console.log('🏠 @아파트 클릭:', aptName);
+                
+                await handleAptMentionClick(aptName);
+            }
+        };
+
+        // @아파트명 클릭 핸들러
+        const handleAptMentionClick = async (aptName: string) => {
+            try {
+                console.log('🔍 아파트 검색 시작:', aptName);
+                
+                // 기존 검색 API 호출
+                const response = await fetch(`/api/search?q=${encodeURIComponent(aptName)}`);
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                    const apt = data[0];
+                    console.log('✅ 아파트 검색 성공:', apt);
+                    
+                    // 지도에 핀 표시 및 중심 이동
+                    if (onMapNavigate) {
+                        onMapNavigate({
+                            lat: apt.lat,
+                            lon: apt.lon,
+                            name: apt.apt_nm,
+                            type: 'apartment'
+                        });
+                    }
+                } else {
+                    console.warn('⚠️ 아파트를 찾을 수 없습니다:', aptName);
+                    alert('아파트 정보를 찾을 수 없습니다.');
+                }
+            } catch (error) {
+                console.error('❌ 아파트 검색 오류:', error);
+                alert('아파트 검색 중 오류가 발생했습니다.');
+            }
+        };
+
+        const handleLocationSearch = async (searchTerm: string, type: string) => {
+            try {
+                console.log('🔍 위치 검색 시작:', { searchTerm, type });
+                
+                // 카카오 장소 검색 API 호출
+                const response = await fetch(`/api/search/location?q=${encodeURIComponent(searchTerm)}&type=${type}`);
+                const data = await response.json();
+                
+                if (data.success && data.results && data.results.length > 0) {
+                    const location = data.results[0];
+                    console.log('📍 위치 검색 성공:', location);
+                    
+                    onMapNavigate!({
+                        lat: parseFloat(location.y),
+                        lon: parseFloat(location.x),
+                        name: location.place_name,
+                        type
+                    });
+                } else {
+                    console.warn('⚠️ 위치를 찾을 수 없습니다:', searchTerm);
+                    // 사용자에게 알림
+                    alert(`"${searchTerm}"의 위치를 찾을 수 없습니다.`);
+                }
+            } catch (error) {
+                console.error('❌ 위치 검색 오류:', error);
+                alert('위치 검색 중 오류가 발생했습니다.');
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('click', handleLinkClick);
+        }
+
+        return () => {
+            document.removeEventListener('click', handleLinkClick);
+        };
+    }, [isOpen, onMapNavigate]);
 
     // 사용자 프로필 정보 가져오기
     useEffect(() => {
@@ -330,7 +498,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
     // 현재 선택된 아파트 정보 첨부
     const attachCurrentApartment = () => {
         if (contextData?.aptId && contextData?.aptName) {
-            setAttachedApartment({
+            setLocalAttachedApartment({
                 id: typeof contextData.aptId === 'string' ? parseInt(contextData.aptId) : contextData.aptId,
                 name: contextData.aptName,
                 address: contextData.aptAddress || '',
@@ -343,7 +511,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
 
     // 아파트 정보 첨부 해제
     const removeAttachedApartment = () => {
-        setAttachedApartment(null);
+        setLocalAttachedApartment(null);
     };
 
     // 사진 첨부 핸들러
@@ -378,6 +546,213 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
         });
     };
 
+    // 아파트 블록 클릭 핸들러 (지도 동작 + 전체 데이터 로딩)
+    const loadApartmentFullData = async (aptName: string) => {
+        try {
+            // 스마트한 데이터 관리: 최근 3개 아파트만 유지 (비교 목적)
+            setApartmentDataStatus(prev => {
+                const existingKeys = Object.keys(prev);
+                const shouldKeepRecent = existingKeys.length < 3; // 3개 미만이면 유지
+                
+                if (shouldKeepRecent) {
+                    // 기존 데이터 유지하면서 새 아파트 추가
+                    return {
+                        ...prev,
+                        [aptName]: { 
+                            isLoading: true, 
+                            hasFullData: false,
+                            loadingSteps: {
+                                basic: false,
+                                nearby: false,
+                                pnu: false,
+                                landuse: false,
+                                deals: false,
+                                building: false,
+                                areas: false
+                            }
+                        }
+                    };
+                } else {
+                    // 3개 이상이면 가장 오래된 것 제거하고 새 아파트 추가
+                    const newStatus = { ...prev };
+                    const oldestKey = existingKeys[0]; // 첫 번째가 가장 오래된 것
+                    delete newStatus[oldestKey];
+                    
+                    return {
+                        ...newStatus,
+                        [aptName]: { 
+                            isLoading: true, 
+                            hasFullData: false,
+                            loadingSteps: {
+                                basic: false,
+                                nearby: false,
+                                pnu: false,
+                                landuse: false,
+                                deals: false,
+                                building: false,
+                                areas: false
+                            }
+                        }
+                    };
+                }
+            });
+            
+            // apartmentFullData도 같은 로직 적용
+            setApartmentFullData(prev => {
+                const existingKeys = Object.keys(prev);
+                if (existingKeys.length < 3) {
+                    return prev; // 기존 데이터 유지
+                } else {
+                    // 가장 오래된 것 제거
+                    const newData = { ...prev };
+                    const oldestKey = existingKeys[0];
+                    delete newData[oldestKey];
+                    return newData;
+                }
+            });
+
+            console.log(`🏢 아파트 블록 클릭: ${aptName} - 전체 데이터 로딩 시작`);
+
+            // 1단계: 기본 아파트 검색
+            const searchRes = await fetch(`/api/search?q=${encodeURIComponent(aptName)}`);
+            const searchData = await searchRes.json();
+            
+            if (!searchData || !Array.isArray(searchData) || searchData.length === 0) {
+                throw new Error('아파트를 찾을 수 없습니다.');
+            }
+
+            const apartment = searchData[0];
+            console.log(`✅ 1단계: 기본 정보 로딩 완료 - ${apartment.apt_nm}`);
+
+            // 기본 정보 완료 표시
+            setApartmentDataStatus(prev => ({
+                ...prev,
+                [aptName]: { 
+                    ...prev[aptName],
+                    loadingSteps: { ...prev[aptName]?.loadingSteps, basic: true }
+                }
+            }));
+
+            // 지도 동작 (기존과 동일)
+            if (apartment) {
+                if (onAptSelected) {
+                    onAptSelected({
+                        id: apartment.id,
+                        apt_nm: apartment.apt_nm,
+                        jibun_address: apartment.jibun_address,
+                        lat: apartment.lat,
+                        lon: apartment.lon
+                    });
+                }
+
+                if (onMapNavigate) {
+                    onMapNavigate({
+                        lat: apartment.lat,
+                        lon: apartment.lon,
+                        name: apartment.apt_nm,
+                        type: 'apartment',
+                        aptId: apartment.id
+                    });
+                }
+            }
+
+            // 2단계: 전체 상세 데이터 병렬 로딩
+            console.log(`🔄 2단계: 상세 데이터 병렬 로딩 시작 (aptId: ${apartment.id})`);
+            
+            const dataLoadPromises = [
+                // 주변 정보
+                fetch(`/api/search/nearby?lat=${apartment.lat}&lon=${apartment.lon}&radius=1000`)
+                    .then(res => res.json())
+                    .then(data => ({ type: 'nearby', data }))
+                    .catch(err => ({ type: 'nearby', error: err.message })),
+                
+                // PNU 정보
+                fetch(`/api/search/pnu/${apartment.id}`)
+                    .then(res => res.json())
+                    .then(data => ({ type: 'pnu', data }))
+                    .catch(err => ({ type: 'pnu', error: err.message })),
+                
+                // 토지이용계획
+                fetch(`/api/search/landuse/${apartment.id}`)
+                    .then(res => res.json())
+                    .then(data => ({ type: 'landuse', data }))
+                    .catch(err => ({ type: 'landuse', error: err.message })),
+                
+                // 실거래가 (최근 1년)
+                fetch(`/api/search/deals/${apartment.id}?period=1년`)
+                    .then(res => res.json())
+                    .then(data => ({ type: 'deals', data }))
+                    .catch(err => ({ type: 'deals', error: err.message })),
+                
+                // 건물정보
+                fetch(`/api/search/building-info/${apartment.id}`)
+                    .then(res => res.json())
+                    .then(data => ({ type: 'building', data }))
+                    .catch(err => ({ type: 'building', error: err.message })),
+                
+                // 전용면적
+                fetch(`/api/search/areas/${apartment.id}`)
+                    .then(res => res.json())
+                    .then(data => ({ type: 'areas', data }))
+                    .catch(err => ({ type: 'areas', error: err.message }))
+            ];
+
+            const results = await Promise.all(dataLoadPromises);
+            
+            // 결과 정리
+            const loadedData: any = { basic: apartment };
+            const completedSteps: any = { basic: true };
+            
+            results.forEach(result => {
+                if (result.error) {
+                    console.warn(`⚠️ ${result.type} 로딩 실패:`, result.error);
+                    completedSteps[result.type] = false;
+                } else {
+                    loadedData[result.type] = result.data;
+                    completedSteps[result.type] = true;
+                    console.log(`✅ ${result.type} 로딩 완료`);
+                }
+            });
+
+            // 전체 데이터 저장 (기존 데이터 유지하면서 새 아파트 추가/업데이트)
+            setApartmentFullData(prev => ({
+                ...prev,
+                [aptName]: loadedData
+            }));
+
+            // 최종 상태 업데이트 (기존 데이터 유지하면서 새 아파트 업데이트)
+            setApartmentDataStatus(prev => ({
+                ...prev,
+                [aptName]: { 
+                    isLoading: false, 
+                    hasFullData: true,
+                    loadingSteps: completedSteps
+                }
+            }));
+
+            console.log(`🎉 ${aptName} 전체 데이터 로딩 완료!`, {
+                nearby: !!loadedData.nearby,
+                pnu: !!loadedData.pnu,
+                landuse: !!loadedData.landuse,
+                deals: !!loadedData.deals,
+                building: !!loadedData.building,
+                areas: !!loadedData.areas
+            });
+
+            return apartment;
+
+        } catch (error: any) {
+            console.error(`❌ ${aptName} 전체 데이터 로딩 실패:`, error);
+            
+            setApartmentDataStatus(prev => ({
+                ...prev,
+                [aptName]: { isLoading: false, hasFullData: false }
+            }));
+            
+            throw error;
+        }
+    };
+
     // 파일을 base64로 변환하는 함수
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -393,6 +768,42 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
         if ((!inputValue.trim() && attachedImages.length === 0) || isLoading || !currentSession) return;
 
         try {
+            // @아파트명들을 추출하여 백엔드에 전달할 정보 준비
+            const extractedApartments: Array<{name: string; id?: number; address?: string; lat?: number; lon?: number}> = [];
+            
+            // 입력에서 모든 @아파트명 추출
+            const mentionMatches = inputValue.trim().matchAll(/@([가-힣\w]+)/g);
+            for (const match of mentionMatches) {
+                const aptName = match[1];
+                try {
+                    console.log('🔍 @아파트 정보 조회:', aptName);
+                    const res = await fetch(`/api/search?q=${encodeURIComponent(aptName)}`);
+                    const data = await res.json();
+                    if (data && data.length > 0) {
+                        const apt = data[0];
+                        extractedApartments.push({
+                            name: apt.apt_nm,
+                            id: apt.id,
+                            address: apt.jibun_address,
+                            lat: apt.lat,
+                            lon: apt.lon
+                        });
+                        console.log('✅ 아파트 정보 추출됨:', apt.apt_nm);
+                    } else {
+                        // 검색 결과 없어도 이름은 전달
+                        extractedApartments.push({
+                            name: aptName
+                        });
+                    }
+                } catch (e) {
+                    console.error('❌ 아파트 정보 조회 실패:', aptName, e);
+                    // 오류가 있어도 이름은 전달
+                    extractedApartments.push({
+                        name: aptName
+                    });
+                }
+            }
+
             // 이미지를 base64로 변환
             const imageData = attachedImages.length > 0 ? await Promise.all(
                 attachedImages.map(async (img) => ({
@@ -438,8 +849,76 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                         content: msg.content,
                         images: (msg as any).images
                     })),
-                    apartmentId: attachedApartment?.id || currentSession.contextData?.apartmentId,
-                    apartmentName: attachedApartment?.name || currentSession.contextData?.apartmentName,
+                    apartmentId: localAttachedApartment?.id || currentSession.contextData?.apartmentId,
+                    apartmentName: localAttachedApartment?.name || currentSession.contextData?.apartmentName,
+                    extractedApartments: extractedApartments.length > 0 ? extractedApartments : undefined, // @아파트명들 전달
+                    apartmentMetadata: extractedApartments.reduce((acc, apt) => {
+                        if (apt.name && (apt.lat || apt.id)) {
+                            acc[apt.name] = {
+                                id: apt.id,
+                                address: apt.address,
+                                lat: apt.lat,
+                                lon: apt.lon
+                            };
+                        }
+                        return acc;
+                    }, {} as Record<string, any>), // @멘션 메타데이터 전달
+                    apartmentFullDataStatus: apartmentDataStatus, // 아파트 전체 데이터 로드 상태
+                    // 🆕 로딩된 전체 아파트 데이터 전달
+                    apartmentFullData: Object.keys(apartmentFullData).reduce((acc, aptName) => {
+                        const data = apartmentFullData[aptName];
+                        if (data && Object.keys(data).length > 0) {
+                            acc[aptName] = {
+                                // 기본 정보
+                                basic: data.basic,
+                                // 주변 편의시설 정보
+                                nearbyPOIs: data.nearby ? {
+                                    total: data.nearby.total || 0,
+                                    categories: data.nearby.categories || {},
+                                    education: data.nearby.categories?.education || [],
+                                    publicFacilities: data.nearby.categories?.publicFacilities || [],
+                                    transportation: data.nearby.categories?.transportation || [],
+                                    convenience: data.nearby.categories?.convenience || []
+                                } : null,
+                                // PNU 정보
+                                pnuInfo: data.pnu ? {
+                                    pnu: data.pnu.pnu,
+                                    coordinates: data.pnu.coordinates
+                                } : null,
+                                // 토지이용계획
+                                landuseInfo: data.landuse ? {
+                                    landuse_zones: data.landuse.landuse_zones || []
+                                } : null,
+                                // 최근 실거래가
+                                recentDeals: data.deals && Array.isArray(data.deals) ? {
+                                    total: data.deals.length,
+                                    deals: data.deals.slice(0, 20), // 최근 20건만 전달
+                                    summary: {
+                                        avgPrice: data.deals.length > 0 ? 
+                                            Math.round(data.deals.reduce((sum: number, deal: any) => 
+                                                sum + (deal.deal_amount || 0), 0) / data.deals.length) : null,
+                                        recentPrice: data.deals[0]?.deal_amount || null,
+                                        priceRange: data.deals.length > 0 ? {
+                                            min: Math.min(...data.deals.map((d: any) => d.deal_amount || Infinity)),
+                                            max: Math.max(...data.deals.map((d: any) => d.deal_amount || 0))
+                                        } : null
+                                    }
+                                } : null,
+                                // 건물 정보
+                                buildingInfo: data.building ? {
+                                    recap_info: data.building.recap_info,
+                                    title_infos: data.building.title_infos,
+                                    total_count: data.building.total_count
+                                } : null,
+                                // 전용면적 정보
+                                areasInfo: data.areas && Array.isArray(data.areas) ? {
+                                    areas: data.areas,
+                                    count: data.areas.length
+                                } : null
+                            };
+                        }
+                        return acc;
+                    }, {} as Record<string, any>),
                     memoData: currentSession.contextData?.memoContent ? {
                         content: currentSession.contextData.memoContent,
                         createdAt: new Date().toISOString()
@@ -471,10 +950,7 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
             // Firebase에 어시스턴트 메시지 저장
             await chatbotService.addMessage(user.uid, currentSession.id, assistantMessage);
 
-            // 메시지 전송 후 첨부 정보 제거
-            if (attachedApartment) {
-                setAttachedApartment(null);
-            }
+            // 메시지 전송 후 첨부 정보 제거 (별도 박스 표시하지 않으므로 항상 해제)
             if (attachedImages.length > 0) {
                 // 메모리 해제
                 attachedImages.forEach(img => URL.revokeObjectURL(img.preview));
@@ -532,6 +1008,61 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
             minute: '2-digit'
         });
     };
+
+    // @아파트명을 클릭 가능한 HTML로 변환
+    const processApartmentMentions = (content: string): string => {
+        return content.replace(/@([가-힣\w]+)/g, (match, aptName) => {
+            const status = apartmentDataStatus[aptName];
+            const fullData = apartmentFullData[aptName];
+            const isLoading = status?.isLoading;
+            const hasFullData = status?.hasFullData;
+            const loadingSteps = status?.loadingSteps;
+            
+            // 상태에 따른 스타일 결정
+            let className = 'apt-mention inline-flex items-center gap-1 px-2 py-1 text-sm font-medium rounded-full border cursor-pointer transition-all duration-200 select-none';
+            let emoji = '🏠';
+            let statusText = '';
+            let dataTypes: string[] = [];
+            
+            if (isLoading) {
+                // 로딩 단계별 표시
+                const completedSteps = Object.values(loadingSteps || {}).filter(Boolean).length;
+                const totalSteps = 7; // basic, nearby, pnu, landuse, deals, building, areas
+                
+                className += ' bg-yellow-100 text-yellow-800 border-yellow-300 animate-pulse';
+                emoji = '🔄';
+                statusText = ` 로딩중... (${completedSteps}/${totalSteps})`;
+            } else if (hasFullData && fullData) {
+                // 로딩된 데이터 유형에 따른 표시
+                if (fullData.nearby) dataTypes.push('주변정보');
+                if (fullData.pnu) dataTypes.push('PNU');
+                if (fullData.landuse) dataTypes.push('용도지역');
+                if (fullData.deals) dataTypes.push('실거래가');
+                if (fullData.building) dataTypes.push('건물정보');
+                if (fullData.areas) dataTypes.push('면적정보');
+                
+                className += ' bg-green-100 text-green-800 border-green-300 hover:bg-green-200';
+                emoji = '🏢';
+                statusText = ` ✅ (${dataTypes.length}개 데이터)`;
+            } else {
+                className += ' bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200';
+            }
+            
+            return `<span class="${className}" data-apt-name="${aptName}" onclick="handleApartmentClick('${aptName}')" title="${dataTypes?.join(', ') || '클릭하여 데이터 로딩'}">${emoji} ${match}${statusText}</span>`;
+        });
+    };
+
+    // 전역 함수로 아파트 클릭 핸들러 등록
+    useEffect(() => {
+        (window as any).handleApartmentClick = (aptName: string) => {
+            console.log(`🏢 아파트 블록 클릭: ${aptName}`);
+            loadApartmentFullData(aptName);
+        };
+        
+        return () => {
+            delete (window as any).handleApartmentClick;
+        };
+    }, []);
 
     if (!user) return null;
 
@@ -779,11 +1310,13 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
                                                                     )
                                                                 }}
                                                             >
-                                                                {message.content}
+                                                                {processApartmentMentions(message.content)}
                                                             </ReactMarkdown>
                                                         </div>
                                                     ) : (
-                                                        <div className="whitespace-pre-wrap">{message.content}</div>
+                                                        <div className="whitespace-pre-wrap">
+                                                            <span dangerouslySetInnerHTML={{ __html: processApartmentMentions(message.content) }} />
+                                                        </div>
                                                     )}
                                                 </div>
                                                 <div className={`text-xs mt-1 opacity-70 ${message.role === 'user' ? 'text-white' : 'text-gray-500'
@@ -813,24 +1346,6 @@ export default function ChatbotSidebar({ contextData }: ChatbotSidebarProps) {
 
                         {/* 입력 영역 */}
                         <div className="p-3 border-t border-gray-200 bg-white rounded-b-xl">
-                            {/* 첨부된 아파트 표시 */}
-                            {attachedApartment && (
-                                <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                            <span className="text-xs font-medium text-blue-800">@{attachedApartment.name}</span>
-                                        </div>
-                                        <button
-                                            onClick={removeAttachedApartment}
-                                            className="text-blue-400 hover:text-blue-600 p-1 text-xs"
-                                            title="아파트 첨부 해제"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* 첨부된 이미지들 표시 */}
                             {attachedImages.length > 0 && (

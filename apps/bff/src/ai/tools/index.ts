@@ -33,6 +33,12 @@ import { generateSelectQuerySchema } from '../schemas/database/generateSelectQue
 import { executeQuerySchema } from '../schemas/database/executeQuery.schema';
 import { displayOnMapSchema } from '../schemas/visualization/displayOnMap.schema';
 
+// 메모 시스템 스키마 import
+import { getUserMemosSchema } from '../schemas/memo/getUserMemos.schema';
+
+// 카카오 API 스키마 import
+import { searchPlacesSchema } from '../schemas/kakao/searchPlaces.schema';
+
 // 모든 스키마를 OpenAI Tool 형식으로 변환
 const createTool = (schema: any): OpenAITool => ({
   type: "function",
@@ -70,7 +76,13 @@ export const tools: OpenAITool[] = [
   // 신규 RAG + Function Calling 통합 함수들
   createTool(generateSelectQuerySchema),
   createTool(executeQuerySchema),
-  createTool(displayOnMapSchema)
+  createTool(displayOnMapSchema),
+  
+  // 메모 시스템 함수들
+  createTool(getUserMemosSchema),
+  
+  // 카카오 API 함수들
+  createTool(searchPlacesSchema)
 ];
 
 // 중복 이름 검사

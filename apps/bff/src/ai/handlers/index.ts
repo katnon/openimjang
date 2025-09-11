@@ -13,6 +13,12 @@ export { getPriceTrends } from './getPriceTrends';
 export { getDealStatsSummary } from './getDealStatsSummary';
 export { getDealDistribution } from './getDealDistribution';
 
+// 메모 시스템 함수 핸들러들
+export { getUserMemos } from './memo/getUserMemos';
+
+// 카카오 API 함수 핸들러들
+export { searchPlaces } from './kakao/searchPlaces';
+
 // 핸들러 맵
 import { ToolHandlers } from '../tools/types';
 
@@ -110,5 +116,17 @@ export const handlers: ToolHandlers = {
   displayOnMap: async (args) => {
     const { displayOnMap } = await import('./visualization/displayOnMap');
     return displayOnMap(args);
+  },
+  
+  // 메모 시스템 함수들
+  getUserMemos: async (args) => {
+    const { getUserMemos } = await import('./memo/getUserMemos');
+    return getUserMemos(args);
+  },
+  
+  // 카카오 API 함수들
+  searchPlaces: async (args) => {
+    const { searchPlaces } = await import('./kakao/searchPlaces');
+    return searchPlaces(args);
   }
 };

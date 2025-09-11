@@ -16,6 +16,8 @@ import aiAskRoute from './routes/aiAsk';
 import aiHybridRoute from './routes/aiHybrid';
 import embeddingRoute from './routes/embedding';
 import swaggerRoute from './routes/swagger';
+import { memoRoute } from './routes/memo';
+import apartmentFullDataRoute from './routes/apartmentFullData';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -41,6 +43,8 @@ app.route('/api/ai', aiAskRoute);       // 🆕 RAG 기반 질의응답 라우�
 app.route('/api/ai', aiHybridRoute);    // 🆕 하이브리드 RAG+Functions 라우터
 app.route('/api/embedding', embeddingRoute); // 🆕 임베딩 관리 라우터
 app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터
+app.route('/api/memo', memoRoute);    // 🆕 Firebase 메모 시스템 라우터
+// app.route('/api/apartment', apartmentFullDataRoute); // 🆕 아파트 전체 정보 일괄 조회 라우터
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
 

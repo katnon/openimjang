@@ -6,6 +6,7 @@ import { slotMiddleware, getSlotStatus, deleteSession } from '../middleware/sess
 import { tools as functionTools } from '../ai/tools';
 import { handlers as functionHandlers } from '../ai/handlers';
 import { validateSchema } from '../ai/tools/validation';
+import { processAIResponse } from '../ai/processors/responseProcessor';
 
 // 플래너 시스템 import
 import { 
@@ -33,13 +34,17 @@ aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
-        console.log('🔍 챗봇 요청:', { message: message?.slice(0, 100) + '...' });
+        console.log('🔍 챗봇 요청:', { 
+            message: message?.slice(0, 100) + '...',
+            extractedApartments: context?.extractedApartments?.length || 0
+        });
 
-        // 1) 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 + 슬롯 정보 포함)
+        // 1) 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 + 슬롯 정보 + 추출된 아파트 정보 포함)
         const systemPrompt = createPersonalizedSystemPrompt(
             context?.userProfile || c.session?.userProfile, 
             context?.messages || c.session?.messageHistory,
-            c.slots
+            c.slots,
+            context?.extractedApartments // @아파트명들 전달
         );
         const messages: any[] = [
             { 
@@ -139,10 +144,7 @@ aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
                     toolResultsMessages.push({
                         role: 'tool',
                         tool_call_id: call.id,
-                        content: JSON.stringify({ 
-                            success: true, 
-                            data: result 
-                        })
+                        content: JSON.stringify(result)
                     });
 
                 } catch (err: any) {
@@ -177,12 +179,38 @@ aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
             });
         }
 
-        // 4) 최종 답변 반환
+        // 4) 최종 답변 처리 및 스마트 링크 생성
         const finalMsg = resp.choices?.[0]?.message?.content ?? '죄송합니다. 답변을 생성하지 못했습니다.';
+        
+        // 스마트 링크 처리
+        let processedResponse;
+        try {
+            processedResponse = await processAIResponse(finalMsg);
+            console.log('🔗 스마트 링크 생성 완료:', {
+                entitiesCount: processedResponse.detectedEntities.length,
+                processingTime: processedResponse.metadata.processingTime
+            });
+        } catch (error: any) {
+            console.error('❌ 스마트 링크 처리 실패:', error);
+            // 실패 시 원본 텍스트 사용
+            processedResponse = {
+                htmlContent: finalMsg,
+                detectedEntities: [],
+                metadata: {
+                    originalLength: finalMsg.length,
+                    processedLength: finalMsg.length,
+                    entitiesCount: 0,
+                    processingTime: 0
+                }
+            };
+        }
         
         return c.json({ 
             success: true, 
-            reply: finalMsg,
+            reply: processedResponse.htmlContent,
+            originalReply: finalMsg,
+            detectedEntities: processedResponse.detectedEntities,
+            linkMetadata: processedResponse.metadata,
             toolCallsCount: guard
         });
 
@@ -196,9 +224,9 @@ aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
 });
 
 /**
- * 사용자 프로필, 대화 기록, 슬롯 정보를 기반으로 개인화된 시스템 프롬프트를 생성합니다
+ * 사용자 프로필, 대화 기록, 슬롯 정보, 추출된 아파트 정보를 기반으로 개인화된 시스템 프롬프트를 생성합니다
  */
-function createPersonalizedSystemPrompt(userProfile: any, recentMessages?: any[], currentSlots?: any): string {
+function createPersonalizedSystemPrompt(userProfile: any, recentMessages?: any[], currentSlots?: any, extractedApartments?: Array<{name: string; id?: number; address?: string; lat?: number; lon?: number}>): string {
     let basePrompt = `당신은 OpenImjang 부동산 임장 분석 전문 AI 어시스턴트입니다.
 
 **역할과 목표:**
@@ -329,6 +357,42 @@ function createPersonalizedSystemPrompt(userProfile: any, recentMessages?: any[]
         basePrompt += slotContext;
     }
 
+    // 추출된 아파트 정보가 있는 경우 컨텍스트 추가
+    if (extractedApartments && extractedApartments.length > 0) {
+        console.log('🏠 추출된 아파트 정보 기반 컨텍스트 추가:', extractedApartments.map(a => a.name).join(', '));
+        
+        let apartmentContext = `
+
+📍 **현재 언급된 아파트 정보 - 사용자가 @로 언급한 아파트들입니다:**`;
+
+        extractedApartments.forEach((apt, index) => {
+            apartmentContext += `
+- **아파트 ${index + 1}**: ${apt.name}`;
+            if (apt.address) {
+                apartmentContext += ` (${apt.address})`;
+            }
+            if (apt.id) {
+                apartmentContext += ` [ID: ${apt.id}]`;
+            }
+        });
+
+        apartmentContext += `
+
+**@아파트명 처리 지침:**
+- 사용자가 @아파트명을 언급했다면 해당 아파트에 대한 상세 정보를 우선 제공하세요
+- 복수의 아파트가 언급된 경우 모든 아파트에 대해 비교 분석을 제공하세요
+- 실거래가 검색 시 언급된 아파트명을 그대로 사용하세요
+
+**주변정보 문의 대응:**
+- 사용자가 아파트 주변시설을 물어보면 ALWAYS searchNearbyPOI 함수를 호출하세요
+- 슬롯에 apartmentMetadata가 있다면 contextAptData 파라미터로 전달하세요
+- POI 검색 시 contextAptData 형식: {lat: 위도, lon: 경도, name: 아파트명, address: 주소}
+- POI 검색 결과는 반드시 상세하고 구체적으로 설명하여 사용자에게 유용한 정보를 제공하세요
+- "주변에 뭐가 있나요?", "편의시설은?", "교통은?" 등의 질문에 적극적으로 POI 검색을 활용하세요`;
+
+        basePrompt += apartmentContext;
+    }
+
     // 대화 기록이 있는 경우 컨텍스트 추가
     if (recentMessages && recentMessages.length > 0) {
         console.log('🗨️ 대화 기록 기반 컨텍스트 추가:', recentMessages.length + '개 메시지');
@@ -356,6 +420,17 @@ function createSlotContext(slots: any): string {
 - **현재 아파트**: ${slots.apartmentName}`;
         if (slots.complexNumber) {
             slotContext += ` ${slots.complexNumber}`;
+        }
+        
+        // 메타데이터 정보 추가
+        if (slots.apartmentMetadata) {
+            const metadata = slots.apartmentMetadata;
+            if (metadata.lat && metadata.lon) {
+                slotContext += ` (좌표: ${metadata.lat}, ${metadata.lon})`;
+            }
+            if (metadata.address) {
+                slotContext += ` [주소: ${metadata.address}]`;
+            }
         }
     }
 
@@ -390,6 +465,25 @@ function createSlotContext(slots: any): string {
         slotContext += `
 - **기간**: ${slots.period}`;
     }
+    
+    // 히든 슬롯 데이터 표시
+    if (slots.realEstateDeals && slots.realEstateDeals.deals.length > 0) {
+        const dealsInfo = slots.realEstateDeals;
+        slotContext += `
+- **실거래가 데이터**: ${dealsInfo.deals.length}건 (${dealsInfo.params.period}, ${dealsInfo.params.dealTypes.join('/')})`;
+    }
+    
+    if (slots.buildingLandInfo) {
+        const buildingInfo = slots.buildingLandInfo;
+        slotContext += `
+- **건물/토지 정보**: 로드됨 (건물 ${buildingInfo.buildingInfo?.title_infos?.length || 0}개, 용도지역 ${buildingInfo.landuseInfo?.landuse_zones?.length || 0}개)`;
+    }
+    
+    if (slots.poiInfo && slots.poiInfo.pois.length > 0) {
+        const poiInfo = slots.poiInfo;
+        slotContext += `
+- **주변 편의시설**: ${poiInfo.totalCount}개 (${poiInfo.searchConditions.radius}m 반경)`;
+    }
 
     slotContext += `
 
@@ -400,7 +494,18 @@ function createSlotContext(slots: any): string {
 4. "그 크기", "같은 면적" → ${slots.area ? slots.area + '㎡' : '(면적 정보 없음)'}
 5. 사용자가 불완전한 정보를 제공하면 위 슬롯 정보로 자동 보완하여 함수 호출
 
-**중요**: 사용자가 "그 아파트"나 "거기" 등의 지시어를 사용하면, 반드시 위 슬롯 정보를 참조하여 구체적인 값으로 치환한 후 함수를 호출하세요.`;
+**중요**: 사용자가 "그 아파트"나 "거기" 등의 지시어를 사용하면, 반드시 위 슬롯 정보를 참조하여 구체적인 값으로 치환한 후 함수를 호출하세요.
+
+**POI 검색 시 슬롯 활용 가이드:**
+- 아파트 메타데이터가 있으면 contextAptData로 전달: {lat: ${slots.apartmentMetadata?.lat || 'null'}, lon: ${slots.apartmentMetadata?.lon || 'null'}, name: "${slots.apartmentName || ''}", address: "${slots.apartmentMetadata?.address || ''}"}
+- 슬롯의 좌표 정보를 최우선으로 활용하여 정확한 위치 기반 POI 검색 수행
+
+**히든 슬롯 데이터 활용 가이드:**
+- realEstateDeals가 있으면 실거래가 질문에 즉시 응답 (Function Call 대신 슬롯 데이터 활용)
+- buildingLandInfo가 있으면 건물/토지 정보 질문에 즉시 응답 
+- poiInfo가 있으면 주변 편의시설 질문에 즉시 응답
+- 슬롯 데이터가 최신인지 확인 (loadedAt 필드 참고)
+- 슬롯 데이터가 있으면 "이미 로드된 정보를 바탕으로" 라고 명시하여 응답`;
 
     return slotContext;
 }

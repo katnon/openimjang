@@ -590,3 +590,71 @@ searchRoute.get("/building-info/:aptId", async (c) => {
         return c.json({ error: "건물 정보 조회 중 오류가 발생했습니다." }, 500);
     }
 });
+
+/**
+ * 카카오 장소 검색 API (스마트 링크용)
+ * GET /api/search/location?q=검색어&type=타입
+ */
+searchRoute.get('/location', async (c) => {
+    try {
+        const query = c.req.query('q');
+        const type = c.req.query('type') || '';
+        
+        if (!query) {
+            return c.json({
+                success: false,
+                error: '검색어가 필요합니다.'
+            }, 400);
+        }
+
+        console.log('🔍 카카오 장소 검색 (스마트 링크):', { query, type });
+
+        // 카카오 REST API 키 확인
+        const kakaoApiKey = process.env.KAKAO_REST_KEY;
+        if (!kakaoApiKey) {
+            console.error('❌ KAKAO_REST_KEY 환경변수가 설정되지 않았습니다.');
+            return c.json({
+                success: false,
+                error: '카카오 API 키가 설정되지 않았습니다.'
+            }, 500);
+        }
+
+        // 카카오 장소 검색 API 호출
+        const response = await fetch(
+            `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5`,
+            {
+                headers: {
+                    'Authorization': `KakaoAK ${kakaoApiKey}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`카카오 API 응답 오류: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        console.log('✅ 카카오 장소 검색 결과:', {
+            query,
+            resultCount: data.documents?.length || 0
+        });
+
+        return c.json({
+            success: true,
+            results: data.documents || [],
+            meta: data.meta || {}
+        });
+
+    } catch (error: any) {
+        console.error('❌ 장소 검색 오류:', error);
+        return c.json({
+            success: false,
+            error: error.message || '장소 검색 중 오류가 발생했습니다.'
+        }, 500);
+    }
+});
+
+// @아파트명 블록 클릭 시에는 기본 검색 API (/api/search?q=아파트명)를 사용합니다
+
+// @아파트명 블록은 일반 검색과 동일하게 처리됩니다

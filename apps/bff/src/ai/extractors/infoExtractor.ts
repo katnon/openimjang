@@ -78,7 +78,28 @@ export function extractSlotsFromMessage(message: string): ExtractionResult {
     overallConfidence += priceRangeResult.confidence;
   }
 
-  // 8. 참조 표현 감지
+  // 8. @멘션 아파트 추출
+  const mentionResult = extractMentionedApartments(message);
+  if (mentionResult.apartments.length > 0) {
+    // 첫 번째 멘션을 기본 아파트로 설정
+    const firstMention = mentionResult.apartments[0];
+    slots.apartmentName = firstMention.name;
+    fieldConfidence.apartmentName = 0.95; // @멘션은 매우 높은 신뢰도
+    
+    // 메타데이터가 있으면 함께 저장
+    if (firstMention.metadata) {
+      slots.apartmentMetadata = {
+        ...firstMention.metadata,
+        extractedAt: new Date()
+      };
+      fieldConfidence.apartmentMetadata = 0.98;
+    }
+    
+    extractedFields++;
+    overallConfidence += 0.95;
+  }
+
+  // 9. 참조 표현 감지
   const referenceMatches = detectReferences(message);
   references.push(...referenceMatches);
 
@@ -344,6 +365,31 @@ export function extractNumbers(text: string): number[] {
   const numberPattern = /\b\d+(?:\.\d+)?\b/g;
   const matches = text.match(numberPattern);
   return matches ? matches.map(Number) : [];
+}
+
+/**
+ * @멘션된 아파트들을 추출합니다. (메타데이터는 별도로 처리)
+ */
+function extractMentionedApartments(message: string): { 
+  apartments: Array<{
+    name: string; 
+    metadata?: any;
+  }>;
+} {
+  const apartments: Array<{name: string; metadata?: any}> = [];
+  
+  // @아파트명 패턴 매칭
+  const mentionPattern = /@([가-힣\w]+)/g;
+  const matches = Array.from(message.matchAll(mentionPattern));
+  
+  for (const match of matches) {
+    const apartmentName = match[1];
+    apartments.push({
+      name: apartmentName
+    });
+  }
+  
+  return { apartments };
 }
 
 /**

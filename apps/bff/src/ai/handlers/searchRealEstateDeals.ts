@@ -3,6 +3,7 @@ import { findBestApartmentMatch, generateSmartQuestion, normalizeApartmentName }
 
 interface SearchRealEstateDealsParams {
   apartmentName?: string;                  // "마곡엠밸리", "신당 현대" 등
+  aptId?: number;                          // 아파트 ID (우선순위)
   region?: string;                         // "강서구", "신당동" 등
   dealType?: '매매' | '전세' | '월세' | '전체';
   period?: string;                         // "3개월" 등
@@ -19,6 +20,7 @@ interface SearchRealEstateDealsParams {
 export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): Promise<any> {
   const {
     apartmentName,
+    aptId,
     region,
     dealType = '매매',
     period,
@@ -31,18 +33,25 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
 
   try {
     console.log('🔍 실거래가 검색 (RAG 오케스트레이션):', { 
-      apartmentName, region, dealType, period, area, areaRange, priceRange, limit 
+      apartmentName, aptId, region, dealType, period, area, areaRange, priceRange, limit 
     });
 
-    // 1️⃣ 아파트명 정규화 (있는 경우만)
+    // 1️⃣ 아파트 식별: ID가 있으면 우선 사용, 없으면 이름으로 정규화
     let finalApartmentName = apartmentName;
+    let finalAptId = aptId;
     let searchHints: string[] = [];
     
-    if (apartmentName) {
+    if (aptId) {
+      // ID가 있으면 우선 사용 (메타데이터에서 전달된 경우)
+      searchHints.push(`apartment_id: ${aptId}`);
+      console.log('✅ 아파트 ID 사용:', aptId, apartmentName);
+    } else if (apartmentName) {
+      // ID가 없으면 이름으로 정규화
       const normalizedApt = await findBestApartmentMatch(apartmentName, region);
       
       if (normalizedApt) {
         finalApartmentName = normalizedApt.aptName;
+        finalAptId = normalizedApt.aptId;
         searchHints.push(`apartment_id: ${normalizedApt.aptId}`);
         console.log('✅ 아파트명 정규화 성공:', {
           입력: apartmentName,
@@ -61,6 +70,19 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
         }
         console.log('⚠️ 아파트명 정규화 실패, 원본 이름 사용:', apartmentName);
       }
+    } else if (!aptId && !apartmentName) {
+      // 아파트 ID나 이름 둘 다 없는 경우
+      return {
+        success: false,
+        error: '아파트 이름이나 ID가 필요합니다. 먼저 @아파트명을 멘션하거나 구체적인 아파트명을 제공해주세요.',
+        dataSchema: {
+          apartmentName: '아파트 이름',
+          aptId: '아파트 ID (선택사항)',
+          dealType: '거래 유형 (매매/전세/월세)',
+          period: '검색 기간 (3개월/6개월/1년 등)',
+          note: 'apartmentName 또는 aptId 중 하나는 반드시 필요'
+        }
+      };
     }
 
     const conds: string[] = [];
