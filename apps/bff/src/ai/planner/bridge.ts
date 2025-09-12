@@ -67,33 +67,95 @@ export class POISearchBridge implements ActionHandler {
     const { radius, categories } = action.parameters || {};
 
     try {
-      // searchNearbyPOI 함수가 있다고 가정하고 호출
-      // 실제 함수가 없으면 스켈레톤으로 처리
-      if (typeof searchNearbyPOI === 'function') {
-        const params = {
-          apartmentName: slots.apartmentName,
-          region: slots.region,
-          radius: radius || 1000,
-          categories: categories || ['subway', 'bus', 'school', 'hospital', 'mart']
-        };
+      // 아파트 좌표가 슬롯에 있는지 확인
+      let lat, lng;
+      
+      if (slots.apartmentMetadata?.lat && slots.apartmentMetadata?.lon) {
+        lat = slots.apartmentMetadata.lat;
+        lng = slots.apartmentMetadata.lon;
+      } else if (slots.apartmentMetadata?.lng) {
+        // lng/lon 둘 다 체크
+        lat = slots.apartmentMetadata.lat;
+        lng = slots.apartmentMetadata.lng;
+      } else if (slots.coordinates) {
+        lat = slots.coordinates.lat;
+        lng = slots.coordinates.lng;
+      } else if (slots.apartmentName) {
+        // 데이터베이스에서 좌표 조회
+        console.log('🔍 [Bridge] 데이터베이스에서 좌표 조회 시도:', slots.apartmentName);
+        try {
+          const { db } = await import('../../lib/db');
+          const result = await db
+            .selectFrom('oi.apt_info')
+            .select(['lat', 'lon', 'apt_nm'])
+            .where('apt_nm', 'ilike', `%${slots.apartmentName}%`)
+            .limit(1)
+            .execute();
 
-        console.log('📍 기존 함수 호출: searchNearbyPOI', params);
-        const result = await searchNearbyPOI(params);
-
-        return {
-          ...result,
-          source: 'existing_function',
-          functionName: 'searchNearbyPOI'
-        };
+          if (result && result.length > 0) {
+            lat = result[0].lat;
+            lng = result[0].lon;
+            console.log('✅ [Bridge] 데이터베이스에서 좌표 획득:', { apt_nm: result[0].apt_nm, lat, lng });
+            
+            // 슬롯에도 저장 (다음 검색 시 재사용)
+            slots.coordinates = { lat, lng };
+            if (slots.apartmentMetadata) {
+              slots.apartmentMetadata.lat = lat;
+              slots.apartmentMetadata.lon = lng;
+            }
+          } else {
+            console.log('❌ [Bridge] 데이터베이스에서 좌표를 찾을 수 없음:', slots.apartmentName);
+            return {
+              success: false,
+              pois: [],
+              categories: categories || [],
+              radius: radius || 1000,
+              error: `${slots.apartmentName} 아파트의 위치 정보를 찾을 수 없습니다`
+            };
+          }
+        } catch (dbError: any) {
+          console.error('❌ [Bridge] 좌표 데이터베이스 조회 오류:', dbError);
+          return {
+            success: false,
+            pois: [],
+            categories: categories || [],
+            radius: radius || 1000,
+            error: '위치 정보 조회 중 오류가 발생했습니다'
+          };
+        }
       } else {
-        // 함수가 없으면 스켈레톤 반환
+        console.log('❌ 좌표 정보가 없어 POI 검색 불가');
         return {
-          success: true,
+          success: false,
           pois: [],
-          message: 'POI 검색 기능이 아직 구현되지 않았습니다.',
-          source: 'skeleton'
+          categories: categories || [],
+          radius: radius || 1000,
+          error: '아파트 위치 정보가 필요합니다'
         };
       }
+
+      // searchNearbyPOI 함수의 올바른 파라미터 형식
+      const params = {
+        lat,
+        lng,
+        radius: radius || 1000,
+        poiType: '전체' // 전체 타입으로 검색
+      };
+
+      console.log('📍 POI 브리지 함수 호출: searchNearbyPOI', params);
+      const result = await searchNearbyPOI(params);
+
+      console.log('📍 POI 브리지 검색 결과:', {
+        success: result.success,
+        poiCount: result.pois?.length || 0,
+        totalCount: result.totalCount || 0
+      });
+
+      return {
+        ...result,
+        source: 'bridge_function',
+        functionName: 'searchNearbyPOI'
+      };
 
     } catch (error: any) {
       console.error('❌ POI 검색 브리지 오류:', error);

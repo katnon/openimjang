@@ -2,6 +2,7 @@
 // 세션 기반 슬롯 저장 및 관리 미들웨어
 
 import { Context, Next } from 'hono';
+import * as iconv from 'iconv-lite';
 import { 
   UserSession, 
   ConversationSlots, 
@@ -144,20 +145,106 @@ export function createSlotMiddleware(config: Partial<SlotMiddlewareConfig> = {})
     try {
       // 인증된 사용자만 처리 (user 정보는 authMiddleware에서 설정)
       // 테스트 환경에서는 임시 사용자 ID 사용
-      let userId = c.user?.uid;
-      if (!userId) {
-        // 테스트용 임시 사용자 ID
-        userId = 'test-user-' + Date.now().toString().slice(-6);
-        if (finalConfig.debugMode) {
-          console.log('⚠️ 슬롯 미들웨어: 테스트용 사용자 ID 생성:', userId);
-        }
-      }
+      
+      // 🔧 강제로 고정 사용자 ID 사용 (세션 메모리 문제 해결)
+      const userId = 'test-user-default';
+      console.log('⚠️ 슬롯 미들웨어: 강제 고정 사용자 ID 사용:', userId);
       
       // 요청에서 메시지와 세션 정보 추출
-      const body = await c.req.json().catch(() => ({}));
-      const message = body.message as string;
+      let body: any = {};
+      let message = '';
+      
+      try {
+        // 🌟 근본적 해결: 원본 바이너리 데이터부터 올바르게 처리
+        
+        // Step 1: 원본 ArrayBuffer 받기
+        const rawBuffer = await c.req.arrayBuffer();
+        console.log('📡 원본 데이터 크기:', rawBuffer.byteLength, 'bytes');
+        
+        const uint8Array = new Uint8Array(rawBuffer);
+        console.log('🔍 첫 20바이트 (hex):', Array.from(uint8Array.slice(0, 20))
+          .map(b => b.toString(16).padStart(2, '0')).join(' '));
+        
+        // Step 2: 다양한 인코딩으로 디코딩 시도
+        const encodings = ['utf-8', 'euc-kr', 'cp949', 'iso-8859-1'];
+        let decodedSuccess = false;
+        
+        for (const encoding of encodings) {
+          try {
+            console.log(`🔄 ${encoding} 디코딩 시도...`);
+            
+            let decodedText: string;
+            if (encoding === 'utf-8') {
+              // UTF-8 기본 디코딩
+              decodedText = new TextDecoder('utf-8').decode(uint8Array);
+            } else if (['euc-kr', 'cp949'].includes(encoding)) {
+              // iconv-lite로 한국어 인코딩 처리  
+              decodedText = iconv.decode(Buffer.from(rawBuffer), encoding);
+            } else {
+              // 기타 인코딩
+              decodedText = iconv.decode(Buffer.from(rawBuffer), encoding);
+            }
+            
+            console.log(`📝 ${encoding} 결과:`, {
+              length: decodedText.length,
+              sample: decodedText.substring(0, 50),
+              hasKorean: /[가-힣]/.test(decodedText),
+              hasGarbled: decodedText.includes('�')
+            });
+            
+            // JSON 파싱 시도
+            const testBody = JSON.parse(decodedText);
+            const testMessage = testBody.message as string;
+            
+            // 성공 조건: JSON 파싱 성공 + � 문자 없음 + 한글 포함 OR 영어만
+            const hasNoGarbled = !testMessage.includes('�');
+            const hasKoreanOrValidText = /[가-힣]/.test(testMessage) || /^[a-zA-Z0-9@\s!?.]+$/.test(testMessage);
+            
+            if (testMessage && hasNoGarbled && hasKoreanOrValidText) {
+              console.log(`✅ ${encoding} 디코딩 성공! 메시지: "${testMessage}"`);
+              body = testBody;
+              message = testMessage;
+              decodedSuccess = true;
+              break;
+            }
+          } catch (err) {
+            console.log(`❌ ${encoding} 디코딩 실패:`, (err as Error).message.substring(0, 40));
+          }
+        }
+        
+        if (!decodedSuccess) {
+          console.log('⚠️ 모든 디코딩 실패, 기본 방식으로 폴백');
+          body = await c.req.json();
+          message = body.message as string;
+        }
+        
+        // 처리된 메시지를 다음 미들웨어에 전달
+        c.set('processedMessage', message);
+        
+        if (finalConfig.debugMode && message) {
+          console.log('📝 메시지 파싱 성공:', {
+            message: message,
+            messageLength: message.length,
+            hasAtMention: message.includes('@')
+          });
+        }
+      } catch (parseError) {
+        console.error('❌ JSON 파싱 오류:', parseError);
+        // 기본 방식으로 fallback
+        body = await c.req.json().catch(() => ({}));
+        message = body.message as string;
+      }
       const requestedSessionId = body.sessionId as string;
       const apartmentMetadata = body.context?.apartmentMetadata || {};
+
+      // 디버깅을 위한 message 값 확인
+      console.log('🔍 message 변수 상태:', {
+        message,
+        messageType: typeof message,
+        messageLength: message?.length,
+        isEmpty: !message,
+        bodyMessage: body.message
+      });
 
       if (!message) {
         if (finalConfig.debugMode) {

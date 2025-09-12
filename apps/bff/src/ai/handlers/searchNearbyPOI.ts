@@ -25,13 +25,19 @@ export async function searchNearbyPOI(args: SearchNearbyPOIParams): Promise<any>
   if (!targetLat || !targetLng) {
     return {
       success: false,
-      error: '위치 정보(위도/경도)가 필요합니다.',
+      error: '위치 정보(위도/경도)가 필요합니다. POI 검색은 반드시 아파트의 정확한 좌표를 사용해야 합니다. 아파트명으로 키워드 검색하지 마세요!',
       dataSchema: {
-        name: 'POI 명칭',
-        category: 'POI 분류',
-        address: '주소',
-        distance: '거리 (m)',
-        note: '카카오 Local API 기반 검색 결과'
+        lat: '위도 (필수)',
+        lng: '경도 (필수)',
+        poiType: 'POI 유형 (학교/병원/마트/지하철/전체)',
+        radius: '검색 반경 (m)',
+        note: '아파트 메타데이터의 lat, lng 값을 반드시 사용하세요'
+      },
+      example: {
+        lat: 37.566535,
+        lng: 126.977969,
+        poiType: '전체',
+        radius: 1000
       }
     };
   }

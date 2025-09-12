@@ -33,12 +33,13 @@ graph TB
     end
     
     subgraph "🔒 Middleware Layer"
-        F[Rate Limiter<br/>요청 제한] --> G[Cache System<br/>응답 캐싱]
+        F[Rate Limiter<br/>요청 제한] --> F1[🔥 UTF-8 Encoder<br/>바이너리 레벨 인코딩 처리]
+        F1 --> G[Cache System<br/>응답 캐싱]
         G --> H[Logger<br/>구조화 로깅] --> I[Metrics<br/>성능 수집]
     end
     
     subgraph "Backend Layer (Hono BFF)"
-        J["AI Function Router<br/>20개 모듈형 함수"] --> F
+        J["🔥 AI Planner Router<br/>슬롯 + 플래너 + POI 검색"] --> F
         K["REST API Router<br/>부동산 검색/분석"] --> F  
         L["Swagger Router<br/>API 문서화"] --> F
         M["Monitoring Router<br/>시스템 모니터링"] --> F
@@ -46,6 +47,7 @@ graph TB
         J --> N[OpenAI GPT-4o-mini<br/>Function Calling]
         K --> O[Kysely ORM<br/>타입 안전 SQL]
         J --> P[Repository Pattern<br/>데이터 추상화]
+        J --> J1[🔥 Session Slots<br/>메모리 관리 + @mention]
     end
     
     subgraph "🗄️ Data Layer"
@@ -62,6 +64,7 @@ graph TB
         Y[국토부 RTMS API<br/>실거래가 수집] --> P
         Z[VWorld API<br/>지리정보 서비스] --> P
         AA[카카오 Maps API<br/>지도/장소 검색] --> A
+        AA1[🔥 카카오 Local API<br/>POI 검색 (지하철/마트/병원)] --> J
         BB[건축물대장 API<br/>건물 상세정보] --> P
         CC[공공데이터포털<br/>법정동 코드] --> P
     end
@@ -139,6 +142,7 @@ graph TB
 - ❌ AI가 이전 대화 맥락을 기억하지 못함  
 - ❌ 부정확한 검색 결과에 대한 검증 부족
 - ❌ 애매한 질문에 대한 체계적 대응 부족
+- ❌ UTF-8 인코딩 문제로 한글 @mention 인식 실패
 
 **v2.0 개선사항:**
 - ✅ **세션 기반 메모리**: 한 번 입력한 정보는 계속 기억
@@ -146,7 +150,13 @@ graph TB
 - ✅ **품질 검증 시스템**: 결과의 신뢰성을 자동 검증
 - ✅ **재시도 메커니즘**: 실패 시 조건을 완화하여 자동 재검색
 
-## 📁 AI 시스템 파일 구조 (v2.0 업데이트)
+**v2.1 최신 개선사항 (2024-12):**
+- 🔥 **UTF-8 인코딩 문제 근본 해결**: 바이너리 레벨 다중 인코딩 감지로 한글 깨짐 현상 완전 해결
+- 🔥 **@mention POI 검색 완전 구현**: "@마곡엠밸리 주변정보" → 실제 카카오 API 데이터 조회 및 응답
+- 🔥 **데이터베이스 자동 좌표 조회**: 아파트명만으로도 PostgreSQL에서 자동 좌표 획득
+- 🔥 **실시간 데이터 기반 응답**: Generic 응답에서 "지하철역 5곳, 대형마트 7곳" 등 구체적 데이터 응답으로 전환
+
+## 📁 AI 시스템 파일 구조 (v2.1 업데이트)
 
 ```
 apps/bff/src/ai/
@@ -159,7 +169,8 @@ apps/bff/src/ai/
 ├── 📋 planner/                      # Phase 2: 계획 시스템  
 │   ├── types.ts                     # PlanAction, PlanContext, ExecutionPlan 정의
 │   ├── actionPlanner.ts             # 액션 계획 수립 엔진
-│   ├── executor.ts                  # 액션 실행기 + Critic 통합
+│   ├── executor.ts                  # 🆕 액션 실행기 + 데이터베이스 좌표 자동 조회
+│   ├── bridge.ts                    # 🆕 기존 함수와 플래너 연결 브리지 (POI 검색 등)
 │   └── dependencyResolver.ts        # 의존성 그래프 해결
 │
 ├── ❓ clarify/                      # Phase 3: 명확화 시스템
@@ -174,11 +185,31 @@ apps/bff/src/ai/
 │   ├── checklist.ts                 # 메인 체크리스트 엔진
 │   └── rules.ts                     # 5가지 검증 규칙 (결과없음/부족/이상치/모순/컨텍스트)
 │
+├── 🔤 extractors/                   # 🆕 데이터 추출 시스템 
+│   └── infoExtractor.ts             # @mention 추출 및 아파트명 파싱 (UTF-8 대응)
+│
+├── 🔗 resolvers/                    # 🆕 참조 해결 시스템
+│   └── referenceResolver.ts         # 대화 히스토리 기반 참조 해결
+│
+├── 🔧 types/                        # 🆕 슬롯 시스템 타입
+│   └── slots.ts                     # SessionStorage, ConversationSlots, 세션 관리 타입
+│
 └── 🏠 handlers/                     # 기존 Function Calling 핸들러
     ├── searchRealEstateDeals.ts     # 부동산 검색 (새 시스템과 브릿지)
+    ├── searchNearbyPOI.ts           # 🔥 POI 검색 (카카오 API 완전 통합)
     ├── database/
     │   └── normalizeApartmentName.ts # 아파트명 정규화 (Clarify와 연동)
     └── ...기타 20개 함수들
+```
+
+### 🆕 v2.1 추가 컴포넌트
+
+```
+apps/bff/src/middleware/
+└── sessionSlots.ts                   # 🔥 UTF-8 인코딩 해결 + 세션 슬롯 관리 미들웨어
+
+apps/bff/src/lib/
+└── db.ts                            # PostgreSQL 연결 (좌표 자동 조회용)
 ```
 
 ### 🔗 시스템 통합 포인트
@@ -195,6 +226,46 @@ apps/bff/src/ai/
 3. **Function Bridge**: `executor.ts` 핸들러들
    - 기존 20개 함수들을 새로운 액션 시스템으로 래핑
    - Critic 검증 결과에 따른 재시도 로직
+
+4. **🆕 Encoding Bridge**: `sessionSlots.ts` 미들웨어
+   - 바이너리 레벨 UTF-8/EUC-KR/CP949 다중 인코딩 감지
+   - ArrayBuffer → 인코딩 탐지 → JSON 파싱 → 슬롯 추출
+   - "@마곡엠밸리 주변정보" 같은 한글 @mention 완전 지원
+
+### 🔥 UTF-8 인코딩 문제 해결 상세
+
+**기존 문제:**
+```typescript
+// ❌ 기존 방식: 이미 깨진 상태로 파싱됨
+body = await c.req.json(); 
+// 결과: "@마곡엠밸리" → "@�Ｚ �ֺ�����"
+```
+
+**해결 방법:**
+```typescript
+// ✅ 새로운 방식: 바이너리부터 올바르게 처리
+const rawBuffer = await c.req.arrayBuffer();
+const uint8Array = new Uint8Array(rawBuffer);
+
+// 다중 인코딩 시도 (UTF-8, EUC-KR, CP949)
+for (const encoding of ['utf-8', 'euc-kr', 'cp949']) {
+  const decodedText = encoding === 'utf-8' 
+    ? new TextDecoder('utf-8').decode(uint8Array)
+    : iconv.decode(Buffer.from(rawBuffer), encoding);
+    
+  // 검증: � 문자 없음 + 한글 포함
+  if (!decodedText.includes('�') && /[가-힣]/.test(decodedText)) {
+    body = JSON.parse(decodedText);
+    break;
+  }
+}
+```
+
+**결과:**
+- 입력: `"@마곡엠밸리 주변정보"`
+- 서버 수신: `"@마곡엠밸리 주변정보"` (완벽!)
+- 슬롯 추출: `apartmentName: "마곡엠밸리"` ✅
+- POI 검색: `지하철역 5곳, 대형마트 7곳, 병원 15곳, 학교 8곳` ✅
 
 ### 🧪 테스트 시스템
 
@@ -877,26 +948,32 @@ GET /api/docs/validate              // 문서 스펙 검증 (개발환경만)
 
 ## 🎯 핵심 기능
 
-### 🤖 AI 임장 도우미 - 차세대 모듈형 Function Calling 시스템
+### 🤖 AI 임장 도우미 - ~~차세대 모듈형 Function Calling 시스템~~ **지능형 플래너 시스템**
 
-OpenImjang의 AI 시스템은 **OpenAI Function Calling**과 **모듈형 아키텍처**를 기반으로 설계된 차세대 부동산 분석 플랫폼입니다.
+OpenImjang의 AI 시스템은 ~~**OpenAI Function Calling**과 **모듈형 아키텍처**를~~ **슬롯 기반 메모리 + 플래너 + Clarify + Critic 시스템**을 기반으로 설계된 차세대 부동산 분석 플랫폼입니다.
+
+#### 🆕 새로운 아키텍처 (2024년 12월)
+- **슬롯 기반 메모리**: 대화 맥락과 아파트 정보 지속적 보관
+- **인텐트 플래너**: 사용자 의도 분석 후 자동 실행 계획 생성
+- **Clarify 정책**: 부족한 정보 스마트 질문 생성
+- **Critic 시스템**: 결과 품질 검증 및 개선 제안
 
 #### 🏗️ 아키텍처 개요
 
 ```mermaid
 graph TB
-    subgraph "AI Frontend Layer"
-        A[AI 채팅봇] --> B[Function Calling Router]
+    subgraph "🆕 AI Frontend Layer"
+        A[AI 채팅봇 + @mention] --> B[플래너 시스템 Router]
         C[AI 분석 패널] --> B
     end
     
-    subgraph "AI Backend - Modular Function System"
-        B --> D["AI Tools API Router<br/>/api/ai/tools"]
-        D --> E[Ajv Parameter Validation<br/>JSON Schema 검증]
-        E --> F[Dynamic Handler Import<br/>동적 모듈 로딩]
+    subgraph "🎯 AI Backend - Intelligent Planner System"
+        B --> D["슬롯 미들웨어<br/>세션 기반 메모리 관리"]
+        D --> E[인텐트 분석기<br/>@mention 패턴 인식]
+        E --> F[플래너<br/>자동 실행 계획 생성]
         
-        F --> G[부동산 함수군<br/>12개 함수]
-        F --> H[지리정보 함수군<br/>8개 함수]
+        F --> G[액션 실행기<br/>Handler 동적 호출]
+        G --> H[Critic 검증<br/>결과 품질 체크]
         
         subgraph "RealEstate Handlers"
             G1[searchRealEstateDeals] --> R1[dealsRepo.ts]

@@ -376,28 +376,65 @@ class SearchRealEstateHandler implements ActionHandler {
   async execute(action: PlanAction, context: PlanContext, previousResults: ActionResult[]): Promise<any> {
     const { slots } = context;
     
-    // 기존 함수 호출을 시뮬레이션
-    // 실제로는 searchRealEstateDeals 함수를 호출
-    console.log('🏠 부동산 데이터 검색:', {
+    console.log('🏠 실제 부동산 데이터 검색:', {
       apartmentName: slots.apartmentName,
+      apartmentMetadata: slots.apartmentMetadata,
       dealType: slots.dealType,
       area: slots.area
     });
     
-    // 검증 결과가 있으면 활용
-    const validationResult = previousResults.find(r => 
-      r.success && r.data?.type !== 'clarify_required'
-    );
-    
-    return {
-      deals: [],
-      totalCount: 0,
-      searchConditions: slots,
-      dataSchema: {
-        dealAmount: '매매가 (만원 단위)',
-        note: '30000 = 3억원'
+    // 실제 searchRealEstateDeals 함수 호출
+    try {
+      const { searchRealEstateDeals } = await import('../handlers/searchRealEstateDeals');
+      
+      // 슬롯에서 검색 파라미터 구성
+      const searchArgs: any = {};
+      
+      // 아파트 메타데이터가 있으면 활용
+      if (slots.apartmentMetadata?.id) {
+        searchArgs.apartmentId = slots.apartmentMetadata.id;
+      } else if (slots.apartmentName) {
+        searchArgs.apartmentName = slots.apartmentName;
       }
-    };
+      
+      if (slots.dealType && slots.dealType !== '전체') {
+        searchArgs.dealType = slots.dealType;
+      }
+      
+      if (slots.area) {
+        searchArgs.area = slots.area.toString();
+      }
+      
+      if (slots.period) {
+        searchArgs.period = slots.period;
+      }
+      
+      console.log('🔍 검색 파라미터:', searchArgs);
+      
+      const result = await searchRealEstateDeals(searchArgs);
+      
+      console.log('📊 검색 결과:', {
+        success: result.success,
+        dealCount: result.data?.deals?.length || 0,
+        totalCount: result.data?.totalCount || 0
+      });
+      
+      return result.data || {
+        deals: [],
+        totalCount: 0,
+        searchConditions: searchArgs,
+        error: result.error
+      };
+      
+    } catch (error: any) {
+      console.error('❌ 부동산 검색 실패:', error.message);
+      return {
+        deals: [],
+        totalCount: 0,
+        searchConditions: slots,
+        error: error.message
+      };
+    }
   }
 }
 
@@ -409,17 +446,125 @@ class SearchPOIHandler implements ActionHandler {
     const { radius, categories } = action.parameters || {};
     const { slots } = context;
     
-    console.log('📍 POI 검색:', { 
+    console.log('📍 실제 POI 검색:', { 
       apartmentName: slots.apartmentName,
+      apartmentMetadata: slots.apartmentMetadata,
+      coordinates: slots.coordinates,
       radius,
       categories 
     });
     
-    return {
-      pois: [],
-      categories: categories || [],
-      radius: radius || 1000
-    };
+    // 디버깅: 슬롯 상태 상세 출력
+    console.log('🔍 POI 검색 - 슬롯 상태 상세:', {
+      hasApartmentName: !!slots.apartmentName,
+      hasApartmentMetadata: !!slots.apartmentMetadata,
+      hasCoordinates: !!slots.coordinates,
+      apartmentMetadataKeys: slots.apartmentMetadata ? Object.keys(slots.apartmentMetadata) : [],
+      coordinatesKeys: slots.coordinates ? Object.keys(slots.coordinates) : []
+    });
+    
+    // 실제 searchNearbyPOI 함수 호출
+    try {
+      const { searchNearbyPOI } = await import('../handlers/searchNearbyPOI');
+      
+      // 아파트 좌표가 슬롯에 있는지 확인
+      let lat, lng;
+      
+      if (slots.apartmentMetadata?.lat && slots.apartmentMetadata?.lon) {
+        lat = slots.apartmentMetadata.lat;
+        lng = slots.apartmentMetadata.lon;
+      } else if (slots.coordinates) {
+        lat = slots.coordinates.lat;
+        lng = slots.coordinates.lng;
+      } else if (slots.apartmentName) {
+        // 데이터베이스에서 좌표 조회
+        console.log('🔍 데이터베이스에서 좌표 조회 시도:', slots.apartmentName);
+        try {
+          const { db } = await import('../../lib/db');
+          const result = await db
+            .selectFrom('oi.apt_info')
+            .select(['lat', 'lon', 'apt_nm'])
+            .where('apt_nm', 'ilike', `%${slots.apartmentName}%`)
+            .limit(1)
+            .execute();
+
+          if (result && result.length > 0) {
+            lat = result[0].lat;
+            lng = result[0].lon;
+            console.log('✅ 데이터베이스에서 좌표 획득:', { apt_nm: result[0].apt_nm, lat, lng });
+            
+            // 슬롯에도 저장 (다음 검색 시 재사용)
+            slots.coordinates = { lat, lng };
+            if (slots.apartmentMetadata) {
+              slots.apartmentMetadata.lat = lat;
+              slots.apartmentMetadata.lon = lng;
+            }
+          } else {
+            console.log('❌ 데이터베이스에서 좌표를 찾을 수 없음:', slots.apartmentName);
+            return {
+              pois: [],
+              categories: categories || [],
+              radius: radius || 1000,
+              error: `${slots.apartmentName} 아파트의 위치 정보를 찾을 수 없습니다`
+            };
+          }
+        } catch (dbError: any) {
+          console.error('❌ 좌표 데이터베이스 조회 오류:', dbError);
+          return {
+            pois: [],
+            categories: categories || [],
+            radius: radius || 1000,
+            error: '위치 정보 조회 중 오류가 발생했습니다'
+          };
+        }
+      } else {
+        console.log('❌ 좌표 정보가 없어 POI 검색 불가');
+        return {
+          pois: [],
+          categories: categories || [],
+          radius: radius || 1000,
+          error: '아파트 위치 정보가 필요합니다'
+        };
+      }
+      
+      const searchArgs: any = {
+        lat: lat.toString(),
+        lng: lng.toString(),
+        radius: (radius || 1000).toString(),
+        poiType: 'all'
+      };
+      
+      console.log('🔍 POI 검색 파라미터:', searchArgs);
+      
+      const result = await searchNearbyPOI(searchArgs);
+      
+      console.log('📍 POI 검색 결과:', {
+        success: result.success,
+        poiCount: result.pois?.length || 0,
+        totalCount: result.totalCount || 0
+      });
+      
+      // searchNearbyPOI가 직접 데이터를 반환하므로 result 자체를 반환
+      if (result.success) {
+        return result;
+      } else {
+        return {
+          pois: [],
+          categories: categories || [],
+          radius: radius || 1000,
+          error: result.error || 'POI 검색에 실패했습니다'
+        };
+      }
+      
+    } catch (error: any) {
+      console.error('❌ POI 검색 실패:', error.message);
+      return {
+        pois: [],
+        categories: categories || [],
+        radius: radius || 1000,
+        error: error.message
+      };
+    }
   }
 }
 

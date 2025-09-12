@@ -79,7 +79,9 @@ export function extractSlotsFromMessage(message: string): ExtractionResult {
   }
 
   // 8. @멘션 아파트 추출
+  console.log('🔍 @멘션 추출 시도:', message);
   const mentionResult = extractMentionedApartments(message);
+  console.log('📋 @멘션 추출 결과:', mentionResult);
   if (mentionResult.apartments.length > 0) {
     // 첫 번째 멘션을 기본 아파트로 설정
     const firstMention = mentionResult.apartments[0];
@@ -378,15 +380,24 @@ function extractMentionedApartments(message: string): {
 } {
   const apartments: Array<{name: string; metadata?: any}> = [];
   
-  // @아파트명 패턴 매칭
-  const mentionPattern = /@([가-힣\w]+)/g;
+  console.log('🔍 extractMentionedApartments 함수 호출:', message);
+  
+  // @아파트명 패턴 매칭 (한글, 영문, 숫자 모두 포함 - 간소화)
+  const mentionPattern = /@([가-힣a-zA-Z0-9\s]+?)(?:\s|$)/g;
+  console.log('📝 사용된 패턴:', mentionPattern.toString());
   const matches = Array.from(message.matchAll(mentionPattern));
+  console.log('🎯 패턴 매칭 결과:', matches);
   
   for (const match of matches) {
-    const apartmentName = match[1];
-    apartments.push({
-      name: apartmentName
-    });
+    let apartmentName = match[1];
+    // 아파트명 정리: 공백 트림, "주변정보" 등 불필요한 단어 제거
+    apartmentName = apartmentName.replace(/\s*(주변정보|주변|정보|가격|실거래|거래|POI)\s*$/gi, '').trim();
+    
+    if (apartmentName && apartmentName.length >= 2) {
+      apartments.push({
+        name: apartmentName
+      });
+    }
   }
   
   return { apartments };
