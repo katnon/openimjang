@@ -28,6 +28,26 @@ aiHybridRoute.post('/chat', authMiddleware, async (c) => {
 
         // 1) RAG 검색으로 관련 컨텍스트 수집
         const retrievedContext = await performRAGSearch(message, { ...context, userId });
+        
+        // 🔧 아파트 메타데이터에서 첫 번째 아파트를 contextAptData로 설정
+        const firstApartment = context?.apartmentMetadata ? Object.values(context.apartmentMetadata)[0] as any : null;
+        const firstApartmentKey = context?.apartmentMetadata ? Object.keys(context.apartmentMetadata)[0] : null;
+        if (firstApartment && firstApartmentKey) {
+            context.contextAptData = {
+                lat: firstApartment.lat,
+                lon: firstApartment.lon,
+                aptId: firstApartment.id,  // aptId 필드명 매칭
+                aptName: firstApartmentKey, // aptName 필드명 매칭
+                id: firstApartment.id,
+                name: firstApartmentKey,
+                address: firstApartment.address
+            };
+            console.log('🏠 contextAptData 설정:', {
+                aptId: context.contextAptData.aptId,
+                aptName: context.contextAptData.aptName,
+                coords: [context.contextAptData.lat, context.contextAptData.lon]
+            });
+        }
 
         // 2) RAG 컨텍스트가 포함된 시스템 메시지 구성
         const systemMessage = createHybridSystemMessage(retrievedContext, context);
@@ -117,6 +137,17 @@ aiHybridRoute.post('/chat', authMiddleware, async (c) => {
                     }
 
                     console.log(`🔧 함수 호출: ${fnName}`, JSON.stringify(args).slice(0, 200));
+                    
+                    // contextAptData를 모든 함수에 추가 (아파트 메타데이터 활용)
+                    if (context?.contextAptData) {
+                        args.contextAptData = context.contextAptData;
+                        console.log(`📋 contextAptData 전달: ${fnName}`, {
+                            aptId: context.contextAptData.id,
+                            aptName: context.contextAptData.name,
+                            coords: [context.contextAptData.lat, context.contextAptData.lon]
+                        });
+                    }
+                    
                     const result = await handler(args);
                     console.log(`✅ 함수 결과: ${fnName} - ${typeof result === 'object' ? 'object' : result}`);
 
@@ -271,12 +302,16 @@ function createHybridSystemMessage(retrievedContext: any, context?: any): string
 - 정적 지식(임장 메모, 도메인 지식)은 RAG로, 동적 데이터(실거래가, 계산)는 Function으로 처리
 - 두 결과를 종합하여 종합적이고 정확한 답변 제공
 
-**함수 호출 지침:**
-- 사용자가 아파트의 **가격, 실거래가, 투자성, 어떤지** 등을 물어보면 searchRealEstateDeals 함수 호출
-- 사용자가 아파트의 **주변 정보, 교통, 편의시설, 인프라** 등을 물어보면 searchNearbyPOI 함수 호출
-- 사용자가 단순히 아파트 이름만 언급한 경우, 맥락에 따라 적절한 함수를 선택하여 호출
-- 함수 호출 없이 "메모가 없습니다" 같은 막연한 응답은 금지
-- **실제 데이터를 조회한 후** 그 결과를 바탕으로 대화형 분석 제공
+**🎯 함수 호출 지침:**
+- **아파트 가격/실거래가** 질문 → searchRealEstateDeals 함수 호출
+- **아파트 주변정보/교통/편의시설** 질문 → searchNearbyPOI 함수 호출  
+- **메타데이터에 있는 아파트 질문** → 반드시 적절한 함수 먼저 호출
+- 함수 호출 후 결과를 바탕으로 전문적 분석 제공
+
+**🚨 POI 검색 관련 절대 규칙:**
+- 주변 정보 검색시 **searchPlaces 함수 사용 금지** (키워드 검색이라 부정확함)
+- **searchNearbyPOI 함수만 사용**하고 반드시 아파트 좌표(lat, lng) 전달
+- 아파트명을 키워드로 사용하여 검색 절대 금지
 
 **🔄 아파트 비교 분석 지침:**
 - 여러 아파트가 언급되면 **비교 분석 모드**로 전환
@@ -344,17 +379,36 @@ function createHybridSystemMessage(retrievedContext: any, context?: any): string
     if (context?.apartmentMetadata && Object.keys(context.apartmentMetadata).length > 0) {
         const apartmentMetaSection = `
 
-**📋 사용자가 언급한 아파트들의 메타데이터:**
+**📋 검색 성공한 아파트들의 메타데이터:**
 ${Object.entries(context.apartmentMetadata).map(([name, meta]: [string, any]) => 
     `- ${name}: ID=${meta.id || 'N/A'}, 주소=${meta.address || 'N/A'}, 좌표=(${meta.lat || 'N/A'}, ${meta.lon || 'N/A'})`
 ).join('\n')}
 
-**🔥 중요한 함수 호출 지침:**
-- 위 아파트들에 대한 질문이 나오면 apartmentName과 함께 aptId도 활용하세요
-- ID가 있는 아파트는 aptId 파라미터를 우선 사용하여 정확한 데이터 조회
-- 예: searchRealEstateDeals(aptId: ${Object.values(context.apartmentMetadata)[0]?.id}, apartmentName: "${Object.keys(context.apartmentMetadata)[0]}")`;
+**✅ 사용 가능한 아파트 데이터:**
+이 아파트들에 대한 질문이 나오면 반드시 함수를 호출하여 실제 데이터를 조회하세요.
+- 주변정보 질문 시: searchNearbyPOI(lat: [아파트좌표], lng: [아파트좌표])
+- 실거래가 질문 시: searchRealEstateDeals(aptId: [아파트ID], apartmentName: "[아파트명]")`;
         
         baseSystem += apartmentMetaSection;
+    }
+
+    // 검색 실패한 아파트들에 대한 안내 (간소화)
+    if (context?.failedApartmentSearches && context.failedApartmentSearches.length > 0) {
+        // 메타데이터에 있는 아파트는 실패 목록에서 제외
+        const actuallyFailedSearches = context.failedApartmentSearches.filter((name: string) => 
+            !context?.apartmentMetadata?.[name]
+        );
+        
+        if (actuallyFailedSearches.length > 0) {
+            const failedSearchSection = `
+
+**❓ 추가 정보가 필요한 아파트들:**
+${actuallyFailedSearches.map((name: string) => `- ${name}`).join('\n')}
+
+이 아파트들에 대해서는 "구체적인 위치(주소나 좌표)를 알려주시면 더 정확한 정보를 제공드릴 수 있습니다"라고 안내해주세요.`;
+            
+            baseSystem += failedSearchSection;
+        }
     }
 
     // RAG 컨텍스트 추가

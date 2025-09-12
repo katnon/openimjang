@@ -67,20 +67,23 @@ export class POISearchBridge implements ActionHandler {
     const { radius, categories } = action.parameters || {};
 
     try {
-      // 아파트 좌표가 슬롯에 있는지 확인
+      // 🎯 단순화된 좌표 탐색 로직 - contextData → slots → DB 순서
       let lat, lng;
       
-      if (slots.apartmentMetadata?.lat && slots.apartmentMetadata?.lon) {
+      // 1순위: apartmentMetadata에서 좌표 추출 (contextData에서 전달된 것)
+      if (slots.apartmentMetadata?.lat && (slots.apartmentMetadata?.lng || slots.apartmentMetadata?.lon)) {
         lat = slots.apartmentMetadata.lat;
-        lng = slots.apartmentMetadata.lon;
-      } else if (slots.apartmentMetadata?.lng) {
-        // lng/lon 둘 다 체크
-        lat = slots.apartmentMetadata.lat;
-        lng = slots.apartmentMetadata.lng;
-      } else if (slots.coordinates) {
+        lng = slots.apartmentMetadata.lng || slots.apartmentMetadata.lon; // lng 우선, lon fallback
+        console.log('✅ [Bridge] apartmentMetadata에서 좌표 발견:', { lat, lng, source: 'apartmentMetadata' });
+      } 
+      // 2순위: coordinates 객체에서 추출
+      else if (slots.coordinates?.lat && slots.coordinates?.lng) {
         lat = slots.coordinates.lat;
         lng = slots.coordinates.lng;
-      } else if (slots.apartmentName) {
+        console.log('✅ [Bridge] coordinates에서 좌표 발견:', { lat, lng, source: 'coordinates' });
+      } 
+      // 3순위: 데이터베이스 조회 (아파트명이 있는 경우만)
+      else if (slots.apartmentName) {
         // 데이터베이스에서 좌표 조회
         console.log('🔍 [Bridge] 데이터베이스에서 좌표 조회 시도:', slots.apartmentName);
         try {
@@ -94,14 +97,14 @@ export class POISearchBridge implements ActionHandler {
 
           if (result && result.length > 0) {
             lat = result[0].lat;
-            lng = result[0].lon;
+            lng = result[0].lon; // DB에서는 여전히 lon 필드명이지만
             console.log('✅ [Bridge] 데이터베이스에서 좌표 획득:', { apt_nm: result[0].apt_nm, lat, lng });
             
-            // 슬롯에도 저장 (다음 검색 시 재사용)
+            // 슬롯에는 일관되게 lng로 저장 (다음 검색 시 재사용)
             slots.coordinates = { lat, lng };
             if (slots.apartmentMetadata) {
               slots.apartmentMetadata.lat = lat;
-              slots.apartmentMetadata.lon = lng;
+              slots.apartmentMetadata.lng = lng; // lng로 통일
             }
           } else {
             console.log('❌ [Bridge] 데이터베이스에서 좌표를 찾을 수 없음:', slots.apartmentName);
@@ -124,13 +127,19 @@ export class POISearchBridge implements ActionHandler {
           };
         }
       } else {
-        console.log('❌ 좌표 정보가 없어 POI 검색 불가');
+        console.log('❌ [Bridge] 모든 소스에서 좌표 정보 없음 - POI 검색 불가');
         return {
           success: false,
           pois: [],
           categories: categories || [],
           radius: radius || 1000,
-          error: '아파트 위치 정보가 필요합니다'
+          error: '아파트 위치 정보를 찾을 수 없습니다. @아파트명에 embedded metadata가 포함되어 있는지 확인해주세요.',
+          debugInfo: {
+            apartmentMetadata: slots.apartmentMetadata || null,
+            coordinates: slots.coordinates || null,
+            apartmentName: slots.apartmentName || null,
+            suggestion: 'contextData.extractedApartments에 완전한 좌표 정보가 있는지 확인'
+          }
         };
       }
 

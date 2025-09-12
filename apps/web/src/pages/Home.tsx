@@ -14,7 +14,6 @@ import { doc, setDoc, deleteDoc, getDoc, collection, getDocs } from "firebase/fi
 import { db } from "@/firebase";
 import UserOnboardingModal from "@/components/onboarding/UserOnboardingModal";
 import UserProfileModal from "@/components/profile/UserProfileModal";
-import ChatbotModal from "@/components/chatbot/ChatbotModal";
 import ChatbotSidebar from "@/components/chatbot/ChatbotSidebar";
 import type { POIItem } from "@/types/poi";
 
@@ -30,6 +29,8 @@ export default function Home() {
     const { user, needsOnboarding, markOnboardingComplete } = useAuth();
     const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
     const [show3D, setShow3D] = useState(false);
+    const [showMiniMap, setShowMiniMap] = useState(false);
+    const [mapViewMode, setMapViewMode] = useState<'2D' | '3D'>('2D');
     const [selectedApt, setSelectedApt] = useState<AptInfo | null>(null);
     const [isCardExpanded, setIsCardExpanded] = useState(false);
     const [hoveredPOI, setHoveredPOI] = useState<POIItem | null>(null);
@@ -37,8 +38,6 @@ export default function Home() {
     const [showAuth, setShowAuth] = useState(false);
     const [showMemoModal, setShowMemoModal] = useState(false);
     const [showProfile, setShowProfile] = useState(false);
-    const [showChatbot, setShowChatbot] = useState(false);
-    const [chatbotContext, setChatbotContext] = useState<any>(null);
     const [currentMapType, setCurrentMapType] = useState<'ROADMAP' | 'SATELLITE'>('ROADMAP');
     const [favorites, setFavorites] = useState<Set<number>>(new Set());
     const [showFavoritePopup, setShowFavoritePopup] = useState(false);
@@ -59,6 +58,13 @@ export default function Home() {
         lon: number;
     } | null>(null);
     const [chatbotInitialMessage, setChatbotInitialMessage] = useState<string>('');
+    const [newApartmentAttachment, setNewApartmentAttachment] = useState<{
+        id: number;
+        name: string;
+        address: string;
+        lat: number;
+        lon: number;
+    } | null>(null);
 
     // ✅ 지도 인스턴스 ref 추가
     const mapInstanceRef = useRef<kakao.maps.Map | null>(null);
@@ -246,81 +252,116 @@ export default function Home() {
 
     return (
         <div className="relative w-screen h-screen overflow-hidden bg-neutral-100">
-            {/* 상단바 */}
-            <TopBar
-                onOpen3D={() => setShow3D(true)}
-                onSearchResult={(results) => {
-                    if (results.length > 0) {
-                        setSelectedApt(results[0]);
-                        setPoint({ lat: results[0].lat, lng: results[0].lon });
-                    }
-                }}
-                onOpenAuth={() => setShowAuth(true)}
-                onOpenMyImjang={() => setShowMyImjang(true)}
-                onOpenProfile={() => setShowProfile(true)}
-            />
+            {/* 상단바 - 3D 모드에서도 표시되도록 z-index 증가 */}
+            <div className={mapViewMode === '3D' ? 'relative z-[300]' : 'relative'}>
+                <TopBar
+                    onOpen3D={() => setShow3D(true)}
+                    onOpen2D={() => setShowMiniMap(prev => !prev)}
+                    mapViewMode={mapViewMode}
+                    onSearchResult={(results) => {
+                        if (results.length > 0) {
+                            setSelectedApt(results[0]);
+                            setPoint({ lat: results[0].lat, lng: results[0].lon });
+                        }
+                    }}
+                    onOpenAuth={() => setShowAuth(true)}
+                    onOpenMyImjang={() => setShowMyImjang(true)}
+                    onOpenProfile={() => setShowProfile(true)}
+                />
+            </div>
 
             {/* 지도 */}
             <main className="absolute inset-0 top-16">
-                <MapContainer
-                    onMapClick={(lat, lon) => setPoint({ lat, lng: lon })}
-                    onAptSelected={(apt) => {
-                        setSelectedApt(apt);
-                        setPoint({ lat: apt.lat, lng: apt.lon });
-                    }}
-                    onMapReady={(map, refreshFavorites) => {
-                        mapInstanceRef.current = map;
-                        refreshFavoritesRef.current = refreshFavorites;
-                    }}
-                    selectedApt={
-                        selectedApt ? { lat: selectedApt.lat, lon: selectedApt.lon } : null
-                    }
-                    isCardExpanded={isCardExpanded}
-                    cardWidth={isCardExpanded ? 464 : 320}
-                    tempMarker={hoveredPOI}
-                    showFavoritePins={showFavoritePins}
-                />
+                {mapViewMode === '2D' ? (
+                    <MapContainer
+                        onMapClick={(lat, lon) => setPoint({ lat, lng: lon })}
+                        onAptSelected={(apt) => {
+                            setSelectedApt(apt);
+                            setPoint({ lat: apt.lat, lng: apt.lon });
+                        }}
+                        onMapReady={(map, refreshFavorites) => {
+                            mapInstanceRef.current = map;
+                            refreshFavoritesRef.current = refreshFavorites;
+                        }}
+                        selectedApt={
+                            selectedApt ? { lat: selectedApt.lat, lon: selectedApt.lon } : null
+                        }
+                        isCardExpanded={isCardExpanded}
+                        cardWidth={isCardExpanded ? 464 : 320}
+                        tempMarker={hoveredPOI}
+                        showFavoritePins={showFavoritePins}
+                    />
+                ) : (
+                    <MapPrime3DViewer
+                        visible={true}
+                        onClose={() => setMapViewMode('2D')}
+                        selectedLocation={
+                            selectedApt
+                                ? { lat: selectedApt.lat, lon: selectedApt.lon }
+                                : point
+                                    ? { lat: point.lat, lon: point.lng }
+                                    : null
+                        }
+                        selectedApt={selectedApt}
+                        mapViewMode={mapViewMode}
+                    />
+                )}
             </main>
 
-            {/* 지도 조작 UI */}
-            <MapControls
-                map={mapInstanceRef.current}
-                isDistrictOverlayActive={isDistrictOverlayActive}
-                onToggleDistrictOverlay={handleDistrictOverlayToggle}
-                onMapTypeChange={handleMapTypeChange}
-                currentMapType={currentMapType}
-                showFavoritePins={showFavoritePins}
-                onToggleFavoritePins={() => setShowFavoritePins(!showFavoritePins)}
-            />
+            {/* 지도 조작 UI - 2D 모드에서만 표시 */}
+            {mapViewMode === '2D' && (
+                <MapControls
+                    map={mapInstanceRef.current}
+                    isDistrictOverlayActive={isDistrictOverlayActive}
+                    onToggleDistrictOverlay={handleDistrictOverlayToggle}
+                    onMapTypeChange={handleMapTypeChange}
+                    currentMapType={currentMapType}
+                    showFavoritePins={showFavoritePins}
+                    onToggleFavoritePins={() => setShowFavoritePins(!showFavoritePins)}
+                />
+            )}
 
-            {/* 요약 카드 */}
+            {/* 요약 카드 - 최상위에서 직접 위치 */}
             <SummaryCard
-                selectedApt={selectedApt}
-                point={point}
-                onMore={() => {
-                    if (selectedApt) {
-                        console.log("🔍 자세히보기 클릭:", selectedApt);
-                        alert(`${selectedApt.apt_nm}의 상세 정보를 표시할 예정입니다.`);
-                    }
-                }}
-                onExpandChange={setIsCardExpanded}
-                onPOIHover={setHoveredPOI}
-                onFavoriteToggle={handleFavoriteToggle}
-                isFavorited={selectedApt ? favorites.has(selectedApt.id) : false}
-                onOpenChatbot={(contextData) => {
-                    // 기존 모달 챗봇 열기
-                    setChatbotContext(contextData);
-                    setShowChatbot(true);
+            selectedApt={selectedApt}
+            point={point}
+            onMore={() => {
+                if (selectedApt) {
+                    console.log("🔍 자세히보기 클릭:", selectedApt);
+                    alert(`${selectedApt.apt_nm}의 상세 정보를 표시할 예정입니다.`);
+                }
+            }}
+            onExpandChange={setIsCardExpanded}
+            onPOIHover={setHoveredPOI}
+            onFavoriteToggle={handleFavoriteToggle}
+            isFavorited={selectedApt ? favorites.has(selectedApt.id) : false}
+            onOpenChatbot={() => {
+                if (selectedApt) {
+                    // 새로운 첨부 방식: ChatbotSidebar에 아파트 정보 직접 전달
+                    setNewApartmentAttachment({
+                        id: selectedApt.id,
+                        name: selectedApt.apt_nm,
+                        address: selectedApt.jibun_address,
+                        lat: selectedApt.lat,
+                        lon: selectedApt.lon
+                    });
                     
-                    // 새로운 사이드바 챗봇에 @아파트명 초기 메시지 설정
-                    if (selectedApt) {
-                        const initialMessage = `@${selectedApt.apt_nm} `;
-                        setChatbotInitialMessage(initialMessage);
-                        console.log('🤖 임장봇 버튼 - 초기 메시지 설정:', initialMessage);
-                    }
-                }}
-                onWriteMemo={() => setShowMemoModal(true)}
-                onOpenMyImjang={() => setShowMyImjang(true)}
+                    console.log('🤖 임장봇 버튼 - 새로운 첨부블록 생성:', {
+                        id: selectedApt.id,
+                        name: selectedApt.apt_nm,
+                        address: selectedApt.jibun_address,
+                        lat: selectedApt.lat,
+                        lon: selectedApt.lon
+                    });
+                    
+                    // 첨부 완료 후 상태 초기화를 위한 타이머
+                    setTimeout(() => {
+                        setNewApartmentAttachment(null);
+                    }, 100);
+                }
+            }}
+            onWriteMemo={() => setShowMemoModal(true)}
+            onOpenMyImjang={() => setShowMyImjang(true)}
             />
 
             {/* 3D 팝업 */}
@@ -335,7 +376,68 @@ export default function Home() {
                             : null
                 }
                 selectedApt={selectedApt}
+                mapViewMode={mapViewMode}
+                onToggleMapView={() => {
+                    // 동시에 상태 전환
+                    setShow3D(false);      // 3D 팝업 닫기
+                    setMapViewMode('3D');  // 메인을 3D로 전환
+                    setShowMiniMap(true);  // 2D 미니맵 표시
+                }}
             />
+
+            {/* 3D 메인 모드일 때 우상단에 2D 미니맵 표시 (3D 팝업과 완전히 동일한 UI) */}
+            {mapViewMode === '3D' && showMiniMap && (
+                <div className="fixed top-20 right-12 z-[200] bg-white border shadow-lg rounded-lg w-80 h-60">
+                    {/* 3D 팝업과 동일한 버튼 구조 */}
+                    <div className="absolute top-2 right-2 flex gap-2 z-10">
+                        {/* 아파트 단지명 표시 (3D 팝업과 동일) */}
+                        {selectedApt && (
+                            <div className="bg-blue-500/90 text-white rounded shadow-sm px-2 py-1 text-xs max-w-48">
+                                🏠 <span className="font-medium">{selectedApt.apt_nm}</span>
+                            </div>
+                        )}
+
+                        {/* X 닫기 버튼 (3D 팝업과 동일한 스타일) */}
+                        <button
+                            onClick={() => setShowMiniMap(false)}
+                            className="bg-gray-500/90 hover:bg-gray-600 text-white rounded shadow-sm transition-all w-6 h-6 flex items-center justify-center text-xs"
+                            title="닫기"
+                        >
+                            ✕
+                        </button>
+
+                        {/* 전환 버튼 (3D 팝업과 동일한 스타일) */}
+                        <button
+                            onClick={() => {
+                                setMapViewMode('2D');
+                                setShowMiniMap(false);
+                                setShow3D(true);
+                            }}
+                            className="bg-white/90 hover:bg-white border border-gray-300 text-gray-700 rounded shadow-sm transition-all px-3 py-1 text-xs"
+                            title="2D 모드로 전환"
+                        >
+                            전환
+                        </button>
+                    </div>
+
+                    {/* 2D 지도 컨테이너 */}
+                    <MapContainer
+                        onMapClick={(lat, lon) => setPoint({ lat, lng: lon })} // 미니맵에서도 클릭 가능
+                        onAptSelected={(apt) => {
+                            setSelectedApt(apt);
+                            setPoint({ lat: apt.lat, lng: apt.lon });
+                        }}
+                        selectedApt={
+                            selectedApt ? { lat: selectedApt.lat, lon: selectedApt.lon } : null
+                        }
+                        isCardExpanded={false}
+                        cardWidth={0}
+                        tempMarker={hoveredPOI}
+                        showFavoritePins={showFavoritePins}
+                        isMiniMap={true}
+                    />
+                </div>
+            )}
 
 
             {/* 메모 작성/수정 모달 */}
@@ -385,9 +487,9 @@ export default function Home() {
                     // 메모 삭제 후 즐겨찾기 마커 새로고침
                     refreshFavoritesRef.current?.();
                 }}
-                onOpenChatbot={(contextData) => {
-                    setChatbotContext(contextData);
-                    setShowChatbot(true);
+                onOpenChatbot={() => {
+                    // 사이드바 챗봇만 사용
+                    setChatbotInitialMessage('');
                 }}
             />
 
@@ -410,28 +512,29 @@ export default function Home() {
                 onClose={() => setShowProfile(false)}
             />
 
-            {/* 챗봇 모달 (기존 유지) */}
-            <ChatbotModal
-                isOpen={showChatbot}
-                onClose={() => {
-                    setShowChatbot(false);
-                    setChatbotContext(null);
-                }}
-                contextData={chatbotContext}
-            />
 
-            {/* 새로운 임장봇 사이드바 */}
-            <ChatbotSidebar 
-                onMapNavigate={handleMapNavigate}
-                onAptSelected={(apt) => {
-                    setSelectedApt(apt);
-                    setPoint({ lat: apt.lat, lng: apt.lon });
-                }}
-                attachedApartment={sidebarApartmentAttachment}
-                onApartmentDetach={() => setSidebarApartmentAttachment(null)}
-                initialMessage={chatbotInitialMessage}
-                onInitialMessageUsed={() => setChatbotInitialMessage('')} // 사용된 초기 메시지 초기화
-            />
+            {/* 새로운 임장봇 사이드바 - 3D 모드에서도 표시되도록 z-index 증가 */}
+            <div className={mapViewMode === '3D' ? 'relative z-[300]' : 'relative'}>
+                <ChatbotSidebar 
+                    contextData={undefined}
+                    onMapNavigate={handleMapNavigate}
+                    onAptSelected={(apt) => {
+                        setSelectedApt({
+                            id: apt.id,
+                            apt_nm: apt.apt_nm,
+                            jibun_address: apt.address,
+                            lat: apt.lat,
+                            lon: apt.lon
+                        });
+                        setPoint({ lat: apt.lat, lng: apt.lon });
+                    }}
+                    attachedApartment={sidebarApartmentAttachment}
+                    onApartmentDetach={() => setSidebarApartmentAttachment(null)}
+                    initialMessage={chatbotInitialMessage}
+                    onInitialMessageUsed={() => setChatbotInitialMessage('')} // 사용된 초기 메시지 초기화
+                    onAddAttachment={newApartmentAttachment} // 새로운 아파트 첨부 요청 전달
+                />
+            </div>
         </div>
     );
 }

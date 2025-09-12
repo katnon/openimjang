@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { authMiddleware } from '../middleware/auth';
 import { slotMiddleware, getSlotStatus, deleteSession } from '../middleware/sessionSlots';
+// ⚠️ LEGACY Function Calling imports - legacy 엔드포인트에서만 사용
 import { tools as functionTools } from '../ai/tools';
 import { handlers as functionHandlers } from '../ai/handlers';
 import { validateSchema } from '../ai/tools/validation';
@@ -29,8 +30,8 @@ const openai = new OpenAI({
 registerBridgeHandlers(defaultExecutor);
 console.log('🎯 플래너 시스템 초기화 완료');
 
-// POST /chat - 표준 tool_call 루프 패턴 + 슬롯 미들웨어
-aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
+// POST /chat-legacy - 기존 Function Calling (사용 중단)
+aiChatRoute.post('/chat-legacy', authMiddleware, slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
@@ -623,8 +624,8 @@ function shouldInjectUserProfile(functionName: string): boolean {
     return functionsNeedingProfile.includes(functionName);
 }
 
-// POST /planner-chat - 플래너 기반 대화 처리 (새로운 방식)
-aiChatRoute.post('/planner-chat', authMiddleware, slotMiddleware, async (c) => {
+// POST /chat - 플래너 기반 대화 처리 (새로운 표준)
+aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
@@ -708,8 +709,17 @@ aiChatRoute.post('/planner-chat', authMiddleware, slotMiddleware, async (c) => {
                 completedActions: [],
                 failedActions: []
             },
-            capabilities: getSystemCapabilities(),
-            constraints: getUserConstraints(c.user?.uid)
+            capabilities: {
+                availableFunctions: ['searchRealEstate', 'searchPOI', 'getBuildingInfo'],
+                maxExecutionTime: 30000,
+                allowedDataSources: ['database', 'external_api'],
+                supportedOutputFormats: ['text', 'json']
+            },
+            constraints: {
+                maxActions: 5,
+                timeoutMs: 30000,
+                qualityLevel: 'balanced'
+            }
         };
 
         // 2. 플랜 생성
@@ -793,282 +803,95 @@ aiChatRoute.get('/slots', authMiddleware, getSlotStatus);
 // 세션 삭제 엔드포인트 (디버깅용)  
 aiChatRoute.delete('/sessions/:sessionId', authMiddleware, deleteSession);
 
-// TEST-ONLY: 인증 없이 테스트할 수 있는 엔드포인트 (개발용)
+// TEST-ONLY: 인증 없이 플래너 시스템을 테스트할 수 있는 엔드포인트 (개발용)
 aiChatRoute.post('/test-chat', slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
-        console.log('🧪 테스트 챗봇 요청:', { message: message?.slice(0, 100) + '...' });
+        console.log('🧪 플래너 테스트 요청:', { message: message?.slice(0, 100) + '...' });
 
-        // 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 + 슬롯 정보 포함)
-        const systemPrompt = createPersonalizedSystemPrompt(
-            context?.userProfile || c.session?.userProfile, 
-            context?.messages || c.session?.messageHistory,
-            c.slots
-        );
-        const messages: any[] = [
-            { 
-                role: 'system', 
-                content: systemPrompt 
+        // 1. 플랜 컨텍스트 생성
+        const planContext: PlanContext = {
+            intent: null, // 플래너가 분석함
+            slots: c.slots,
+            userProfile: context?.userProfile || c.session?.userProfile || {
+                purpose: ['매매', '투자'],
+                workLocation: '강남역',
+                commutingRadius: 30
             },
-            ...(context?.messages ?? []),
-            { role: 'user', content: message }
-        ];
+            sessionHistory: {
+                messages: context?.messages || c.session?.messageHistory || [],
+                lastQuestionTypes: [],
+                context: {},
+                timestamp: new Date()
+            }
+        };
 
-        // 모델 호출(첫 턴) — tools 등록
-        let resp = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-            messages,
-            tools: functionTools.map(t => ({
-                type: 'function',
-                function: {
-                    name: t.function.name,
-                    description: t.function.description,
-                    parameters: t.function.parameters
-                }
-            })),
-            tool_choice: 'auto'
+        // 2. 플랜 생성
+        const plan = await defaultPlanner.createPlan(planContext);
+        
+        console.log('📋 생성된 테스트 플랜:', {
+            planId: plan.id,
+            actionCount: plan.actions.length,
+            constraints: plan.constraints
         });
 
-        // tool_call 루프
-        let guard = 0;
-        while ((resp.choices?.[0]?.message?.tool_calls?.length ?? 0) > 0) {
-            guard++;
-            if (guard > 6) {
-                console.warn('⚠️ Tool call 무한루프 방지 - 6회 초과');
-                break;
+        // 3. 시스템 능력 정의
+        const capabilities: SystemCapabilities = {
+            availableFunctions: ['searchRealEstate', 'searchPOI', 'getBuildingInfo'],
+            maxExecutionTime: 30000,
+            allowedDataSources: ['database', 'external_api'],
+            supportedOutputFormats: ['text', 'json']
+        };
+
+        // 4. 플랜 실행
+        const execution = await defaultExecutor.executeWithCritic(plan, planContext);
+        
+        console.log('✅ 플랜 실행 완료:', {
+            status: execution.status,
+            resultCount: execution.results.length,
+            criticResult: execution.criticResult?.hasIssue || false
+        });
+
+        // 5. 응답 생성
+        let reply = "플래너 시스템이 작업을 완료했습니다.\\n\\n";
+        
+        // 실행 결과를 기반으로 응답 생성
+        for (const result of execution.results) {
+            if (result.success && result.data) {
+                if (result.data.type === 'clarify_required') {
+                    reply += `❓ ${result.data.message}\\n`;
+                } else if (result.data.deals) {
+                    reply += `🏠 실거래 ${result.data.totalCount || result.data.deals.length}건을 찾았습니다.\\n`;
+                } else if (result.data.pois) {
+                    reply += `📍 주변 편의시설 ${result.data.totalCount || result.data.pois.length}개를 찾았습니다.\\n`;
+                } else {
+                    reply += `✅ 작업이 완료되었습니다.\\n`;
+                }
+            } else {
+                reply += `⚠️ 작업 중 오류가 발생했습니다: ${result.error}\\n`;
             }
-
-            const toolCalls = resp.choices[0].message!.tool_calls!;
-            const toolResultsMessages: any[] = [];
-
-            for (const call of toolCalls) {
-                if (call.type !== 'function') continue;
-                const fnName = call.function.name;
-                const rawArgs = call.function.arguments ?? '{}';
-
-                // Ajv 검증
-                const schema = functionTools.find(t => t.function.name === fnName);
-                if (!schema) {
-                    console.error(`❌ 알 수 없는 함수: ${fnName}`);
-                    toolResultsMessages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        content: JSON.stringify({ 
-                            success: false, 
-                            error: `Unknown function: ${fnName}` 
-                        })
-                    });
-                    continue;
-                }
-
-                let fnArgs: any;
-                try {
-                    fnArgs = JSON.parse(rawArgs);
-                } catch (e) {
-                    console.error(`❌ JSON 파싱 오류: ${fnName}`, rawArgs);
-                    toolResultsMessages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        content: JSON.stringify({ 
-                            success: false, 
-                            error: 'Invalid JSON arguments' 
-                        })
-                    });
-                    continue;
-                }
-
-                const { valid, errors } = validateSchema(schema.function, fnArgs);
-                if (!valid) {
-                    console.error(`❌ 스키마 검증 실패: ${fnName}`, errors);
-                    toolResultsMessages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        content: JSON.stringify({ 
-                            success: false, 
-                            error: `Schema validation failed: ${errors?.join(', ')}` 
-                        })
-                    });
-                    continue;
-                }
-
-                // userProfile 주입 (필요한 함수만)
-                if (shouldInjectUserProfile(fnName) && context?.userProfile) {
-                    fnArgs.userProfile = context.userProfile;
-                }
-
-                // 함수 실행
-                console.log(`🔧 함수 실행: ${fnName}`, fnArgs);
-                const handler = functionHandlers[fnName];
-                if (!handler) {
-                    console.error(`❌ 핸들러를 찾을 수 없음: ${fnName}`);
-                    toolResultsMessages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        content: JSON.stringify({ 
-                            success: false, 
-                            error: `Handler not found: ${fnName}` 
-                        })
-                    });
-                    continue;
-                }
-
-                try {
-                    const result = await handler(fnArgs);
-                    toolResultsMessages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        content: JSON.stringify(result)
-                    });
-                } catch (handlerError: any) {
-                    console.error(`❌ 핸들러 실행 오류: ${fnName}`, handlerError);
-                    toolResultsMessages.push({
-                        role: 'tool',
-                        tool_call_id: call.id,
-                        content: JSON.stringify({ 
-                            success: false, 
-                            error: handlerError.message || 'Handler execution failed' 
-                        })
-                    });
-                }
-            }
-
-            messages.push(resp.choices[0].message); // assistant 메시지(툴콜 포함) 반영
-            messages.push(...toolResultsMessages);  // 각 툴 결과 반영
-
-            resp = await openai.chat.completions.create({
-                model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-                messages,
-                tools: functionTools.map(t => ({
-                    type: 'function',
-                    function: {
-                        name: t.function.name,
-                        description: t.function.description,
-                        parameters: t.function.parameters
-                    }
-                })),
-                tool_choice: 'auto'
-            });
         }
 
-        // 최종 답변 반환
-        const finalMsg = resp.choices?.[0]?.message?.content ?? '죄송합니다. 답변을 생성하지 못했습니다.';
-        
-        return c.json({ 
-            success: true, 
-            reply: finalMsg,
-            toolCallsCount: guard
-        });
+        if (execution.criticResult?.hasIssue) {
+            reply += `\\n🔍 Critic 검증: ${execution.criticResult.explanation}`;
+        }
 
+        return c.json({
+            success: true,
+            reply,
+            plannerUsed: true,
+            executionId: execution.planId,
+            actionCount: execution.results.length
+        });
     } catch (error: any) {
-        console.error('❌ 테스트 챗봇 처리 오류:', error);
+        console.error('❌ 플래너 테스트 오류:', error);
         return c.json({
             success: false,
-            error: error.message || '테스트 챗봇 처리 중 오류가 발생했습니다.'
+            error: error.message,
+            plannerUsed: true
         }, 500);
     }
 });
-
-/**
- * 시스템 기능 정의
- */
-function getSystemCapabilities(): SystemCapabilities {
-    return {
-        availableTools: [
-            'searchRealEstate', 'searchPOI', 'getBuildingInfo', 
-            'calculateStats', 'getPriceTrends', 'visualize'
-        ],
-        dataAccess: {
-            realEstate: true,
-            POI: true,
-            market: true,
-            geographic: true
-        },
-        analysisFeatures: {
-            statistics: true,
-            visualization: true,
-            prediction: false, // 추후 구현
-            comparison: true
-        },
-        externalServices: {
-            webSearch: false, // 추후 구현
-            maps: true,
-            weather: false // 추후 구현
-        }
-    };
-}
-
-/**
- * 사용자별 제약 조건 생성
- */
-function getUserConstraints(userId?: string): PlanConstraints {
-    return {
-        maxActions: 10,
-        maxDuration: 30000, // 30초
-        budgetLimits: {
-            apiCalls: 50,
-            computeTime: 10000
-        },
-        userPermissions: ['basic', 'data_access', 'analysis'], // 기본 권한
-        rateLimit: {
-            actionsPerMinute: 20,
-            dataQueryLimit: 10
-        }
-    };
-}
-
-/**
- * 플랜 실행 결과를 기반으로 최종 메시지 생성
- */
-function generateFinalMessage(results: any[], context: PlanContext): string {
-    const successfulResults = results.filter(r => r.success && r.data);
-    
-    if (successfulResults.length === 0) {
-        return '죄송합니다. 요청하신 정보를 처리하지 못했습니다.';
-    }
-
-    // 요약 결과가 있으면 우선 사용
-    const summaryResult = successfulResults.find(r => r.data?.summary);
-    if (summaryResult?.data?.summary) {
-        let message = summaryResult.data.summary;
-        
-        // 주요 인사이트 추가
-        if (summaryResult.data.keyInsights?.length > 0) {
-            message += '\n\n주요 포인트:\n';
-            summaryResult.data.keyInsights.forEach((insight: string, index: number) => {
-                message += `${index + 1}. ${insight}\n`;
-            });
-        }
-        
-        return message;
-    }
-
-    // 검색 결과가 있으면 기본 요약 생성
-    const searchResult = successfulResults.find(r => r.data?.deals || r.data?.pois);
-    if (searchResult?.data) {
-        const { question, slots } = context;
-        
-        if (searchResult.data.deals) {
-            const count = searchResult.data.deals.length;
-            let message = '';
-            
-            if (slots.apartmentName) {
-                message += `${slots.apartmentName}의 `;
-            }
-            if (slots.dealType) {
-                message += `${slots.dealType} `;
-            }
-            message += `정보를 찾았습니다. 총 ${count}건의 거래 데이터가 있습니다.`;
-            
-            return message;
-        }
-        
-        if (searchResult.data.pois) {
-            return `주변 편의시설 정보를 찾았습니다. 총 ${searchResult.data.pois.length}개의 시설이 있습니다.`;
-        }
-    }
-
-    return '요청하신 정보를 처리했습니다.';
-}
 
 export default aiChatRoute;

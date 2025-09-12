@@ -64,7 +64,7 @@ export default function MapControls({
     const btnActive = "w-10 h-10 rounded-xl border border-primary-500 bg-primary-500 text-white shadow transition-all";
 
     return (
-        <div className="absolute right-4 top-20 z-20 flex flex-col gap-2">
+        <div className="absolute right-4 top-20 z-[200] flex flex-col gap-2">
             <button
                 className={btn}
                 onClick={handleZoomIn}

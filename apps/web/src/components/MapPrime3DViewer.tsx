@@ -25,14 +25,15 @@ type Props = {
         apt_nm: string;
         jibun_address: string;
     } | null;
+    mapViewMode?: '2D' | '3D'; // 현재 맵 뷰 모드
+    onToggleMapView?: () => void; // 맵 뷰 모드 전환 함수
 };
 
-export default function MapPrime3DViewer({ visible, onClose, selectedLocation, selectedApt }: Props) {
+export default function MapPrime3DViewer({ visible, onClose, selectedLocation, selectedApt, mapViewMode = '2D', onToggleMapView }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewerRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
-    const prevLocationRef = useRef<{lat: number, lon: number} | null>(null); // ✅ 이전 좌표 저장용
-    const [isFull, setIsFull] = useState(false);
+    const prevLocationRef = useRef<{ lat: number, lon: number } | null>(null); // ✅ 이전 좌표 저장용
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isWindowViewMode, setIsWindowViewMode] = useState(false);
@@ -105,65 +106,89 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
         viewerRef.current._setCameraView(cameraView);
     };
 
-    // ✅ 뷰어 생성 (visible만 의존성으로 설정 - 한 번만 실행)
+    // ✅ 뷰어 생성/파괴 관리
     useEffect(() => {
-        if (!visible || !containerRef.current || viewerRef.current) return;
+        if (!visible) {
+            // 뷰어가 존재하면 정리
+            if (viewerRef.current) {
+                console.log('🧹 3D 뷰어 정리 시작');
 
-        // AbortController 초기화
-        abortControllerRef.current = new AbortController();
-        console.log('🎮 AbortController 초기화됨');
-
-        // MapPrime3D 라이브러리 로딩 대기 함수
-        const waitForLibraries = () => {
-            return new Promise<void>((resolve, reject) => {
-                let attempts = 0;
-                const maxAttempts = 50; // 5초 대기
-
-                const checkLibraries = () => {
-                    attempts++;
-
-                    // Cesium과 MapPrime3DExtension 모두 확인
-                    if (window.Cesium &&
-                        window.Cesium.Viewer &&
-                        typeof window.Cesium.Viewer === 'function' &&
-                        window.MapPrime3DExtension) {
-                        resolve();
-                        return;
+                // 🔧 안전한 뷰어 파괴
+                try {
+                    // 1. 모든 이벤트 핸들러 정리
+                    if (viewerRef.current.cesiumWidget?.screenSpaceEventHandler) {
+                        const handler = viewerRef.current.cesiumWidget.screenSpaceEventHandler;
+                        handler.removeInputAction(window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
+                        handler.removeInputAction(window.Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+                        handler.removeInputAction(window.Cesium.ScreenSpaceEventType.RIGHT_CLICK);
                     }
 
-                    if (attempts >= maxAttempts) {
-                        reject(new Error(
-                            `라이브러리 로딩 실패. ` +
-                            `Cesium: ${!!window.Cesium}, ` +
-                            `Cesium.Viewer: ${!!window.Cesium?.Viewer}, ` +
-                            `MapPrime3DExtension: ${!!window.MapPrime3DExtension}`
-                        ));
-                        return;
+                    // 2. 렌더링 루프 중단
+                    if (viewerRef.current.clock) {
+                        viewerRef.current.clock.shouldAnimate = false;
                     }
 
-                    setTimeout(checkLibraries, 100);
+                    // 3. WebGL 컨텍스트 정리
+                    if (viewerRef.current.scene?.context) {
+                        viewerRef.current.scene.context.destroy();
+                    }
+
+                    // 4. 뷰어 파괴
+                    if (!viewerRef.current.isDestroyed()) {
+                        viewerRef.current.destroy();
+                        console.log('✅ 3D 뷰어 파괴 완료');
+                    }
+
+                } catch (e) {
+                    console.warn('⚠️ 뷰어 파괴 중 오류:', e);
+                }
+
+                // 5. 참조 정리
+                viewerRef.current = null;
+                if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                    abortControllerRef.current = null;
+                }
+
+                console.log('✅ 3D 뷰어 정리 완료');
+            }
+            return;
+        }
+
+        // 🔧 async 함수로 뷰어 생성
+        const initializeViewer = async () => {
+            // ✅ 기본 카메라 위치 (서울)
+            const getDefaultCamera = () => {
+                console.log("📍 기본 위치로 3D 카메라 설정: 서울");
+                return {
+                    longitude: 127.035,
+                    latitude: 37.519,
+                    height: 400,
+                    heading: 340,
+                    pitch: -50,
+                    roll: 0,
                 };
-
-                checkLibraries();
-            });
-        };
-
-        // ✅ 기본 카메라 위치 (서울)
-        const getDefaultCamera = () => {
-            console.log("📍 기본 위치로 3D 카메라 설정: 서울");
-            return {
-                longitude: 127.035,
-                latitude: 37.519,
-                height: 400,
-                heading: 340,
-                pitch: -50,
-                roll: 0,
             };
-        };
 
-        // 라이브러리 로딩 대기 후 뷰어 초기화
-        waitForLibraries()
-            .then(() => {
+            // 라이브러리 로딩 대기
+            const waitForLibraries = () => {
+                return new Promise<void>((resolve, reject) => {
+                    const checkLibraries = () => {
+                        if (window.Cesium && window.MapPrime3DExtension) {
+                            console.log('✅ Cesium과 MapPrime3D 라이브러리 로딩 완료');
+                            resolve();
+                        } else {
+                            console.log('⏳ 라이브러리 로딩 대기 중...');
+                            setTimeout(checkLibraries, 100);
+                        }
+                    };
+                    checkLibraries();
+                });
+            };
+
+            try {
+                await waitForLibraries();
+
                 // 중간에 취소되었는지 확인
                 if (abortControllerRef.current?.signal.aborted) {
                     console.log('🚫 뷰어 초기화 취소됨');
@@ -173,150 +198,124 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                 setError(null);
                 console.log('라이브러리 로딩 완료, 뷰어 생성 시작');
 
+                // 뷰어 생성 부분 수정 (예시 방식 완전 복사)
                 try {
-                    // 1. Cesium 뷰어 생성
-                    const cesiumViewer = new window.Cesium.Viewer(containerRef.current, {
-                        // Cesium 기본 UI 모두 숨기기
-                        homeButton: false,
-                        sceneModePicker: false,
-                        baseLayerPicker: false,
-                        navigationHelpButton: false,
-                        animation: false,
-                        timeline: false,
-                        fullscreenButton: false,
-                        geocoder: false,
-                        infoBox: false,
-                        selectionIndicator: false,
-                        vrButton: false,
-                        // 토큰 관련 요청 방지
-                        requestRenderMode: false,
-                    });
-
-                    // Cesium Ion 관련 기능 비활성화 (토큰 에러 방지)
-                    if (cesiumViewer.cesiumWidget.creditContainer) {
-                        cesiumViewer.cesiumWidget.creditContainer.style.display = "none";
+                    // 🔧 컨테이너 정리
+                    if (containerRef.current) {
+                        containerRef.current.innerHTML = '';
                     }
+                    
+                    // 🔧 예시와 동일한 방식으로 div 생성
+                    const worldContainer = document.createElement('div');
+                    worldContainer.id = 'world-container';
+                    worldContainer.style.width = '100%';
+                    worldContainer.style.height = '100%';
+                    worldContainer.style.display = 'block';
+                    
+                    containerRef.current.appendChild(worldContainer);
+                    
+                    // 🔧 뷰어 안정화 대기
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // 1. Cesium 뷰어 생성 (예시와 완전 동일)
+                    const cesiumViewer = new window.Cesium.Viewer('world-container');
+                    
+                    console.log('✅ Cesium 뷰어 생성 완료');
 
-                    // Cesium Ion 서비스 비활성화
-                    if (window.Cesium.Ion) {
-                        window.Cesium.Ion.defaultAccessToken = undefined;
-                    }
+                    // 🔧 뷰어 안정화 대기
+                    await new Promise(resolve => setTimeout(resolve, 500));
 
-                    // 2. MapPrime3D 확장 적용
+                    // 2. MapPrime3D 확장 적용 (예시와 완전 동일)
                     cesiumViewer.extend(window.MapPrime3DExtension, {
-                        terrain: "https://mapprime.synology.me:15289/seoul/data/terrain/1m_v1.1/",
-                        tileset: "https://mapprime.synology.me:15289/seoul/data/all_ktx2/tileset.json",
-                        // tileset: "https://mapprime.synology.me:15289/MapPrimeServer/map/wmts?LAYER=mapprime:ecw_12cm&STYLE=&TILEMATRIXSET=google_tms&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&FORMAT=image/png&TILEMATRIX={z}&TILECOL={x}&TILEROW={y}",
+                        terrain: 'https://mapprime.synology.me:15289/seoul/data/terrain/1m_v1.1/',
+                        tileset: 'https://mapprime.synology.me:15289/seoul/data/all_ktx2/tileset.json',
                         controls: [],
-                        credit: "<i>MapPrime</i>",
-                        imageries: [
-                            {
-                                title: "Arcgis",
-                                credit: "Arcgis",
-                                type: "TMS",
-                                epsg: "EPSG:3857",
-                                url: "https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-                                format: "jpeg",
-                                maximumLevel: 18,
-                                current: false,
-                            },
-                            {
-                                // title: "Arcgis",
-                                // credit: "Arcgis",
-                                // type: "TMS",
-                                epsg: "EPSG:3857",
-                                url: "https://mapprime.synology.me:15289/MapPrimeServer/map/wmts?LAYER=mapprime:ecw_12cm&STYLE=&TILEMATRIXSET=google_tms&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&FORMAT=image/png&TILEMATRIX={z}&TILECOL={x}&TILEROW={y}",
-                                format: "jpeg",
-                                maximumLevel: 18,
-                                current: true,
-                            },
-                        ],
-                        // ✅ 기본 카메라 위치만 설정 (동적 이동은 별도 처리)
-                        initialCamera: getDefaultCamera(),
+                        imageries: [{
+                            "title": "Imagery",
+                            "credit": "Arcgis",
+                            "type": "TMS",
+                            "epsg": "EPSG:3857",
+                            "url": "https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                            "format": "jpeg",
+                            "maximumLevel": 18,
+                            "current": true
+                        }, {
+                            "title": "일반",
+                            "credit": "바로e맵",
+                            "type": "TMS",
+                            "epsg": "EPSG:5179",
+                            "url": "https://map.ngii.go.kr/openapi/Gettile.do?apikey=04trYP9_xwLAfALjwZ-B8g&layer=korean_map&style=korean&tilematrixset=korean&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image/png&TileMatrix={csZ}&TileCol={x}&TileRow={y}",
+                            "format": "png",
+                            "maximumLevel": 19,
+                            "current": false
+                        }],
+                        credit: '<i>MapPrime</i>',
+                        initialCamera: {
+                            longitude: 127.035,
+                            latitude: 37.519,
+                            height: 400,
+                            heading: 340,
+                            pitch: -50,
+                            roll: 0
+                        }
                     });
 
-                    // 뷰어 생성 후 다시 한 번 취소 확인
-                    if (abortControllerRef.current?.signal.aborted) {
-                        console.log('🚫 뷰어 생성 완료 후 취소 감지 - 뷰어 파괴');
-                        cesiumViewer.destroy();
-                        return;
+                    console.log('✅ MapPrime3D 확장 적용 완료');
+                    
+                    // 🔧 예시처럼 카메라 설정
+                    if (cesiumViewer._setCameraView) {
+                        cesiumViewer._setCameraView({
+                            longitude: 127.035,
+                            latitude: 37.519,
+                            height: 400,
+                            heading: 340,
+                            pitch: -50,
+                            roll: 0
+                        });
+                        console.log('✅ MapPrime3D 카메라 설정 완료');
                     }
-
+                    
+                    // 🔧 최종 안정화 대기
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
                     viewerRef.current = cesiumViewer;
                     setIsLoading(false);
-                    console.log('MapPrime3D 뷰어 생성 성공!');
+                    setError(null);
+                    
+                    console.log('✅ MapPrime3D 뷰어 생성 성공! (예시 방식 완전 복사)');
+                    
+                    // 🔧 뷰어 상태 확인
+                    console.log('🔍 뷰어 상태:', {
+                        viewer: !!cesiumViewer,
+                        cesiumWidget: !!cesiumViewer.cesiumWidget,
+                        screenSpaceEventHandler: !!cesiumViewer.cesiumWidget?.screenSpaceEventHandler,
+                        scene: !!cesiumViewer.scene,
+                        camera: !!cesiumViewer.camera,
+                        _setCameraView: typeof cesiumViewer._setCameraView,
+                        _drawAction: typeof cesiumViewer._drawAction,
+                        _startAnalysisShade: typeof cesiumViewer._startAnalysisShade
+                    });
 
-                    // ✅ 초기 위치로 카메라 이동 (selectedLocation이 있는 경우)
-                    if (selectedLocation) {
-                        console.log('🎯 초기 위치로 카메라 이동:', selectedLocation);
-                        setTimeout(() => {
-                            flyToLocation(selectedLocation.lat, selectedLocation.lon);
-                            setTimeout(() => {
-                                console.log('✅ 초기 하이라이트 시작');
-                                highlightApartment(selectedLocation.lat, selectedLocation.lon);
-                            }, 300);
-                        }, 500); // 뷰어 안정화를 위한 짧은 지연
-                    }
-
-                } catch (createError: unknown) {
-                    // ✅ 타입 오류 수정
-                    console.error('뷰어 생성 실패:', createError);
-                    const errorMessage = createError instanceof Error ? createError.message : '알 수 없는 오류';
-                    setError(`뷰어 생성 실패: ${errorMessage}`);
+                } catch (error) {
+                    console.error('❌ 뷰어 생성 실패:', error);
+                    setError(error instanceof Error ? error.message : '뷰어 생성 실패');
                     setIsLoading(false);
                 }
-            })
-            .catch((err) => {
-                setError(err.message);
+
+            } catch (error) {
+                console.error('❌ 뷰어 초기화 중 오류:', error);
+                setError('뷰어 초기화 실패');
                 setIsLoading(false);
-                console.error('MapPrime3D 초기화 오류:', err);
-            });
-
-        return () => {
-            console.log('🧹 3D 뷰어 cleanup 시작');
-
-            // 1. 모든 진행 중인 요청 취소
-            if (abortControllerRef.current) {
-                console.log('❌ 진행 중인 모든 요청 취소');
-                abortControllerRef.current.abort('Component unmounting');
-                abortControllerRef.current = null;
             }
-
-            // 2. 하이라이트 및 음영분석 정리 (뷰어 파괴 전에)
-            try {
-                console.log('🧹 3D 하이라이트 정리 시작');
-                clearHighlight();
-            } catch (e) {
-                console.warn('⚠️ 하이라이트 정리 중 오류:', e);
-            }
-
-            try {
-                console.log('🧹 3D 음영분석 정리 시작');
-                clearShadeAnalysis();
-            } catch (e) {
-                console.warn('⚠️ 음영분석 정리 중 오류:', e);
-            }
-
-            // 3. 뷰어 파괴
-            if (viewerRef.current) {
-                try {
-                    // 뷰어가 이미 파괴되었는지 확인
-                    if (!viewerRef.current.isDestroyed()) {
-                        console.log('🧹 3D 뷰어 정리 시작');
-                        viewerRef.current.destroy();
-                        console.log('✅ 3D 뷰어 정리 완료');
-                    }
-                } catch (e) {
-                    console.warn('⚠️ 뷰어 정리 중 오류:', e);
-                } finally {
-                    // 어떤 경우든 참조 정리 (맨 마지막에)
-                    viewerRef.current = null;
-                }
-            }
-
-            console.log('✅ 3D 뷰어 cleanup 완료');
         };
-    }, [visible]); // ✅ selectedLocation 의존성 제거 - 뷰어는 한 번만 생성
+
+        // 🔧 async 함수 호출
+        initializeViewer().catch(error => {
+            console.error('❌ 뷰어 초기화 중 오류:', error);
+            setError('뷰어 초기화 실패');
+            setIsLoading(false);
+        });
+    }, [visible]);
 
     // ✅ 카메라 이동 및 하이라이트 처리 (selectedLocation 변경 시)
     useEffect(() => {
@@ -337,10 +336,10 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
         if (selectedLocation) {
             // ✅ 좌표가 실제로 변경된 경우에만 실행
             const prev = prevLocationRef.current;
-            const isSameLocation = prev && 
-                Math.abs(prev.lat - selectedLocation.lat) < 0.000001 && 
+            const isSameLocation = prev &&
+                Math.abs(prev.lat - selectedLocation.lat) < 0.000001 &&
                 Math.abs(prev.lon - selectedLocation.lon) < 0.000001;
-            
+
             if (!isSameLocation) {
                 console.log('🎯 3D 카메라 이동 및 하이라이트:', selectedLocation);
 
@@ -352,7 +351,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                     console.log('✅ 하이라이트 시작');
                     highlightApartment(selectedLocation.lat, selectedLocation.lon);
                 }, 300); // 300ms 지연
-                
+
                 // 3. 현재 좌표를 이전 좌표로 저장
                 prevLocationRef.current = { lat: selectedLocation.lat, lon: selectedLocation.lon };
             } else {
@@ -370,29 +369,22 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
 
     return (
         <>
-            {/* 확대 시 전체 화면 오버레이 */}
-            {isFull && (
-                <div className="fixed inset-0 bg-black/20 z-[9998]" onClick={() => setIsFull(false)} />
-            )}
-
             {/* ✅ 3D 뷰어 컨테이너 - TopBar 아래 우측으로 이동 */}
             <div
-                className={`fixed bg-white border shadow-lg transition-all duration-300 ${isFull
-                    ? "inset-4 z-[9999]" // 확대 시 전체 화면
-                    : "top-20 right-12 z-50" // TopBar(h-16) 아래 + 우측 버튼 왼쪽
-                    }`}
-                style={{
-                    borderRadius: isFull ? '12px' : '8px',
-                    width: isFull ? 'auto' : `${width}px`,
-                    height: isFull ? 'auto' : `${height}px`,
+                className={mapViewMode === '3D'
+                    ? 'fixed inset-0 bg-white z-[100]' // 3D 메인 모드 - 적절한 z-index로 표시되도록
+                    : 'fixed top-20 right-12 z-50 bg-white border shadow-lg rounded-lg' // 팝업 기본 위치
+                }
+                style={mapViewMode === '3D' ? {} : {
+                    width: `${width}px`,
+                    height: `${height}px`,
                 }}
             >
-                {/* 리사이즈 핸들 - 좌측 하단 (축소 모드에서만 표시) */}
-                {!isFull && (
-                    <div 
-                        className={`absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize z-10 ${
-                            resizeHandle.isDragging ? 'bg-[#3D7D7B]' : 'bg-gray-300 hover:bg-[#14E3DC]'
-                        } rounded-bl-lg opacity-60 hover:opacity-100 transition-all duration-200`}
+                {/* 리사이즈 핸들 - 좌측 하단 (3D 메인 모드가 아닌 경우에만 표시) */}
+                {mapViewMode !== '3D' && (
+                    <div
+                        className={`absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize z-10 ${resizeHandle.isDragging ? 'bg-[#3D7D7B]' : 'bg-gray-300 hover:bg-[#14E3DC]'
+                            } rounded-bl-lg opacity-60 hover:opacity-100 transition-all duration-200`}
                         onMouseDown={resizeHandle.onMouseDown}
                         title="크기 조절"
                     >
@@ -403,57 +395,65 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                     </div>
                 )}
                 {/* 기본 제어 버튼들 (항상 표시) */}
-                <div className={`absolute flex gap-2 z-10 ${isFull
-                    ? "top-4 right-4"
-                    : "top-2 right-2"
-                    }`}>
+                <div className="absolute flex gap-2 z-10 top-2 right-2">
                     {/* ✅ 아파트 단지명 표시 (좌표 대신) */}
                     {selectedApt && (
-                        <div className={`bg-blue-500/90 text-white rounded shadow-sm ${isFull
-                            ? "px-3 py-2 text-xs max-w-xs"
-                            : "px-2 py-1 text-xs max-w-48"
-                            }`}>
+                        <div className="bg-blue-500/90 text-white rounded shadow-sm px-2 py-1 text-xs max-w-48">
                             🏠 <span className="font-medium">{selectedApt.apt_nm}</span>
                         </div>
                     )}
-                    <button
-                        className={`bg-white/90 hover:bg-white border border-gray-300 text-gray-700 rounded shadow-sm transition-all ${isFull
-                            ? "px-4 py-2 text-sm"
-                            : "px-3 py-1 text-xs"
-                            }`}
-                        onClick={() => setIsFull(!isFull)}
-                        disabled={isLoading || !!error}
-                    >
-                        {isFull ? "축소" : "확대"}
-                    </button>
-                    <button
-                        className={`bg-red-500/90 hover:bg-red-600 text-white rounded shadow-sm transition-all ${isFull
-                            ? "px-4 py-2 text-sm"
-                            : "px-3 py-1 text-xs"
-                            }`}
-                        onClick={() => {
-                            // 즉시 로딩 취소
-                            if (isLoading && abortControllerRef.current) {
-                                console.log('🛑 사용자가 로딩 중 닫기 요청 - 모든 작업 취소');
-                                abortControllerRef.current.abort('User requested close');
-                                setIsLoading(false);
-                            }
-                            onClose();
-                        }}
-                    >
-                        닫기
-                    </button>
+
+                    {/* X 닫기 버튼 - 3D 메인 모드가 아닐 때만 표시 */}
+                    {mapViewMode !== '3D' && (
+                        <button
+                            onClick={onClose}
+                            className="bg-gray-500/90 hover:bg-gray-600 text-white rounded shadow-sm transition-all w-6 h-6 flex items-center justify-center text-xs"
+                            title="닫기"
+                        >
+                            ✕
+                        </button>
+                    )}
+                    {/* 전환 버튼 - 팝업에서만 표시 */}
+                    {mapViewMode !== '3D' && (
+                        <button
+                            className="bg-white/90 hover:bg-white border border-gray-300 text-gray-700 rounded shadow-sm transition-all px-3 py-1 text-xs"
+                            onClick={() => {
+                                if (onToggleMapView) {
+                                    onToggleMapView(); // Home.tsx의 로직이 처리
+                                }
+                            }}
+                            disabled={isLoading || !!error}
+                        >
+                            전환
+                        </button>
+                    )}
                 </div>
 
-                {/* 3D 지도 조작 버튼들 (확대 시에만 표시, 우측 배치) */}
-                {isFull && (
-                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-10">
+                {/* 3D 지도 조작 버튼들 (3D 메인 모드에서만 표시, 우측 배치) */}
+                {mapViewMode === '3D' && (
+                    <div className="fixed right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 z-[300]">
                         <button
                             className={`${isWindowViewMode
                                 ? "bg-blue-500 text-white border-blue-500"
                                 : "bg-white/90 hover:bg-white border-gray-300 text-gray-700"
                                 } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm`}
-                            onClick={() => setIsWindowViewMode(!isWindowViewMode)}
+                            onClick={() => {
+                                console.log('🪟 창가뷰 버튼 클릭됨:', {
+                                    현재상태: isWindowViewMode,
+                                    음영분석중: isAnalyzing,
+                                    뷰어상태: !!viewerRef.current
+                                });
+
+                                // 🔧 음영분석이 진행 중이면 먼저 중단
+                                if (isAnalyzing) {
+                                    console.log('🛑 음영분석 중단 중...');
+                                    clearShadeAnalysis();
+                                    setHasShadeResult(false);
+                                    setLastShadeOptions(null);
+                                }
+                                setIsWindowViewMode(!isWindowViewMode);
+                                console.log('✅ 창가뷰 모드 변경:', !isWindowViewMode);
+                            }}
                             disabled={isLoading || !!error}
                             title="창가 뷰 모드"
                         >
@@ -484,11 +484,32 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                                     } rounded-lg shadow-md transition-all px-4 py-3 text-sm border backdrop-blur-sm ${isAnalyzing ? "opacity-75 cursor-not-allowed" : ""
                                     }`}
                                 onClick={async () => {
-                                    // shade.html처럼 바로 분석 시작
-                                    const options = { interval: 15 }; // 기본 옵션
-                                    await startShadeAnalysis(options);
-                                    setLastShadeOptions(options); // 마지막 분석 옵션 저장
-                                    setHasShadeResult(true); // 분석 완료 시 결과 표시 상태 활성화
+                                    console.log('☀️ 음영분석 버튼 클릭됨:', {
+                                        창가뷰모드: isWindowViewMode,
+                                        분석중: isAnalyzing,
+                                        뷰어상태: !!viewerRef.current
+                                    });
+
+                                    // 🔧 창가뷰 모드가 활성화되어 있다면 먼저 비활성화
+                                    if (isWindowViewMode) {
+                                        console.log('🛑 창가뷰 모드 비활성화 중...');
+                                        setIsWindowViewMode(false);
+                                        // 짧은 지연 후 음영분석 시작 (이벤트 정리 시간)
+                                        setTimeout(async () => {
+                                            console.log('🌅 창가뷰 해제 후 음영분석 시작');
+                                            const options = { interval: 15 };
+                                            await startShadeAnalysis(options);
+                                            setLastShadeOptions(options);
+                                            setHasShadeResult(true);
+                                        }, 100);
+                                    } else {
+                                        console.log('🌅 즉시 음영분석 시작');
+                                        // shade.html처럼 바로 분석 시작
+                                        const options = { interval: 15 }; // 기본 옵션
+                                        await startShadeAnalysis(options);
+                                        setLastShadeOptions(options); // 마지막 분석 옵션 저장
+                                        setHasShadeResult(true); // 분석 완료 시 결과 표시 상태 활성화
+                                    }
                                 }}
                                 disabled={isLoading || !!error || isAnalyzing}
                                 title="음영분석"
@@ -562,8 +583,8 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
 
                 {/* 창가뷰 모드 가이드 메시지 */}
                 {isWindowViewMode && (
-                    <div className="absolute bottom-4 left-4 right-4 bg-blue-500/90 text-white px-4 py-3 rounded-lg shadow-lg z-10">
-                        <div className="flex items-center gap-2">
+                    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-blue-500/95 text-white px-6 py-3 rounded-lg shadow-xl z-[400] max-w-md">
+                        <div className="flex items-center gap-3">
                             <span className="text-lg">🪟</span>
                             <div className="flex-1">
                                 <p className="text-sm font-medium">창가뷰 모드</p>
@@ -571,7 +592,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                             </div>
                             <button
                                 onClick={() => setIsWindowViewMode(false)}
-                                className="text-white/80 hover:text-white text-lg"
+                                className="text-white/80 hover:text-white text-lg ml-2"
                                 title="창가뷰 모드 해제"
                             >
                                 ✕
@@ -582,8 +603,8 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
 
                 {/* 둘러보기 모드 가이드 메시지 */}
                 {isFirstPersonMode && (
-                    <div className="absolute bottom-4 left-4 right-4 bg-green-500/90 text-white px-4 py-3 rounded-lg shadow-lg z-10">
-                        <div className="flex items-center gap-2">
+                    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-500/95 text-white px-6 py-3 rounded-lg shadow-xl z-[400] max-w-md">
+                        <div className="flex items-center gap-3">
                             <span className="text-lg">🚶</span>
                             <div className="flex-1">
                                 <p className="text-sm font-medium">둘러보기 모드</p>
@@ -591,7 +612,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                             </div>
                             <button
                                 onClick={() => setIsFirstPersonMode(false)}
-                                className="text-white/80 hover:text-white text-lg"
+                                className="text-white/80 hover:text-white text-lg ml-2"
                                 title="둘러보기 모드 해제"
                             >
                                 ✕
@@ -602,8 +623,8 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
 
                 {/* 음영분석 가이드 메시지 (분석 중일 때만) */}
                 {isAnalyzing && (
-                    <div className="absolute bottom-4 left-4 right-4 bg-orange-500/90 text-white px-4 py-3 rounded-lg shadow-lg z-10">
-                        <div className="flex items-center gap-2">
+                    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-orange-500/95 text-white px-6 py-3 rounded-lg shadow-xl z-[400] max-w-md">
+                        <div className="flex items-center gap-3">
                             <span className="text-lg">☀️</span>
                             <div className="flex-1">
                                 <p className="text-sm font-medium">음영분석</p>
@@ -615,8 +636,8 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
 
                 {/* 음영분석 에러 표시 */}
                 {shadeError && (
-                    <div className="absolute bottom-4 left-4 right-4 bg-red-500/90 text-white px-4 py-3 rounded-lg shadow-lg z-10">
-                        <div className="flex items-center gap-2">
+                    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-500/95 text-white px-6 py-3 rounded-lg shadow-xl z-[400] max-w-md">
+                        <div className="flex items-center gap-3">
                             <span className="text-lg">⚠️</span>
                             <div className="flex-1">
                                 <p className="text-sm font-medium">음영분석 오류</p>
@@ -624,7 +645,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                             </div>
                             <button
                                 onClick={() => clearShadeAnalysis()}
-                                className="text-white/80 hover:text-white text-lg"
+                                className="text-white/80 hover:text-white text-lg ml-2"
                                 title="오류 메시지 닫기"
                             >
                                 ✕

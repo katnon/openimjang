@@ -12,27 +12,92 @@ type AptInfoRow = {
 
 export const searchRoute = new Hono();
 
-// 🔍 자동완성 및 검색
+// 🔍 통합 아파트 검색 (좌표 > 주소 > 아파트명 순서로 검색)
 searchRoute.get("/", async (c) => {
-    const q = c.req.query("q") ?? "";
+    const address = c.req.query("address") ?? "";
+    const lat = c.req.query("lat") ? parseFloat(c.req.query("lat")!) : null;
+    const lng = c.req.query("lng") ? parseFloat(c.req.query("lng")!) : null;
+    const aptName = c.req.query("q") ?? ""; // 아파트명 검색 파라미터 추가
 
-    if (!q || q.trim().length < 1) return c.json([]);
+    if (!address && (!lat || !lng) && !aptName) {
+        return c.json({ 
+            error: "검색 조건이 필요합니다",
+            example: "/api/search?lat=37.55817&lng=127.01790 또는 /api/search?address=서울 신당동 843 또는 /api/search?q=삼성"
+        }, 400);
+    }
 
     try {
-        console.log(`🔍 검색 요청: "${q}"`);
+        let results;
 
-        const results = await (db
-            .selectFrom("oi.apt_info" as any)
-            .select(["id", "apt_nm", "jibun_address", "lat", "lon"]) as any)
-            .where((eb: any) => eb.or([
-                eb("apt_nm", "ilike", `%${q}%`),
-                eb("jibun_address", "ilike", `%${q}%`)
-            ]))
-            .orderBy("apt_nm")
-            .limit(10)
-            .execute();
+        if (lat && lng) {
+            // 1순위: 좌표 기반 검색 (가장 정확함)
+            console.log(`🔍 좌표 검색: lat=${lat}, lng=${lng}`);
+            results = await db
+                .selectFrom("oi.apt_info" as any)
+                .select(["id", "apt_nm", "jibun_address", "lat", "lon"])
+                .where("lat", "is not", null)
+                .where("lon", "is not", null)
+                .orderBy(sql`ST_Distance(ST_Point(${lng}, ${lat}), ST_Point(lon, lat))`)
+                .limit(10)
+                .execute();
+        } else if (address) {
+            // 2순위: 지번주소 기반 검색
+            console.log(`🔍 주소 검색: "${address}"`);
+            results = await (db
+                .selectFrom("oi.apt_info" as any)
+                .select(["id", "apt_nm", "jibun_address", "lat", "lon"]) as any)
+                .where("jibun_address", "ilike", `%${address}%`)
+                .orderBy("jibun_address")
+                .limit(10)
+                .execute();
+        } else if (aptName) {
+            // 3순위: 아파트명 유사도 검색 (PostgreSQL similarity 사용)
+            console.log(`🔍 아파트명 검색: "${aptName}"`);
+            
+            try {
+                // similarity extension이 있는지 확인하고, 유사도 검색 시도
+                results = await sql<AptInfoRow>`
+                    SELECT id, apt_nm, jibun_address, lat, lon,
+                           similarity(apt_nm, ${aptName}) as sim_score
+                    FROM oi.apt_info
+                    WHERE apt_nm % ${aptName} OR apt_nm ILIKE ${`%${aptName}%`}
+                    ORDER BY similarity(apt_nm, ${aptName}) DESC, apt_nm
+                    LIMIT 10
+                `.execute(db);
+                
+                // similarity가 없는 경우 ILIKE로 fallback
+                if (!results.rows || results.rows.length === 0) {
+                    console.log(`📝 유사도 검색 결과 없음, ILIKE로 재검색`);
+                    results = await (db
+                        .selectFrom("oi.apt_info" as any)
+                        .select(["id", "apt_nm", "jibun_address", "lat", "lon"]) as any)
+                        .where("apt_nm", "ilike", `%${aptName}%`)
+                        .orderBy("apt_nm")
+                        .limit(10)
+                        .execute();
+                } else {
+                    // sql 결과를 표준 형식으로 변환
+                    results = results.rows;
+                }
+            } catch (simError) {
+                // similarity extension이 없는 경우 ILIKE 검색으로 fallback
+                console.log(`⚠️ Similarity 검색 실패, ILIKE로 fallback:`, simError.message);
+                results = await (db
+                    .selectFrom("oi.apt_info" as any)
+                    .select(["id", "apt_nm", "jibun_address", "lat", "lon"]) as any)
+                    .where("apt_nm", "ilike", `%${aptName}%`)
+                    .orderBy("apt_nm")
+                    .limit(10)
+                    .execute();
+            }
+        } else {
+            results = [];
+        }
 
-        console.log(`🔍 검색 결과: "${q}" -> ${results.length}개`);
+        const searchType = lat && lng ? "좌표" : address ? "주소" : "아파트명";
+        const searchValue = lat && lng ? `(${lat}, ${lng})` : address || aptName;
+        console.log(`🔍 검색 결과: ${searchType} "${searchValue}" -> ${results.length}개`);
+        
         return c.json(results);
     } catch (e) {
         console.error("❌ 검색 오류:", e);

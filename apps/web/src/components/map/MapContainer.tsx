@@ -25,6 +25,7 @@ type MapContainerProps = {
     cardWidth?: number;
     tempMarker?: POIItem | null; // 임시 마커 (POI 호버용)
     showFavoritePins?: boolean; // 즐겨찾기 핀 표시 여부
+    isMiniMap?: boolean; // 미니맵 모드 여부
 };
 
 const MapContainer: React.FC<MapContainerProps> = ({
@@ -35,7 +36,8 @@ const MapContainer: React.FC<MapContainerProps> = ({
     isCardExpanded = false,
     cardWidth = 320,
     tempMarker,
-    showFavoritePins = true
+    showFavoritePins = true,
+    isMiniMap = false
 }) => {
     const { user } = useAuth();
     const mapRef = useRef<HTMLDivElement | null>(null);

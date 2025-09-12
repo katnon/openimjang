@@ -67,6 +67,15 @@ export function useShadeAnalysis(
 
   // 음영분석 실행
   const startShadeAnalysis = useCallback(async (options?: ShadeAnalysisOptions) => {
+    console.log('🌅 startShadeAnalysis 호출됨:', options);
+    console.log('🔍 뷰어 상태 확인:', {
+      viewer: !!viewer,
+      _drawAction: typeof viewer?._drawAction,
+      _startAnalysisShade: typeof viewer?._startAnalysisShade,
+      cesiumWidget: !!viewer?.cesiumWidget,
+      screenSpaceEventHandler: !!viewer?.cesiumWidget?.screenSpaceEventHandler
+    });
+    
     if (!viewer || !viewer._drawAction || !viewer._startAnalysisShade) {
       console.error('⚠️ MapPrime3D 음영분석 API가 준비되지 않음');
       setError('음영분석 API가 준비되지 않았습니다.');
@@ -90,14 +99,21 @@ export function useShadeAnalysis(
         selectedPoint = storedPosition;
       } else {
         console.log('🎯 음영분석을 위한 지점 선택 시작');
-        console.log('viewer._drawAction:', typeof viewer._drawAction);
 
-        // 사용자가 지점을 선택하도록 대기
-        const drawResult = await viewer._drawAction({
-          shapeType: 0, // 점 선택
-        });
+        // 🔧 shade.html처럼 간단하게 _drawAction 호출
+        console.log('🎯 _drawAction 호출 시작...');
+        
+        try {
+          const drawResult = await viewer._drawAction({
+            shapeType: 0, // 점 선택
+          });
 
-        console.log('🎯 drawResult:', drawResult);
+          console.log('🎯 drawResult 완료:', drawResult);
+          console.log('📊 선택된 위치 정보:', drawResult?.data?.positions);
+        } catch (drawError) {
+          console.error('❌ _drawAction 실행 중 오류:', drawError);
+          throw drawError;
+        }
 
         // 작업 취소 확인
         if (abortController?.signal.aborted) {

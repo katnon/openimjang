@@ -144,11 +144,15 @@ export function createSlotMiddleware(config: Partial<SlotMiddlewareConfig> = {})
   return async (c: Context, next: Next) => {
     try {
       // 인증된 사용자만 처리 (user 정보는 authMiddleware에서 설정)
-      // 테스트 환경에서는 임시 사용자 ID 사용
+      // 테스트 환경에서는 클라이언트별 고유 사용자 ID 생성
       
-      // 🔧 강제로 고정 사용자 ID 사용 (세션 메모리 문제 해결)
-      const userId = 'test-user-default';
-      console.log('⚠️ 슬롯 미들웨어: 강제 고정 사용자 ID 사용:', userId);
+      // 🔧 클라이언트별로 고정된 사용자 ID 사용 (대화 히스토리 보존)
+      // 실제 프로덕션에서는 JWT 토큰이나 세션 쿠키에서 userId를 추출
+      const clientIP = c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP') || 'default';
+      const userAgent = c.req.header('User-Agent') || 'default';
+      const clientFingerprint = Buffer.from(clientIP + userAgent).toString('base64').substring(0, 8);
+      const userId = `client-${clientFingerprint}`;
+      console.log('✅ 슬롯 미들웨어: 클라이언트별 고정 사용자 ID:', userId);
       
       // 요청에서 메시지와 세션 정보 추출
       let body: any = {};

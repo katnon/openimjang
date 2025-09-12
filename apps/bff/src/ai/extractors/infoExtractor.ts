@@ -382,8 +382,8 @@ function extractMentionedApartments(message: string): {
   
   console.log('🔍 extractMentionedApartments 함수 호출:', message);
   
-  // @아파트명 패턴 매칭 (한글, 영문, 숫자 모두 포함 - 간소화)
-  const mentionPattern = /@([가-힣a-zA-Z0-9\s]+?)(?:\s|$)/g;
+  // @아파트명 패턴 매칭 (한글, 영문, 숫자, 하이픈, 특수문자 모두 포함)
+  const mentionPattern = /@([가-힣a-zA-Z0-9\s\-_.()]+?)(?:\s(?![가-힣a-zA-Z0-9\-_.])|$)/g;
   console.log('📝 사용된 패턴:', mentionPattern.toString());
   const matches = Array.from(message.matchAll(mentionPattern));
   console.log('🎯 패턴 매칭 결과:', matches);

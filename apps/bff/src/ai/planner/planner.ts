@@ -13,7 +13,7 @@ import {
   PlannerConfig,
   DEFAULT_PLANNER_CONFIG
 } from './types';
-import { analyzeIntent, refineIntentWithContext } from './intentAnalyzer';
+import { analyzewithLLM, mergeLLMSlots } from './llmAnalyzer';
 import { ConversationSlots } from '../types/slots';
 
 /**
@@ -38,17 +38,28 @@ export class SmartPlanner implements IPlanner {
       });
     }
 
-    // 1. 의도 분석 및 개선
-    const rawIntent = analyzeIntent(context.question, context.slots);
-    const intent = refineIntentWithContext(rawIntent, context);
-    context.intent = intent;
+    // 1. LLM 기반 통합 분석 (의도 + 슬롯 + 액션 추천)
+    const llmAnalysis = await analyzewithLLM(
+      context.question,
+      context.slots,
+      context.userProfile,
+      context.sessionHistory?.messageHistory
+    );
+    
+    // 2. 슬롯 업데이트 (LLM이 추출한 정보로)
+    context.slots = mergeLLMSlots(context.slots, llmAnalysis.slots);
+    context.intent = {
+      ...llmAnalysis.intent,
+      entities: [] // 기존 호환성을 위해
+    };
 
     if (this.config.debugMode) {
-      console.log('🧠 의도 분석 결과:', {
-        category: intent.category,
-        subcategory: intent.subcategory,
-        confidence: intent.confidence.toFixed(2),
-        entitiesCount: intent.entities.length
+      console.log('🧠 LLM 분석 완료:', {
+        category: llmAnalysis.intent.category,
+        subcategory: llmAnalysis.intent.subcategory,
+        confidence: llmAnalysis.intent.confidence.toFixed(2),
+        recommendedActions: llmAnalysis.recommendedActions,
+        updatedSlots: Object.keys(llmAnalysis.slots)
       });
     }
 
@@ -84,13 +95,106 @@ export class SmartPlanner implements IPlanner {
   }
 
   /**
-   * 컨텍스트 기반 액션 생성
+   * LLM 분석 기반 액션 생성
    */
   private async generateActions(context: PlanContext): Promise<PlanAction[]> {
     const actions: PlanAction[] = [];
     const { intent, slots } = context;
+    
+    // LLM이 분석한 recommendedActions를 우선 사용
+    const llmAnalysis = await analyzewithLLM(
+      context.question,
+      slots,
+      context.userProfile,
+      context.sessionHistory?.messageHistory
+    );
+    
+    console.log('🎯 LLM 추천 액션:', llmAnalysis.recommendedActions);
+    
+    // LLM이 추천한 액션들을 기반으로 PlanAction 생성
+    for (const actionType of llmAnalysis.recommendedActions) {
+      switch (actionType) {
+        case 'searchNearbyPOI':
+        case 'searchPOI':
+          if (slots.apartmentName || slots.apartmentMetadata) {
+            actions.push({
+              id: uuidv4(),
+              type: 'searchPOI',
+              name: 'Search Nearby POIs',
+              description: '주변 편의시설을 검색합니다',
+              reason: llmAnalysis.intent.reasoning || 'LLM이 POI 검색을 추천했습니다',
+              priority: ActionPriority.HIGH,
+              parameters: {
+                apartmentName: slots.apartmentName,
+                apartmentMetadata: slots.apartmentMetadata,
+                radius: 1000,
+                categories: ['편의점', '마트', '병원', '학교', '지하철역']
+              }
+            });
+          }
+          break;
+          
+        case 'searchRealEstate':
+          actions.push({
+            id: uuidv4(),
+            type: 'searchRealEstate',
+            name: 'Search Real Estate Data',
+            description: '부동산 실거래 데이터를 검색합니다',
+            reason: llmAnalysis.intent.reasoning || 'LLM이 부동산 검색을 추천했습니다',
+            priority: ActionPriority.HIGH,
+            parameters: {
+              includeHistory: true,
+              maxResults: 50
+            }
+          });
+          break;
+          
+        case 'getBuildingInfo':
+          if (slots.apartmentName) {
+            actions.push({
+              id: uuidv4(),
+              type: 'getBuildingInfo',
+              name: 'Get Building Information',
+              description: '건물 기본 정보를 조회합니다',
+              reason: llmAnalysis.intent.reasoning || 'LLM이 건물 정보 조회를 추천했습니다',
+              priority: ActionPriority.MEDIUM,
+              parameters: {
+                apartmentName: slots.apartmentName
+              }
+            });
+          }
+          break;
+      }
+    }
+    
+    // LLM이 액션을 추천하지 않은 경우, 기본 로직 사용
+    if (actions.length === 0) {
+      console.log('⚠️ LLM 추천 액션 없음, 기본 로직 사용');
+      // 기존 로직을 간소화하여 유지
+      if (intent.category === 'search' && intent.subcategory?.includes('poi')) {
+        if (slots.apartmentName || slots.apartmentMetadata) {
+          actions.push({
+            id: uuidv4(),
+            type: 'searchPOI',
+            name: 'Search Nearby POIs (Fallback)',
+            description: '주변 편의시설을 검색합니다',
+            reason: '폴백: 기본 POI 검색 로직',
+            priority: ActionPriority.MEDIUM,
+            parameters: {
+              apartmentName: slots.apartmentName,
+              apartmentMetadata: slots.apartmentMetadata,
+              radius: 1000
+            }
+          });
+        }
+      }
+    }
+    
+    if (actions.length > 0) {
+      return actions;
+    }
 
-    // 1. Clarify 단계 확인 (최우선)
+    // 2. Clarify 단계 확인
     const clarifyActions = this.generateClarifyActions(context);
     if (clarifyActions.length > 0) {
       actions.push(...clarifyActions);
@@ -156,6 +260,14 @@ export class SmartPlanner implements IPlanner {
   private identifyMissingSlots(context: PlanContext): string[] {
     const { slots, intent } = context;
     const missing: string[] = [];
+
+    // POI 검색의 경우 아파트 이름만 있으면 됨
+    if (intent.subcategory === 'poi_search') {
+      if (!slots.apartmentName) {
+        missing.push('apartmentName');
+      }
+      return missing; // POI 검색은 dealType 불필요
+    }
 
     // 의도별 필수 슬롯 정의
     const requiredSlots = this.getRequiredSlots(intent.category, intent.subcategory);
@@ -312,12 +424,53 @@ export class SmartPlanner implements IPlanner {
   }
 
   /**
-   * 검색 액션 생성
+   * 검색 액션 생성 (LLM 추천 우선)
    */
   private generateSearchActions(context: PlanContext): PlanAction[] {
     const actions: PlanAction[] = [];
     const { intent } = context;
 
+    // 🧠 LLM 추천 액션 우선 처리
+    if (intent.actions && intent.actions.length > 0) {
+      console.log('🎯 LLM 추천 액션:', intent.actions);
+      
+      intent.actions.forEach(actionName => {
+        if (actionName === 'searchNearbyPOI' || actionName === 'searchPOI') {
+          actions.push({
+            id: uuidv4(),
+            type: 'searchPOI',
+            name: 'Search Nearby POI',
+            description: '주변 편의시설 정보를 검색합니다',
+            reason: 'LLM이 POI 검색을 추천했습니다',
+            priority: ActionPriority.HIGH,
+            parameters: {
+              radius: 1000,
+              poiType: '전체'
+            }
+          });
+        } else if (actionName === 'searchRealEstate' || actionName === 'searchRealEstateDeals') {
+          actions.push({
+            id: uuidv4(),
+            type: 'searchRealEstate',
+            name: 'Search Real Estate Data',
+            description: '부동산 실거래 데이터를 검색합니다',
+            reason: 'LLM이 실거래 검색을 추천했습니다',
+            priority: ActionPriority.HIGH,
+            parameters: {
+              includeHistory: true,
+              maxResults: 50
+            }
+          });
+        }
+      });
+      
+      // LLM 추천이 있으면 기존 규칙 기반 로직은 생략
+      if (actions.length > 0) {
+        return actions;
+      }
+    }
+
+    // 🔄 폴백: 기존 규칙 기반 로직 (LLM 추천이 없는 경우에만)
     if (intent.subcategory === 'price_search' || !intent.subcategory) {
       actions.push({
         id: uuidv4(),

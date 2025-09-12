@@ -36,8 +36,8 @@ import { displayOnMapSchema } from '../schemas/visualization/displayOnMap.schema
 // 메모 시스템 스키마 import
 import { getUserMemosSchema } from '../schemas/memo/getUserMemos.schema';
 
-// 카카오 API 스키마 import
-import { searchPlacesSchema } from '../schemas/kakao/searchPlaces.schema';
+// 카카오 API 스키마 import (주변 POI 검색시 searchNearbyPOI만 사용)
+// import { searchPlacesSchema } from '../schemas/kakao/searchPlaces.schema';
 
 // 모든 스키마를 OpenAI Tool 형식으로 변환
 const createTool = (schema: any): OpenAITool => ({
@@ -79,10 +79,10 @@ export const tools: OpenAITool[] = [
   createTool(displayOnMapSchema),
   
   // 메모 시스템 함수들
-  createTool(getUserMemosSchema),
+  createTool(getUserMemosSchema)
   
-  // 카카오 API 함수들
-  createTool(searchPlacesSchema)
+  // 카카오 API 함수들 제거 (searchNearbyPOI만 사용)
+  // createTool(searchPlacesSchema)
 ];
 
 // 중복 이름 검사

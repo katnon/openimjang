@@ -3,17 +3,22 @@ import 'dotenv/config';
 import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
+import { bodyLimit } from 'hono/body-limit';
 import { db } from './lib/db';
 import { searchRoute } from './routes/search';
 import { sql } from "kysely";
 import upisGeoRouter from './routes/geo/upis';
 import buildings from './routes/geo/buildings';
 import poi from './routes/poi';
-// import { aiRoute } from './routes/ai';  // ⚠️ LEGACY - 새로운 AI 모듈로 대체됨
-import apiAiToolsRoute from './routes/apiAiTools';
+// ⚠️ LEGACY Function Calling imports - 제거됨
+// import apiAiToolsRoute from './routes/apiAiTools';
+// import aiAskRoute from './routes/aiAsk';
+// import aiHybridRoute from './routes/aiHybrid';
+
+// 🎯 플래너 기반 AI 시스템
 import aiChatRoute from './routes/aiChat';
-import aiAskRoute from './routes/aiAsk';
-import aiHybridRoute from './routes/aiHybrid';
+// import plannerTestRoute from './routes/plannerTest';  // 구문 오류로 임시 주석
+import chatBotRoute from './routes/chatBot';
 import embeddingRoute from './routes/embedding';
 import swaggerRoute from './routes/swagger';
 import { memoRoute } from './routes/memo';
@@ -26,6 +31,11 @@ const app = new Hono();
 // logger
 app.use('*', logger());
 
+// Body parsing 설정 - UTF-8 인코딩 보장
+app.use('*', bodyLimit({
+    maxSize: 50 * 1024 * 1024 // 50MB
+}));
+
 // CORS 설정
 app.use('*', cors({
     origin: ['http://localhost:5173', 'http://localhost:5175', 'http://localhost:3000'],
@@ -36,11 +46,16 @@ app.use('*', cors({
 // 라우트 등록
 app.route('/api/search', searchRoute);
 app.route('/api/poi', poi);
-// app.route('/api/ai', aiRoute);  // ⚠️ LEGACY - 새로운 AI 모듈로 대체됨
-app.route('/api/ai', apiAiToolsRoute);  // AI Functions 전용 라우터
-app.route('/api/ai-new', aiChatRoute);  // 새로운 표준 패턴 테스트용
-app.route('/api/ai', aiAskRoute);       // 🆕 RAG 기반 질의응답 라우터
-app.route('/api/ai', aiHybridRoute);    // 🆕 하이브리드 RAG+Functions 라우터
+// ⚠️ LEGACY Function Calling 라우트들 - 플래너 시스템으로 대체됨
+// app.route('/api/ai', aiRoute);
+// app.route('/api/ai', apiAiToolsRoute);
+// app.route('/api/ai', aiAskRoute);
+// app.route('/api/ai', aiHybridRoute);
+
+// 🎯 플래너 기반 AI 시스템 (새로운 표준)
+// app.route('/api/ai', aiChatRoute);  // 구문 오류로 임시 비활성화
+app.route('/api/ai', chatBotRoute);  // 🧪 정상 작동하는 플래너 시스템
+// app.route('/api/planner', plannerTestRoute);  // 🧪 플래너 테스트 전용 - 구문 오류로 임시 주석
 app.route('/api/embedding', embeddingRoute); // 🆕 임베딩 관리 라우터
 app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터
 app.route('/api/memo', memoRoute);    // 🆕 Firebase 메모 시스템 라우터

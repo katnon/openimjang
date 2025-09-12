@@ -168,9 +168,9 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
     };
 
     return (
-        <div className={`absolute left-4 z-50 bg-white shadow-xl rounded-xl border border-gray-200 transition-all duration-300 ${isExpanded
+        <div className={`absolute left-4 z-[200] bg-white shadow-xl rounded-xl border border-gray-200 transition-all duration-300 ${isExpanded
                 ? 'w-[29rem] h-[calc(100vh-8rem)] top-20' // ✅ 폭 20% 감소 (36rem→29rem), TopBar 아래 여유공간 확보 (top-4→top-20)
-                : 'w-80 p-4 bottom-4'
+                : 'w-80 p-4 bottom-4' // 화면 bottom 기준으로 하단에 위치
             }`}>
             {!isExpanded ? (
                 // ✅ 기본 상태 (축소형)

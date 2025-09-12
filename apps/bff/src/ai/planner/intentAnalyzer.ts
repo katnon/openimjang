@@ -38,10 +38,15 @@ export function analyzeIntent(question: string, slots: ConversationSlots): Quest
  * 주요 카테고리 분류
  */
 function classifyCategory(question: string): QuestionIntent['category'] {
+  // @mention 패턴이 있는 경우 무조건 search 카테고리로 분류
+  if (question.includes('@')) {
+    return 'search';
+  }
+  
   // 검색 관련 키워드
   const searchKeywords = [
     '실거래가', '가격', '시세', '매매가', '전세', '월세', '거래',
-    '아파트', '단지', '찾아', '검색', '조회', '알려'
+    '아파트', '단지', '찾아', '검색', '조회', '알려', '주변', '편의시설'
   ];
   
   // 분석 관련 키워드
@@ -94,11 +99,14 @@ function classifyCategory(question: string): QuestionIntent['category'] {
 function classifySubcategory(question: string, category: QuestionIntent['category']): string | undefined {
   switch (category) {
     case 'search':
+      // POI 검색을 우선 체크 (더 구체적)
+      if (question.includes('주변') || question.includes('편의시설') || question.includes('교통') || 
+          question.includes('POI') || question.includes('시설') || question.includes('상가') ||
+          question.includes('병원') || question.includes('학교') || question.includes('마트')) {
+        return 'poi_search';
+      }
       if (question.includes('실거래가') || question.includes('가격') || question.includes('시세')) {
         return 'price_search';
-      }
-      if (question.includes('주변') || question.includes('편의시설') || question.includes('교통')) {
-        return 'poi_search';
       }
       if (question.includes('아파트') || question.includes('단지')) {
         return 'apartment_search';
@@ -148,7 +156,8 @@ function extractEntities(question: string): ExtractedEntity[] {
   
   // 아파트명 추출
   const apartmentPatterns = [
-    /([\w가-힣]+(?:아파트|단지|빌라|타워|캐슬|팰리스|래미안|힐스테이트|엠밸리|푸르지오|위브)[\w가-힣]*)/g
+    /([\w가-힣]+(?:아파트|단지|빌라|타워|캐슬|팰리스|래미안|힐스테이트|엠밸리|푸르지오|위브)[\w가-힣]*)/g,
+    /@([\w가-힣]+)/g  // @mention 패턴 추가
   ];
   
   for (const pattern of apartmentPatterns) {

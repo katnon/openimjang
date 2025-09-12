@@ -12,6 +12,7 @@ interface SearchRealEstateDealsParams {
   priceRange?: [number, number];           // 만원 단위 가정
   limit?: number;
   userProfile?: any;                       // 사용자 프로필 (개인화)
+  contextAptData?: any;                    // 아파트 컨텍스트 데이터
 }
 
 /**
@@ -29,6 +30,7 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
     priceRange,
     limit = 50,
     userProfile,
+    contextAptData,
   } = args;
 
   try {
@@ -36,12 +38,22 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
       apartmentName, aptId, region, dealType, period, area, areaRange, priceRange, limit 
     });
 
-    // 1️⃣ 아파트 식별: ID가 있으면 우선 사용, 없으면 이름으로 정규화
+    // 1️⃣ 아파트 식별: 컨텍스트 데이터 우선, ID가 있으면 우선 사용, 없으면 이름으로 정규화
     let finalApartmentName = apartmentName;
     let finalAptId = aptId;
     let searchHints: string[] = [];
     
-    if (aptId) {
+    // 컨텍스트에서 아파트 데이터가 있으면 우선 사용
+    if (contextAptData && contextAptData.aptId) {
+      finalApartmentName = contextAptData.aptName || apartmentName;
+      finalAptId = contextAptData.aptId;
+      searchHints.push(`apartment_id: ${finalAptId}`);
+      console.log('✅ 컨텍스트 아파트 데이터 사용:', {
+        aptId: finalAptId,
+        aptName: finalApartmentName,
+        source: 'contextAptData'
+      });
+    } else if (aptId) {
       // ID가 있으면 우선 사용 (메타데이터에서 전달된 경우)
       searchHints.push(`apartment_id: ${aptId}`);
       console.log('✅ 아파트 ID 사용:', aptId, apartmentName);

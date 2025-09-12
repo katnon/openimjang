@@ -5,6 +5,8 @@ import { useAuth } from "@/auth/AuthProvider";
 
 type TopBarProps = {
     onOpen3D?: () => void;
+    onOpen2D?: () => void;
+    mapViewMode?: '2D' | '3D';
     onSearchResult?: (results: AptInfo[]) => void;
     onOpenAuth?: () => void;
     onOpenMyImjang?: () => void;
@@ -20,7 +22,7 @@ export type AptInfo = {
     lat: number;
 };
 
-const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, onOpenMyImjang, onOpenProfile }) => {
+const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onOpen2D, mapViewMode = '2D', onSearchResult, onOpenAuth, onOpenMyImjang, onOpenProfile }) => {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
     const [query, setQuery] = useState("");
@@ -188,12 +190,25 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onSearchResult, onOpenAuth, o
 
                 {/* 오른쪽 박스: 버튼들 */}
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={onOpen3D}
-                        className="px-4 py-2 text-sm font-medium border border-primary-500 text-primary-600 hover:bg-primary-500 hover:text-white rounded-lg transition-colors"
-                    >
-                        3D지도 보기
-                    </button>
+                    {/* 2D지도 보기 버튼 (3D 모드일 때만 표시) */}
+                    {mapViewMode === '3D' && onOpen2D && (
+                        <button
+                            onClick={onOpen2D}
+                            className="px-4 py-2 text-sm font-medium border border-green-500 text-green-600 hover:bg-green-500 hover:text-white rounded-lg transition-colors"
+                        >
+                            2D지도 보기
+                        </button>
+                    )}
+                    
+                    {/* 3D지도 보기 버튼 (2D 모드일 때만 표시) */}
+                    {mapViewMode === '2D' && onOpen3D && (
+                        <button
+                            onClick={onOpen3D}
+                            className="px-4 py-2 text-sm font-medium border border-primary-500 text-primary-600 hover:bg-primary-500 hover:text-white rounded-lg transition-colors"
+                        >
+                            3D지도 보기
+                        </button>
+                    )}
                     
                     {user && onOpenMyImjang && (
                         <button

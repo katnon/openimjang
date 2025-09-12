@@ -86,66 +86,108 @@ export function useWindowView(viewer: any, isActive: boolean, onDeactivate: () =
         }
     }, [viewer, onDeactivate]);
 
-    // 클릭 이벤트 핸들러
-    const handleClick = useCallback((event: any) => {
-        if (!viewer || !isActive) return;
+    // 클릭 이벤트 핸들러 - useRef로 안정화
+    const handleClickRef = useRef<((event: any) => void) | null>(null);
+
+    handleClickRef.current = useCallback((event: any) => {
+        console.log('🎯 창가뷰 클릭 핸들러 호출됨!', { isActive, hasViewer: !!viewer });
+
+        if (!viewer || !isActive) {
+            console.log('🚫 창가뷰 핸들러 조건 불만족');
+            return;
+        }
 
         try {
-            console.log('🖱️ 3D 뷰어 클릭됨');
+            console.log('🖱️ 창가뷰 모드: 3D 뷰어 클릭 처리 시작', event.position);
 
+            // 클릭 위치의 3D 좌표를 가져옴
             const position = viewer.scene.pickPosition(event.position);
 
             if (position) {
-                const pickedObject = viewer.scene.pick(event.position);
-                if (pickedObject && pickedObject.primitive && 
-                    (pickedObject.primitive instanceof window.Cesium.Cesium3DTileset ||
-                     pickedObject.primitive.constructor.name === 'Cesium3DTileset')) {
-                    console.log('🏢 건물 클릭 감지됨');
-                    handleBuildingClick(position);
-                } else {
-                    console.log('🌍 지면 또는 다른 객체 클릭됨 (동작 없음)');
-                }
+                console.log('🏢 클릭 위치에서 창가뷰 실행', position);
+                handleBuildingClick(position);
             } else {
-                console.log('🖱️ 클릭 위치의 3D 좌표를 가져올 수 없음');
+                console.log('⚠️ 클릭 위치의 3D 좌표를 가져올 수 없음');
             }
 
         } catch (error) {
-            console.error('❌ 클릭 처리 실패:', error);
+            console.error('❌ 창가뷰 클릭 처리 실패:', error);
         }
     }, [viewer, isActive, handleBuildingClick]);
 
+    // 안정적인 클릭 핸들러 래퍼
+    const stableHandleClick = useCallback((event: any) => {
+        if (handleClickRef.current) {
+            handleClickRef.current(event);
+        }
+    }, []);
+
     // 클릭 이벤트 등록/해제
     useEffect(() => {
-        // isActive가 false일 때는 검사하지 않음 (불필요한 로그 방지)
+        console.log('🔍 useWindowView useEffect 호출:', { isActive, hasViewer: !!viewer });
+        
         if (!isActive) {
+            console.log('🚫 창가뷰 모드 비활성화 상태');
             return;
         }
         
         if (!viewer || !viewer.cesiumWidget || !window.Cesium) {
-            console.warn('⚠️ 뷰어나 Cesium이 준비되지 않음');
+            console.warn('⚠️ 뷰어나 Cesium이 준비되지 않음:', {
+                viewer: !!viewer,
+                cesiumWidget: !!viewer?.cesiumWidget,
+                Cesium: !!window.Cesium
+            });
+            return;
+        }
+
+        // 🔧 뷰어 상태 확인
+        if (viewer.isDestroyed()) {
+            console.warn('⚠️ 뷰어가 이미 파괴됨');
             return;
         }
 
         const handler = viewer.cesiumWidget.screenSpaceEventHandler;
-
-        if (isActive) {
-            console.log('✅ 창가 뷰 모드 활성화 - 클릭 이벤트 등록');
-            // 현재 카메라 위치 저장
-            previousCameraPositionRef.current = viewer.camera.positionWC.clone();
-            console.log('📷 이전 카메라 위치 저장됨:', previousCameraPositionRef.current);
-            
-            handler.setInputAction(handleClick, window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-            // 정리 함수
-            return () => {
-                console.log('🧹 창가 뷰 모드 비활성화 - 클릭 이벤트 해제');
-                previousCameraPositionRef.current = null; // 참조 정리
-                if (handler && !handler.isDestroyed()) {
-                    handler.removeInputAction(window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
-                }
-            };
+        
+        if (!handler || handler.isDestroyed()) {
+            console.warn('⚠️ 이벤트 핸들러가 유효하지 않음');
+            return;
         }
-    }, [viewer, isActive, handleClick]);
+
+        console.log('✅ 창가 뷰 모드 활성화 - 클릭 이벤트 등록');
+        console.log('🔍 핸들러 상태:', { 
+            handler: !!handler, 
+            isDestroyed: handler?.isDestroyed(),
+            viewerDestroyed: viewer.isDestroyed()
+        });
+        
+        // 현재 카메라 위치 저장
+        previousCameraPositionRef.current = viewer.camera.positionWC.clone();
+        console.log('📷 이전 카메라 위치 저장됨:', previousCameraPositionRef.current);
+        
+        // �� 안전한 이벤트 등록
+        try {
+            handler.setInputAction(stableHandleClick, window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
+            console.log('🎯 창가뷰 클릭 핸들러 등록 완료');
+        } catch (error) {
+            console.error('❌ 클릭 핸들러 등록 실패:', error);
+            return;
+        }
+
+        // 정리 함수
+        return () => {
+            console.log('🧹 창가 뷰 모드 비활성화 - 클릭 이벤트 해제');
+            previousCameraPositionRef.current = null;
+            
+            try {
+                if (handler && !handler.isDestroyed() && !viewer.isDestroyed()) {
+                    handler.removeInputAction(window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
+                    console.log('✅ 창가뷰 클릭 핸들러 해제 완료');
+                }
+            } catch (error) {
+                console.warn('⚠️ 클릭 핸들러 해제 중 오류:', error);
+            }
+        };
+    }, [viewer, isActive, stableHandleClick]);
 
     return {
         // 필요한 경우 추가 함수들을 반환할 수 있음
