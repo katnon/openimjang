@@ -272,7 +272,7 @@ export default function Home() {
 
             {/* 지도 */}
             <main className="absolute inset-0 top-16">
-                {mapViewMode === '2D' ? (
+                {mapViewMode === '2D' && (
                     <MapContainer
                         onMapClick={(lat, lon) => setPoint({ lat, lng: lon })}
                         onAptSelected={(apt) => {
@@ -291,21 +291,40 @@ export default function Home() {
                         tempMarker={hoveredPOI}
                         showFavoritePins={showFavoritePins}
                     />
-                ) : (
-                    <MapPrime3DViewer
-                        visible={true}
-                        onClose={() => setMapViewMode('2D')}
-                        selectedLocation={
-                            selectedApt
-                                ? { lat: selectedApt.lat, lon: selectedApt.lon }
-                                : point
-                                    ? { lat: point.lat, lon: point.lng }
-                                    : null
-                        }
-                        selectedApt={selectedApt}
-                        mapViewMode={mapViewMode}
-                    />
                 )}
+                {/* 통합된 3D 뷰어 - 팝업 모드일 때와 메인 모드일 때 모두 처리 */}
+                <MapPrime3DViewer
+                    isVisible={show3D || mapViewMode === '3D'}
+                    onClose={() => {
+                        if (mapViewMode === '3D') {
+                            setMapViewMode('2D');
+                        } else {
+                            setShow3D(false);
+                        }
+                    }}
+                    selectedLocation={
+                        selectedApt
+                            ? { lat: selectedApt.lat, lon: selectedApt.lon }
+                            : point
+                                ? { lat: point.lat, lon: point.lng }
+                                : null
+                    }
+                    selectedApt={selectedApt}
+                    mapViewMode={mapViewMode === '3D' ? '3D' : '2D'}
+                    onToggleMapView={() => {
+                        if (show3D) {
+                            // 팝업에서 전환: 팝업 닫고 메인을 3D로
+                            setShow3D(false);
+                            setMapViewMode('3D');
+                            setShowMiniMap(true);
+                        } else {
+                            // 메인에서 전환: 메인을 2D로 하고 팝업 열기
+                            setMapViewMode('2D');
+                            setShow3D(true);
+                            setShowMiniMap(false);
+                        }
+                    }}
+                />
             </main>
 
             {/* 지도 조작 UI - 2D 모드에서만 표시 */}
@@ -364,26 +383,6 @@ export default function Home() {
             onOpenMyImjang={() => setShowMyImjang(true)}
             />
 
-            {/* 3D 팝업 */}
-            <MapPrime3DViewer
-                visible={show3D}
-                onClose={() => setShow3D(false)}
-                selectedLocation={
-                    selectedApt
-                        ? { lat: selectedApt.lat, lon: selectedApt.lon }
-                        : point
-                            ? { lat: point.lat, lon: point.lng }
-                            : null
-                }
-                selectedApt={selectedApt}
-                mapViewMode={mapViewMode}
-                onToggleMapView={() => {
-                    // 동시에 상태 전환
-                    setShow3D(false);      // 3D 팝업 닫기
-                    setMapViewMode('3D');  // 메인을 3D로 전환
-                    setShowMiniMap(true);  // 2D 미니맵 표시
-                }}
-            />
 
             {/* 3D 메인 모드일 때 우상단에 2D 미니맵 표시 (3D 팝업과 완전히 동일한 UI) */}
             {mapViewMode === '3D' && showMiniMap && (

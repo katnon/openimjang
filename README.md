@@ -26,16 +26,16 @@
 ```mermaid
 graph TB
     subgraph "🎨 Frontend Layer (React SPA)"
-        A[React 19 SPA<br/>Vite + TypeScript] --> B[Kakao Maps 2D<br/>지도 시각화]
-        A --> C[Cesium 3D Viewer<br/>3차원 공간 분석]
-        A --> D[Firebase Auth<br/>사용자 인증]
-        A --> E[AI 챗봇 UI<br/>임장 도우미]
+        A["React 19 SPA<br/>Vite + TypeScript"] --> B["Kakao Maps 2D<br/>지도 시각화"]
+        A --> C["Cesium 3D Viewer<br/>3차원 공간 분석"]
+        A --> D["Firebase Auth<br/>사용자 인증"]
+        A --> E["AI 챗봇 UI<br/>임장 도우미"]
     end
     
     subgraph "🔒 Middleware Layer"
-        F[Rate Limiter<br/>요청 제한] --> F1[🔥 UTF-8 Encoder<br/>바이너리 레벨 인코딩 처리]
-        F1 --> G[Cache System<br/>응답 캐싱]
-        G --> H[Logger<br/>구조화 로깅] --> I[Metrics<br/>성능 수집]
+        F["Rate Limiter<br/>요청 제한"] --> F1["🔥 UTF-8 Encoder<br/>바이너리 레벨 인코딩 처리"]
+        F1 --> G["Cache System<br/>응답 캐싱"]
+        G --> H["Logger<br/>구조화 로깅"] --> I["Metrics<br/>성능 수집"]
     end
     
     subgraph "Backend Layer (Hono BFF)"
@@ -44,36 +44,39 @@ graph TB
         L["Swagger Router<br/>API 문서화"] --> F
         M["Monitoring Router<br/>시스템 모니터링"] --> F
         
-        J --> N[OpenAI GPT-4o-mini<br/>Function Calling]
-        K --> O[Kysely ORM<br/>타입 안전 SQL]
-        J --> P[Repository Pattern<br/>데이터 추상화]
-        J --> J1[🔥 Session Slots<br/>메모리 관리 + @mention]
+        J --> N["OpenAI GPT-4o-mini<br/>Function Calling"]
+        K --> O["Kysely ORM<br/>타입 안전 SQL"]
+        J --> P["Repository Pattern<br/>데이터 추상화"]
+        J --> J1["🔥 Session Slots<br/>메모리 관리 + @mention"]
     end
     
     subgraph "🗄️ Data Layer"
-        Q[PostGIS Database<br/>공간 데이터베이스] --> R[부동산 실거래<br/>매매/전월세 데이터]
-        Q --> S[건물 정보<br/>건축물대장 데이터]
-        Q --> T[지적 정보<br/>연속지적도/용도지역]
+        Q["PostgreSQL + PostGIS<br/>공간 데이터베이스"] --> R["부동산 실거래<br/>매매/전월세 데이터"]
+        Q --> S["건물 정보<br/>건축물대장 데이터"]
+        Q --> T["지적 정보<br/>연속지적도/용도지역"]
+        Q --> Q1["🚀 pgvector Extension<br/>벡터 임베딩 저장"]
+        Q1 --> Q2["ai.embeddings 테이블<br/>스키마 문서 벡터화"]
+        Q2 --> Q3["코사인 유사도 검색<br/>RAG 시스템"]
         
-        U[Firebase Firestore<br/>NoSQL 문서 DB] --> V[사용자 프로필<br/>온보딩 데이터]
-        U --> W[임장 메모<br/>현장 방문 기록]
-        U --> X[즐겨찾기<br/>관심 아파트]
+        U["Firebase Firestore<br/>NoSQL 문서 DB"] --> V["사용자 프로필<br/>온보딩 데이터"]
+        U --> W["임장 메모<br/>현장 방문 기록"]
+        U --> X["즐겨찾기<br/>관심 아파트"]
     end
     
     subgraph "🌍 External APIs"
-        Y[국토부 RTMS API<br/>실거래가 수집] --> P
-        Z[VWorld API<br/>지리정보 서비스] --> P
-        AA[카카오 Maps API<br/>지도/장소 검색] --> A
-        AA1[🔥 카카오 Local API<br/>POI 검색 (지하철/마트/병원)] --> J
-        BB[건축물대장 API<br/>건물 상세정보] --> P
-        CC[공공데이터포털<br/>법정동 코드] --> P
+        Y["국토부 RTMS API<br/>실거래가 수집"] --> P
+        Z["VWorld API<br/>지리정보 서비스"] --> P
+        AA["카카오 Maps API<br/>지도/장소 검색"] --> A
+        AA1["🔥 카카오 Local API<br/>POI 검색 (지하철/마트/병원)"] --> J
+        BB["건축물대장 API<br/>건물 상세정보"] --> P
+        CC["공공데이터포털<br/>법정동 코드"] --> P
     end
     
     subgraph "📋 Documentation & Monitoring"
-        DD[Swagger UI<br/>인터랙티브 문서] --> L
-        EE[OpenAPI 3.0 Spec<br/>자동 생성 스키마] --> DD
-        FF[Metrics Dashboard<br/>성능 모니터링] --> M
-        GG[Health Check<br/>시스템 상태] --> M
+        DD["Swagger UI<br/>인터랙티브 문서"] --> L
+        EE["OpenAPI 3.0 Spec<br/>자동 생성 스키마"] --> DD
+        FF["Metrics Dashboard<br/>성능 모니터링"] --> M
+        GG["Health Check<br/>시스템 상태"] --> M
     end
     
     A <--> J
@@ -89,53 +92,109 @@ graph TB
     style DD fill:#85c1e5,color:#000
 ```
 
-### 🎯 새로운 구조화된 AI 시스템 아키텍처 (v2.0)
+### 🎯 새로운 구조화된 AI 시스템 아키텍처 (v2.2)
 
-OpenImjang AI 시스템은 "척하면 척" 대화가 가능한 구조화된 4단계 아키텍처로 진화했습니다:
+OpenImjang AI 시스템은 벡터DB 통합으로 "척하면 척" 대화가 가능한 구조화된 5단계 아키텍처로 진화했습니다:
 
 ```mermaid
 graph TB
+    subgraph "🚀 Phase 0: VectorDB RAG System"
+        V1[사용자 질문] --> V2["VectorService<br/>text-embedding-3-small"]
+        V2 --> V3["pgvector Search<br/>코사인 유사도 검색"]
+        V3 --> V4["Schema Context<br/>관련 DB 스키마 정보 수집"]
+        V4 --> V5["RAG Context<br/>LLM 프롬프트 통합"]
+    end
+
     subgraph "🧠 Phase 1: Memory System (Slots)"
-        A1[사용자 입력] --> A2[Intent 분석<br/>category + subcategory]
-        A2 --> A3[Slot 추출<br/>apartmentName, dealType, area, period]
-        A3 --> A4[ConversationSlots<br/>세션 메모리 관리]
-        A4 --> A5[UserProfile<br/>온보딩 기반 개인화]
+        A1[사용자 입력] --> A2["Intent 분석<br/>category + subcategory"]
+        A2 --> A3["Slot 추출<br/>apartmentName, dealType, area, period"]
+        A3 --> A4["ConversationSlots<br/>세션 메모리 관리"]
+        A4 --> A5["UserProfile<br/>온보딩 기반 개인화"]
     end
 
     subgraph "📋 Phase 2: Planning System (Planner)"
-        B1[PlanContext 생성<br/>slots + intent + profile] --> B2[ActionPlanner<br/>실행 전략 수립]
-        B2 --> B3[Dependency Graph<br/>위상정렬 최적화]
-        B3 --> B4[ExecutionPlan<br/>순서화된 액션 리스트]
-        B4 --> B5[ActionExecutor<br/>핸들러 기반 실행]
+        B1["PlanContext 생성<br/>slots + intent + profile"] --> B2["ActionPlanner<br/>실행 전략 수립"]
+        B2 --> B3["Dependency Graph<br/>위상정렬 최적화"]
+        B3 --> B4["ExecutionPlan<br/>순서화된 액션 리스트"]
+        B4 --> B5["ActionExecutor<br/>핸들러 기반 실행"]
     end
 
     subgraph "❓ Phase 3: Clarification System (Clarify Policy)"
-        C1[누락/애매 정보 감지] --> C2[ClarifyPolicy<br/>질문 전략 엔진]
-        C2 --> C3[Template System<br/>상황별 질문 생성]
-        C3 --> C4[ApartmentMatcher<br/>부분일치 후보 검색]
-        C4 --> C5[ResponseHandler<br/>사용자 응답 처리]
+        C1[누락/애매 정보 감지] --> C2["ClarifyPolicy<br/>질문 전략 엔진"]
+        C2 --> C3["Template System<br/>상황별 질문 생성"]
+        C3 --> C4["ApartmentMatcher<br/>부분일치 후보 검색"]
+        C4 --> C5["ResponseHandler<br/>사용자 응답 처리"]
     end
 
     subgraph "🔍 Phase 4: Quality Assurance (Critic Checklist)"
-        D1[ActionResult 검증] --> D2[CriticRules<br/>5가지 품질 규칙]
-        D2 --> D3[결과없음/데이터부족<br/>이상치/모순/컨텍스트]
-        D3 --> D4[RetryStrategy<br/>기간확장/조건완화]
-        D4 --> D5[QualityAssurance<br/>신뢰도 기반 결론]
+        D1[ActionResult 검증] --> D2["CriticRules<br/>5가지 품질 규칙"]
+        D2 --> D3["결과없음/데이터부족<br/>이상치/모순/컨텍스트"]
+        D3 --> D4["RetryStrategy<br/>기간확장/조건완화"]
+        D4 --> D5["QualityAssurance<br/>신뢰도 기반 결론"]
     end
 
+    subgraph "🤖 Phase 5: LLM Response Generation"
+        L1["Enhanced Prompt<br/>벡터DB 컨텍스트 + 실행결과"] --> L2["OpenAI GPT-4o-mini<br/>할루시네이션 방지 프롬프트"]
+        L2 --> L3["Validated Response<br/>검증된 답변"]
+    end
+
+    V1 --> A1
+    V5 --> L1
     A4 --> B1
     B5 --> C1
     C5 --> B1
     B5 --> D1
     D4 --> B1
+    D5 --> L1
 
+    style V1 fill:#e1f5fe,color:#000
+    style V2 fill:#e1f5fe,color:#000
+    style V3 fill:#e1f5fe,color:#000
+    style V4 fill:#e1f5fe,color:#000
+    style V5 fill:#e1f5fe,color:#000
     style A1 fill:#e3f2fd,color:#000
     style B1 fill:#f3e5f5,color:#000  
     style C1 fill:#fff3e0,color:#000
     style D1 fill:#e8f5e8,color:#000
+    style L1 fill:#fce4ec,color:#000
+    style L2 fill:#fce4ec,color:#000
+    style L3 fill:#fce4ec,color:#000
 ```
 
-### 🔄 AI 대화 흐름 개선사항
+### 🚀 벡터DB 통합 플로우 상세
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant C as chatBot.ts
+    participant V as vectorService
+    participant P as Planner
+    participant E as Executor
+    participant CR as Critic
+    participant L as LLM
+
+    U->>C: "아파트 거래 데이터 구조가 어떻게 되어있어?"
+    
+    Note over C,V: Phase 0: VectorDB RAG
+    C->>V: 벡터 검색 요청
+    V->>V: text-embedding-3-small 임베딩
+    V->>V: pgvector 코사인 유사도 검색
+    V-->>C: 관련 스키마 정보 (topK=5)
+    
+    Note over C,P: Phase 1-2: Memory & Planning
+    C->>P: 슬롯 추출 + 액션 계획
+    P->>E: 실행 계획 전달
+    
+    Note over E,CR: Phase 3-4: Execution & Quality
+    E->>E: 실제 함수 실행
+    E->>CR: 실행 결과 검증
+    CR-->>E: 품질 검증 결과
+    
+    Note over C,L: Phase 5: Enhanced Response
+    C->>L: 벡터DB 컨텍스트 + 실행결과
+    L-->>C: 검증된 답변
+    C-->>U: 정확한 DB 구조 정보 제공
+```
 
 **기존 문제점:**
 - ❌ 매번 사용자가 모든 정보를 다시 입력해야 함
@@ -156,7 +215,13 @@ graph TB
 - 🔥 **데이터베이스 자동 좌표 조회**: 아파트명만으로도 PostgreSQL에서 자동 좌표 획득
 - 🔥 **실시간 데이터 기반 응답**: Generic 응답에서 "지하철역 5곳, 대형마트 7곳" 등 구체적 데이터 응답으로 전환
 
-## 📁 AI 시스템 파일 구조 (v2.1 업데이트)
+**v2.2 벡터DB 통합 (2024-12):**
+- 🚀 **RAG 기반 컨텍스트 강화**: 사용자 질문에 대한 실시간 벡터 검색으로 관련 DB 스키마 정보 자동 수집
+- 🚀 **할루시네이션 완전 방지**: 벡터DB 검증된 정보만 사용하여 추측성 답변 완전 차단
+- 🚀 **전문성 강화**: 부동산 도메인 지식과 DB 구조 정보를 활용한 정확한 답변 제공
+- 🚀 **Critic 시스템 통합**: 기존 품질 검증 시스템과 벡터DB 검색 결과를 결합한 다층 검증
+
+## 📁 AI 시스템 파일 구조 (v2.2 업데이트)
 
 ```
 apps/bff/src/ai/
@@ -198,13 +263,23 @@ apps/bff/src/ai/
     ├── searchRealEstateDeals.ts     # 부동산 검색 (새 시스템과 브릿지)
     ├── searchNearbyPOI.ts           # 🔥 POI 검색 (카카오 API 완전 통합)
     ├── database/
-    │   └── normalizeApartmentName.ts # 아파트명 정규화 (Clarify와 연동)
+    │   ├── normalizeApartmentName.ts # 아파트명 정규화 (Clarify와 연동)
+    │   ├── executeQuery.ts          # 🆕 SQL 쿼리 실행 (Kysely 통합)
+    │   └── generateSelectQuery.ts   # 🆕 RAG 기반 SQL 생성 (벡터DB 활용)
     └── ...기타 20개 함수들
 ```
 
-### 🆕 v2.1 추가 컴포넌트
+### 🆕 v2.2 추가 컴포넌트
 
 ```
+apps/bff/src/services/
+├── vectorService.ts                 # 🚀 pgvector 기반 벡터 검색 서비스
+└── embeddingService.ts              # 🚀 임베딩 파이프라인 관리
+
+apps/bff/src/routes/
+├── embedding.ts                     # 🚀 임베딩 관리 API 엔드포인트
+└── chatBot.ts                       # 🚀 벡터DB 통합 AI 챗봇 엔드포인트
+
 apps/bff/src/middleware/
 └── sessionSlots.ts                   # 🔥 UTF-8 인코딩 해결 + 세션 슬롯 관리 미들웨어
 
@@ -231,6 +306,84 @@ apps/bff/src/lib/
    - 바이너리 레벨 UTF-8/EUC-KR/CP949 다중 인코딩 감지
    - ArrayBuffer → 인코딩 탐지 → JSON 파싱 → 슬롯 추출
    - "@마곡엠밸리 주변정보" 같은 한글 @mention 완전 지원
+
+5. **🚀 VectorDB Bridge**: `chatBot.ts` ↔ `vectorService.ts`
+   - 사용자 질문에 대한 실시간 벡터 검색
+   - 관련 DB 스키마 정보를 LLM 프롬프트에 자동 통합
+   - RAG 기반 컨텍스트 강화로 할루시네이션 방지
+
+6. **🚀 RAG Integration**: `generateSelectQuery.ts` ↔ `vectorService.ts`
+   - 자연어 질문을 SQL로 변환할 때 벡터 검색 활용
+   - 관련 테이블/컬럼 정보를 자동으로 제공
+   - 정확한 스키마 기반 SQL 생성
+
+### 🚀 벡터DB 통합 상세
+
+**pgvector 아키텍처:**
+```sql
+-- PostgreSQL 확장 활성화
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 벡터 임베딩 저장 테이블
+CREATE TABLE ai.embeddings (
+    id SERIAL PRIMARY KEY,
+    source_path TEXT NOT NULL,
+    schema_name TEXT,
+    table_name TEXT,
+    chunk_id INTEGER NOT NULL,
+    content_text TEXT NOT NULL,
+    token_count INTEGER,
+    embedding VECTOR(1536),  -- OpenAI text-embedding-3-small 차원
+    meta JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(source_path, chunk_id)
+);
+
+-- 벡터 유사도 검색 인덱스
+CREATE INDEX ON ai.embeddings USING ivfflat (embedding vector_cosine_ops);
+```
+
+**벡터DB 검색 플로우:**
+```typescript
+// 1. 사용자 질문 벡터화
+const vectorResults = await vectorService.search(message, { topK: 5 });
+
+// 2. pgvector 코사인 유사도 검색
+const rows = await sql`
+    SELECT id, schema_name, table_name, chunk_id,
+           content_text,
+           1 - (embedding <=> ${vec}::vector) AS score
+    FROM ai.embeddings
+    ORDER BY embedding <=> ${vec}::vector
+    LIMIT ${topK};
+`;
+
+// 3. 관련 스키마 정보 수집
+const ragContext = vectorResults.map(result => 
+  `${result.metadata.schema_name}.${result.metadata.table_name} (유사도: ${result.metadata.score})`
+).join('\n');
+
+// 4. LLM 프롬프트에 통합
+const llmPrompt = `관련 데이터베이스 정보:\n${ragContext}\n\n사용자 질문: ${message}`;
+```
+
+**RAG 검색 결과 예시:**
+```
+질의: "아파트 거래 데이터 구조가 어떻게 되어있어?"
+
+벡터 검색 결과:
+1. oi.apt_deal_trade_raw (유사도: 0.6002)
+   - 아파트 매매 거래 원본 데이터를 저장하는 테이블입니다...
+2. oi.apt_deal_rent_raw (유사도: 0.5697)  
+   - 아파트 전월세 거래 원본 데이터를 저장하는 테이블입니다...
+```
+
+**할루시네이션 방지 메커니즘:**
+- ✅ 벡터 검색으로 검증된 정보만 사용
+- ✅ 실제 DB 스키마 정보 기반 답변
+- ✅ 추측성 답변 완전 차단
+- ✅ Critic 시스템과 다층 검증
 
 ### 🔥 UTF-8 인코딩 문제 해결 상세
 
@@ -294,7 +447,7 @@ cd apps/bff && bun scripts/test-critic-checklist.ts
 ```mermaid
 graph LR
     subgraph "사용자 계층"
-        A[웹 브라우저] --> B[React SPA<br/>포트 5173]
+        A[웹 브라우저] --> B["React SPA<br/>포트 5173"]
     end
     
     subgraph "API Gateway 계층"
@@ -552,6 +705,7 @@ OpenImjang/ (Root)
 ### Database & Infrastructure
 - **PostgreSQL 14+** - 관계형 데이터베이스
 - **PostGIS 3.3+** - 공간 데이터 확장
+- **🚀 pgvector Extension** - 벡터 임베딩 저장 및 유사도 검색
 - **Firebase Firestore** - NoSQL 문서 데이터베이스 (임장 메모)
 - **Firebase Storage** - 파일 저장소 (사진 업로드)
 - **Firebase Authentication** - 사용자 인증 (구글 OAuth 지원)
@@ -566,7 +720,7 @@ OpenImjang/ (Root)
 
 ### 필수 요구사항
 - **Node.js 18+** 또는 **Bun 1.0+**
-- **PostgreSQL 14+** with **PostGIS 3.3+**
+- **PostgreSQL 14+** with **PostGIS 3.3+** and **pgvector Extension**
 - **Firebase 프로젝트** (Authentication, Firestore, Storage 활성화)
 
 ### 1. 저장소 클론 및 의존성 설치
@@ -609,12 +763,38 @@ FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.c
 # PostgreSQL + PostGIS 설치 (Ubuntu)
 sudo apt-get install postgresql postgresql-contrib postgis
 
+# pgvector 확장 설치 (벡터DB용)
+sudo apt-get install postgresql-14-pgvector  # PostgreSQL 14의 경우
+# 또는 PostgreSQL 15의 경우
+sudo apt-get install postgresql-15-pgvector
+
 # 데이터베이스 생성
 createdb openimjang
 psql -d openimjang -c "CREATE EXTENSION postgis;"
+psql -d openimjang -c "CREATE EXTENSION vector;"
 
 # 스키마 생성
 psql -d openimjang -f db/scripts/SQLquery/oi.query.sql
+
+# 벡터DB 테이블 생성
+psql -d openimjang -c "
+CREATE SCHEMA IF NOT EXISTS ai;
+CREATE TABLE ai.embeddings (
+    id SERIAL PRIMARY KEY,
+    source_path TEXT NOT NULL,
+    schema_name TEXT,
+    table_name TEXT,
+    chunk_id INTEGER NOT NULL,
+    content_text TEXT NOT NULL,
+    token_count INTEGER,
+    embedding VECTOR(1536),
+    meta JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(source_path, chunk_id)
+);
+CREATE INDEX ON ai.embeddings USING ivfflat (embedding vector_cosine_ops);
+"
 ```
 
 ### 4. 개발 서버 실행

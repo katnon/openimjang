@@ -125,12 +125,12 @@ export function useWindowView(viewer: any, isActive: boolean, onDeactivate: () =
     // 클릭 이벤트 등록/해제
     useEffect(() => {
         console.log('🔍 useWindowView useEffect 호출:', { isActive, hasViewer: !!viewer });
-        
+
         if (!isActive) {
             console.log('🚫 창가뷰 모드 비활성화 상태');
             return;
         }
-        
+
         if (!viewer || !viewer.cesiumWidget || !window.Cesium) {
             console.warn('⚠️ 뷰어나 Cesium이 준비되지 않음:', {
                 viewer: !!viewer,
@@ -147,23 +147,23 @@ export function useWindowView(viewer: any, isActive: boolean, onDeactivate: () =
         }
 
         const handler = viewer.cesiumWidget.screenSpaceEventHandler;
-        
+
         if (!handler || handler.isDestroyed()) {
             console.warn('⚠️ 이벤트 핸들러가 유효하지 않음');
             return;
         }
 
         console.log('✅ 창가 뷰 모드 활성화 - 클릭 이벤트 등록');
-        console.log('🔍 핸들러 상태:', { 
-            handler: !!handler, 
+        console.log('🔍 핸들러 상태:', {
+            handler: !!handler,
             isDestroyed: handler?.isDestroyed(),
             viewerDestroyed: viewer.isDestroyed()
         });
-        
+
         // 현재 카메라 위치 저장
         previousCameraPositionRef.current = viewer.camera.positionWC.clone();
         console.log('📷 이전 카메라 위치 저장됨:', previousCameraPositionRef.current);
-        
+
         // �� 안전한 이벤트 등록
         try {
             handler.setInputAction(stableHandleClick, window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -177,7 +177,7 @@ export function useWindowView(viewer: any, isActive: boolean, onDeactivate: () =
         return () => {
             console.log('🧹 창가 뷰 모드 비활성화 - 클릭 이벤트 해제');
             previousCameraPositionRef.current = null;
-            
+
             try {
                 if (handler && !handler.isDestroyed() && !viewer.isDestroyed()) {
                     handler.removeInputAction(window.Cesium.ScreenSpaceEventType.LEFT_CLICK);

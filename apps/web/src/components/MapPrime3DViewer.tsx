@@ -14,7 +14,7 @@ declare global {
 }
 
 type Props = {
-    visible: boolean;
+    isVisible: boolean;
     onClose: () => void;
     selectedLocation?: {
         lat: number;
@@ -29,7 +29,7 @@ type Props = {
     onToggleMapView?: () => void; // 맵 뷰 모드 전환 함수
 };
 
-export default function MapPrime3DViewer({ visible, onClose, selectedLocation, selectedApt, mapViewMode = '2D', onToggleMapView }: Props) {
+export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation, selectedApt, mapViewMode = '2D', onToggleMapView }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewerRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -106,52 +106,10 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
         viewerRef.current._setCameraView(cameraView);
     };
 
-    // ✅ 뷰어 생성/파괴 관리
+    // ✅ 뷰어 한 번만 생성 관리 (파괴하지 않음)
     useEffect(() => {
-        if (!visible) {
-            // 뷰어가 존재하면 정리
-            if (viewerRef.current) {
-                console.log('🧹 3D 뷰어 정리 시작');
-
-                // 🔧 안전한 뷰어 파괴
-                try {
-                    // 1. 모든 이벤트 핸들러 정리
-                    if (viewerRef.current.cesiumWidget?.screenSpaceEventHandler) {
-                        const handler = viewerRef.current.cesiumWidget.screenSpaceEventHandler;
-                        handler.removeInputAction(window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
-                        handler.removeInputAction(window.Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
-                        handler.removeInputAction(window.Cesium.ScreenSpaceEventType.RIGHT_CLICK);
-                    }
-
-                    // 2. 렌더링 루프 중단
-                    if (viewerRef.current.clock) {
-                        viewerRef.current.clock.shouldAnimate = false;
-                    }
-
-                    // 3. WebGL 컨텍스트 정리
-                    if (viewerRef.current.scene?.context) {
-                        viewerRef.current.scene.context.destroy();
-                    }
-
-                    // 4. 뷰어 파괴
-                    if (!viewerRef.current.isDestroyed()) {
-                        viewerRef.current.destroy();
-                        console.log('✅ 3D 뷰어 파괴 완료');
-                    }
-
-                } catch (e) {
-                    console.warn('⚠️ 뷰어 파괴 중 오류:', e);
-                }
-
-                // 5. 참조 정리
-                viewerRef.current = null;
-                if (abortControllerRef.current) {
-                    abortControllerRef.current.abort();
-                    abortControllerRef.current = null;
-                }
-
-                console.log('✅ 3D 뷰어 정리 완료');
-            }
+        // 뷰어가 이미 있거나 보이지 않으면 생성하지 않음
+        if (viewerRef.current || !isVisible) {
             return;
         }
 
@@ -204,22 +162,22 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                     if (containerRef.current) {
                         containerRef.current.innerHTML = '';
                     }
-                    
+
                     // 🔧 예시와 동일한 방식으로 div 생성
                     const worldContainer = document.createElement('div');
                     worldContainer.id = 'world-container';
                     worldContainer.style.width = '100%';
                     worldContainer.style.height = '100%';
                     worldContainer.style.display = 'block';
-                    
+
                     containerRef.current.appendChild(worldContainer);
-                    
+
                     // 🔧 뷰어 안정화 대기
                     await new Promise(resolve => setTimeout(resolve, 100));
-                    
+
                     // 1. Cesium 뷰어 생성 (예시와 완전 동일)
                     const cesiumViewer = new window.Cesium.Viewer('world-container');
-                    
+
                     console.log('✅ Cesium 뷰어 생성 완료');
 
                     // 🔧 뷰어 안정화 대기
@@ -261,7 +219,7 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                     });
 
                     console.log('✅ MapPrime3D 확장 적용 완료');
-                    
+
                     // 🔧 예시처럼 카메라 설정
                     if (cesiumViewer._setCameraView) {
                         cesiumViewer._setCameraView({
@@ -274,16 +232,16 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
                         });
                         console.log('✅ MapPrime3D 카메라 설정 완료');
                     }
-                    
+
                     // 🔧 최종 안정화 대기
                     await new Promise(resolve => setTimeout(resolve, 1000));
-                    
+
                     viewerRef.current = cesiumViewer;
                     setIsLoading(false);
                     setError(null);
-                    
+
                     console.log('✅ MapPrime3D 뷰어 생성 성공! (예시 방식 완전 복사)');
-                    
+
                     // 🔧 뷰어 상태 확인
                     console.log('🔍 뷰어 상태:', {
                         viewer: !!cesiumViewer,
@@ -315,12 +273,12 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
             setError('뷰어 초기화 실패');
             setIsLoading(false);
         });
-    }, [visible]);
+    }, [isVisible]);
 
     // ✅ 카메라 이동 및 하이라이트 처리 (selectedLocation 변경 시)
     useEffect(() => {
-        // visible이 false일 때는 처리하지 않음 (POI 호버 시 불필요한 처리 방지)
-        if (!visible) {
+        // isVisible이 false일 때는 처리하지 않음 (POI 호버 시 불필요한 처리 방지)
+        if (!isVisible) {
             return;
         }
 
@@ -363,9 +321,9 @@ export default function MapPrime3DViewer({ visible, onClose, selectedLocation, s
             clearHighlight();
             prevLocationRef.current = null; // 이전 좌표 초기화
         }
-    }, [visible, selectedLocation, highlightApartment, clearHighlight, isLoading, error]);
+    }, [isVisible, selectedLocation, highlightApartment, clearHighlight, isLoading, error]);
 
-    if (!visible) return null;
+    if (!isVisible) return null;
 
     return (
         <>

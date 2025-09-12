@@ -2,12 +2,15 @@
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { slotMiddleware } from '../middleware/sessionSlots';
-import { 
-  defaultPlanner, 
-  defaultExecutor, 
-  registerBridgeHandlers, 
-  PlanContext 
+import {
+    defaultPlanner,
+    defaultExecutor,
+    registerBridgeHandlers,
+    PlanContext
 } from '../ai/planner';
+import { defaultCriticChecklist } from '../ai/critic/checklist';
+import { ConversationSlots } from '../ai/types/slots';
+import { vectorService } from '../services/vectorService';
 
 const chatBotRoute = new Hono();
 
@@ -25,12 +28,13 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
         // 🌟 올바른 인코딩 처리 - 슬롯 미들웨어에서 이미 처리되었으므로 간단하게
         let requestBody: any = {};
         let message = '';
-        
+
         // 슬롯 미들웨어에서 이미 올바른 메시지를 처리했으므로 컨텍스트에서 가져오기 시도
-        if (c.get('processedMessage')) {
-            message = c.get('processedMessage');
+        const processedMessage = (c as any).get('processedMessage');
+        if (processedMessage) {
+            message = processedMessage as string;
             console.log('✅ 슬롯 미들웨어에서 처리된 메시지 사용:', message);
-            
+
             // context는 별도로 파싱
             try {
                 const rawBody = await c.req.text().catch(() => '{}');
@@ -50,10 +54,10 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
                 message = requestBody.message as string;
             }
         }
-        
+
         const { context } = requestBody;
-        
-        console.log('🎯 플래너 기반 챗봇 요청:', { 
+
+        console.log('🎯 플래너 기반 챗봇 요청:', {
             message: message?.slice(0, 100) + '...',
             extractedApartments: context?.extractedApartments?.length || 0
         });
@@ -68,18 +72,18 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
 
         // 1. 현재 메시지에서 추출된 슬롯 정보 (슬롯 미들웨어에서 처리됨)
         const currentMentionApartment = c.slots?.apartmentName;
-        
+
         // 2. extractedApartments에서 아파트 데이터 추출 (프론트엔드에서 전송)
         const extractedApartments = context?.extractedApartments || [];
         const apartmentData = extractedApartments[0];
-        
+
         // 3. apartmentMetadata에서 메타데이터 추출 (검색 성공한 아파트들)
         const apartmentMetadata = context?.apartmentMetadata || {};
         const apartmentFullData = context?.apartmentFullData || {};
-        
+
         // 4. 우선순위 결정: 현재 @멘션 > 컨텍스트 데이터
         const finalApartmentName = currentMentionApartment || apartmentData?.name;
-        
+
         console.log('🎯 아파트 정보 통합 결과:', {
             currentMention: currentMentionApartment,
             contextApartments: extractedApartments.map(apt => apt.name).join(', '),
@@ -88,13 +92,13 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
             finalChoice: finalApartmentName,
             priority: currentMentionApartment ? 'current_mention' : 'context'
         });
-        
+
         // 5. 선택된 아파트의 메타데이터 추출
         let selectedApartmentMetadata = null;
         if (finalApartmentName) {
             // 먼저 apartmentMetadata에서 찾기 (검색 성공한 아파트)
             selectedApartmentMetadata = apartmentMetadata[finalApartmentName];
-            
+
             // 없으면 extractedApartments에서 찾기
             if (!selectedApartmentMetadata && apartmentData && apartmentData.name === finalApartmentName) {
                 selectedApartmentMetadata = {
@@ -105,7 +109,7 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
                 };
             }
         }
-        
+
         // 6. 통합된 슬롯 데이터 설정
         const testSlots = finalApartmentName ? {
             apartmentName: finalApartmentName,
@@ -115,11 +119,36 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
             availableApartmentData: apartmentFullData[finalApartmentName] || null
         } : {};
 
+        // 🔧 contextAptData 생성 - aiHybrid.ts와 동일한 방식으로
+        let contextAptData = null;
+        if (selectedApartmentMetadata) {
+            contextAptData = {
+                aptId: selectedApartmentMetadata.id,
+                aptName: finalApartmentName,
+                id: selectedApartmentMetadata.id,
+                name: finalApartmentName,
+                address: selectedApartmentMetadata.address,
+                lat: selectedApartmentMetadata.lat,
+                lon: selectedApartmentMetadata.lon
+            };
+
+            console.log('🔧 contextAptData 생성:', {
+                aptId: contextAptData.aptId,
+                aptName: contextAptData.aptName,
+                coords: [contextAptData.lat, contextAptData.lon]
+            });
+        }
+
         // 플랜 컨텍스트 생성 - 현재 @멘션이 우선되도록 순서 변경
         const planContext: PlanContext = {
             question: message,
-            intent: null, // 플래너가 분석함
-            slots: { ...testSlots, ...c.slots }, // 🔥 순서 변경: testSlots 먼저, c.slots가 덮어쓰기
+            intent: null as any, // 플래너가 분석함
+            slots: {
+                ...testSlots,
+                ...c.slots,
+                // contextAptData를 슬롯에 포함시켜 플래너가 사용할 수 있도록
+                contextAptData
+            } as any,
             userProfile: context?.userProfile || {
                 purpose: ['매매', '투자'],
                 workLocation: '강남역',
@@ -132,21 +161,18 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
                 failedActions: []
             },
             capabilities: {
-                availableFunctions: ['searchRealEstate', 'searchPOI', 'getBuildingInfo'],
-                maxExecutionTime: 30000,
                 allowedDataSources: ['database', 'external_api'],
                 supportedOutputFormats: ['text', 'json']
-            },
+            } as any,
             constraints: {
                 maxActions: 5,
-                timeoutMs: 30000,
                 qualityLevel: 'balanced'
-            }
+            } as any
         };
 
         // 플랜 생성
         const plan = await defaultPlanner.createPlan(planContext);
-        
+
         console.log('✅ 플랜 생성 완료:', {
             planId: plan.id,
             actionCount: plan.actions.length,
@@ -155,12 +181,50 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
 
         // 플랜 실행
         const execution = await defaultExecutor.executeWithCritic(plan, planContext);
-        
+
         console.log('✅ 플랜 실행 완료:', {
             status: execution.status,
             resultCount: execution.results.length
         });
-        
+
+        // 🔍 기존 Critic 시스템을 활용한 추가 검증
+        const criticContext = {
+            currentSlots: planContext.slots as ConversationSlots,
+            actionResults: execution.results.map((result, index) => ({
+                actionId: `action_${index}`,
+                actionType: plan.actions[index]?.type || 'unknown',
+                data: result.data,
+                success: result.success,
+                executedAt: new Date(),
+                executionTime: 0 // 기본값
+            })),
+            userProfile: planContext.userProfile,
+            sessionMetadata: {
+                retryCount: 0,
+                periodExtended: false,
+                conditionsRelaxed: false
+            }
+        };
+
+        const criticResult = await defaultCriticChecklist.validateResults(criticContext);
+
+        console.log('🔍 Critic 검증 결과:', {
+            hasIssue: criticResult.hasIssue,
+            issueType: criticResult.issueType,
+            confidence: criticResult.confidence,
+            explanation: criticResult.explanation
+        });
+
+        // 🔍 벡터DB RAG 검색으로 관련 컨텍스트 수집
+        console.log('🔍 벡터DB RAG 검색 시작:', message.slice(0, 50));
+        const vectorResults = await vectorService.search(message, { topK: 5 });
+
+        console.log('📊 벡터 검색 결과:', {
+            found: vectorResults.length,
+            topScore: vectorResults[0]?.metadata.score || 0,
+            schemas: [...new Set(vectorResults.map(r => r.metadata.schema_name).filter(Boolean))]
+        });
+
         // 디버깅용: 실행 결과 상세 로깅
         execution.results.forEach((result, index) => {
             console.log(`📊 결과 ${index + 1}:`, {
@@ -176,7 +240,7 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
 
         // 🤖 OpenAI 4o-mini를 사용한 자연스러운 응답 생성
         let reply = "";
-        
+
         try {
             // 플래너 실행 결과를 요약해서 LLM에게 전달
             // 실제 POI 데이터를 추출하여 LLM에게 전달
@@ -185,7 +249,7 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
                 .map(result => {
                     const pois = result.data.pois || [];
                     const transportation = result.data.transportation || [];
-                    
+
                     // 지하철역 정보만 추출 (디버깅 로그 추가)
                     console.log('🔍 전체 POI 개수:', pois.length);
                     console.log('🔍 POI 샘플 1개 전체 구조:', JSON.stringify(pois[0], null, 2));
@@ -196,7 +260,7 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
                         distance: p.distance,
                         priority: p.priority
                     })));
-                    
+
                     // 각 POI의 카테고리 정보를 더 자세히 로깅
                     console.log('🔍 전체 결과 데이터 구조:', JSON.stringify({
                         resultKeys: Object.keys(result.data || {}),
@@ -206,7 +270,7 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
                         poisLength: result.data?.pois?.length || 0,
                         categoryStats: result.data?.categoryStats || {},
                     }, null, 2));
-                    
+
                     console.log('🔍 전체 POI 카테고리 분석:');
                     const categoryStats = pois.reduce((stats: any, poi: any) => {
                         const category = poi.category || 'unknown';
@@ -227,7 +291,7 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
                     console.log('🚇 지하철역 목록:', subwayStations);
 
                     // 기타 주요 시설
-                    const otherPOIs = pois.filter((poi: any) => 
+                    const otherPOIs = pois.filter((poi: any) =>
                         poi.category !== '지하철역'
                     ).slice(0, 10).map((poi: any) => ({
                         name: poi.name,
@@ -278,14 +342,14 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
 ${JSON.stringify(detailedPOIData.categoryStats, null, 2)}
 
 🚇 지하철역 정보:
-${detailedPOIData.subwayStations?.map(station => 
-    `- ${station.name} (${station.category}), 거리: ${station.distance}m`
-).join('\n') || '지하철역 정보 없음'}
+${detailedPOIData.subwayStations?.map(station =>
+                    `- ${station.name} (${station.category}), 거리: ${station.distance}m`
+                ).join('\n') || '지하철역 정보 없음'}
 
 🏢 주요 시설:
-${detailedPOIData.otherPOIs?.slice(0, 8).map(poi => 
-    `- ${poi.name} (${poi.category}), 거리: ${poi.distance}m`
-).join('\n') || '주요 시설 정보 없음'}`;
+${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
+                    `- ${poi.name} (${poi.category}), 거리: ${poi.distance}m`
+                ).join('\n') || '주요 시설 정보 없음'}`;
             }
 
             // 🏠 아파트 컨텍스트 정보 구성
@@ -293,7 +357,7 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
             if (finalApartmentName) {
                 apartmentContextInfo += `\n\n=== 현재 대상 아파트 ===\n`;
                 apartmentContextInfo += `📍 **아파트명**: ${finalApartmentName}\n`;
-                
+
                 if (selectedApartmentMetadata) {
                     apartmentContextInfo += `📍 **아파트 ID**: ${selectedApartmentMetadata.id || '미상'}\n`;
                     apartmentContextInfo += `📍 **주소**: ${selectedApartmentMetadata.address || '미상'}\n`;
@@ -304,7 +368,7 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
                 const fullData = apartmentFullData[finalApartmentName];
                 if (fullData) {
                     apartmentContextInfo += `\n**📊 미리 로딩된 아파트 데이터**:\n`;
-                    
+
                     if (fullData.nearbyPOIs) {
                         apartmentContextInfo += `- 🎯 **주변 편의시설**: 총 ${fullData.nearbyPOIs.total}개\n`;
                         const categories = fullData.nearbyPOIs.categories;
@@ -318,7 +382,7 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
                             apartmentContextInfo += `  - 🏪 편의시설: ${categories.convenience.length}개\n`;
                         }
                     }
-                    
+
                     if (fullData.recentDeals) {
                         apartmentContextInfo += `- 💰 **실거래가**: 최근 ${fullData.recentDeals.total}건\n`;
                         if (fullData.recentDeals.summary.recentPrice) {
@@ -328,11 +392,11 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
                             apartmentContextInfo += `  - 평균 거래가: ${Math.floor(fullData.recentDeals.summary.avgPrice / 10000)}억원\n`;
                         }
                     }
-                    
+
                     if (fullData.buildingInfo) {
                         apartmentContextInfo += `- 🏢 **건물정보**: ${fullData.buildingInfo.total_count || 0}개 동\n`;
                     }
-                    
+
                     if (fullData.areasInfo) {
                         apartmentContextInfo += `- 📐 **면적정보**: ${fullData.areasInfo.count}개 타입\n`;
                     }
@@ -345,38 +409,127 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
                 ?.map((msg: any) => msg.extractedSlots.apartmentName)
                 ?.filter((name: string, index: number, arr: string[]) => arr.indexOf(name) === index) // 중복 제거
                 ?.slice(-3) || []; // 최근 3개만
-                
-            const conversationContext = previousApartments.length > 0 
+
+            const conversationContext = previousApartments.length > 0
                 ? `\n\n=== 대화 히스토리 ===\n이전에 언급된 아파트들: ${previousApartments.join(', ')}\n현재 주 대상: ${finalApartmentName}`
                 : '';
 
-            const llmPrompt = `당신은 친근하고 전문적인 부동산 임장 도우미입니다. 
-사용자의 질문과 플래너 시스템이 수집한 데이터, 그리고 프론트엔드에서 미리 로딩된 아파트 정보를 바탕으로 자연스럽고 도움이 되는 답변을 해주세요.
+            // 🔍 사용자 정정사항 추적 (대화 히스토리에서)
+            const userCorrections = context?.messages
+                ?.filter((msg: any) =>
+                    msg.message && (
+                        msg.message.includes('없어') ||
+                        msg.message.includes('아니') ||
+                        msg.message.includes('제대로') ||
+                        msg.message.includes('잘못') ||
+                        msg.message.includes('그게') ||
+                        msg.message.includes('아닌') ||
+                        msg.message.includes('틀렸')
+                    )
+                )
+                ?.map((msg: any) => msg.message)
+                ?.slice(-5) || []; // 최근 5개 정정사항만
 
-**사용자 질문**: ${message}
-**실행된 액션**: ${plan.actions.map(a => a.type).join(', ')}${apartmentContextInfo}${conversationContext}
-${detailedDataPrompt}
+            // 🎯 현재 메시지가 정정사항인지 확인
+            const isCurrentMessageCorrection = message && (
+                message.includes('없어') ||
+                message.includes('아니') ||
+                message.includes('제대로') ||
+                message.includes('잘못') ||
+                message.includes('그게') ||
+                message.includes('아닌') ||
+                message.includes('틀렸')
+            );
+
+            // 📊 실제 데이터 검증 및 요약
+            const validateAndSummarizeData = (poiData: any) => {
+                if (!poiData) {
+                    return "❌ 수집된 데이터가 없습니다.";
+                }
+
+                let summary = "✅ 실제 수집된 데이터:\n";
+
+                // 지하철역 정보 검증
+                if (poiData.subwayStations && poiData.subwayStations.length > 0) {
+                    const stations = poiData.subwayStations.map((s: any) => `${s.name} (거리: ${s.distance}m)`).join(', ');
+                    summary += `🚇 지하철역: ${stations}\n`;
+                } else {
+                    summary += `🚇 지하철역: 없음\n`;
+                }
+
+                // 기타 시설 정보
+                if (poiData.otherPOIs && poiData.otherPOIs.length > 0) {
+                    const facilities = poiData.otherPOIs.slice(0, 5).map((p: any) => `${p.name}(${p.category})`).join(', ');
+                    summary += `🏢 주요시설: ${facilities}\n`;
+                }
+
+                // 카테고리별 통계
+                if (poiData.categoryStats) {
+                    const stats = Object.entries(poiData.categoryStats)
+                        .map(([category, count]) => `${category}: ${count}개`)
+                        .join(', ');
+                    summary += `📊 시설통계: ${stats}\n`;
+                }
+
+                return summary;
+            };
+
+            const dataValidation = validateAndSummarizeData(detailedPOIData);
+            const correctionsContext = userCorrections.length > 0
+                ? `\n\n⚠️ **사용자 정정사항**: ${userCorrections.join(' | ')}`
+                : '';
+
+            // 🚨 현재 메시지가 정정사항인 경우 특별 처리
+            const correctionAlert = isCurrentMessageCorrection
+                ? `\n\n🚨 **중요**: 현재 메시지가 정정사항입니다! 사용자의 정정을 즉시 인정하고 사과하세요.`
+                : '';
+
+            // 🔍 Critic 검증 결과를 프롬프트에 반영
+            const criticAlert = criticResult.hasIssue
+                ? `\n\n⚠️ **데이터 검증 결과**: ${criticResult.explanation}${criticResult.userMessage ? `\n사용자 메시지: ${criticResult.userMessage}` : ''}`
+                : '';
+
+            // 🔍 벡터DB RAG 컨텍스트 구성
+            const ragContext = vectorResults.length > 0
+                ? `\n\n📚 **관련 데이터베이스 정보** (벡터 검색 결과):\n${vectorResults.map((result, idx) =>
+                    `${idx + 1}. **${result.metadata.schema_name || '스키마'}.${result.metadata.table_name || '테이블'}** (유사도: ${result.metadata.score.toFixed(3)})\n   ${result.content.slice(0, 200)}...`
+                ).join('\n\n')}`
+                : '';
+
+            const llmPrompt = `당신은 정확하고 신뢰할 수 있는 부동산 임장 도우미입니다.
+
+**🚨 중요 규칙**:
+1. **오직 제공된 실제 데이터만 사용**: 추측하거나 일반적인 지식을 사용하지 마세요
+2. **사용자 정정사항 반드시 인정**: 사용자가 "없어", "아니"라고 한 내용은 절대 반박하지 마세요
+3. **모르는 것은 솔직히 말하기**: 데이터에 없는 정보는 "모르겠습니다"라고 답변하세요
+
+**사용자 질문**: ${message}${correctionsContext}${correctionAlert}${criticAlert}${ragContext}
+
+${dataValidation}
 
 **답변 가이드라인**:
-1. **🎯 아파트 블록 정보 활용**: 사용자가 임장봇 버튼으로 첨부한 아파트 정보가 있다면 이를 우선적으로 활용해 답변
-2. **📊 미리 로딩된 데이터 우선 사용**: 플래너가 새로 검색한 데이터보다 프론트엔드에서 미리 로딩해둔 전체 데이터를 우선 참조
-3. **🗣️ 자연스러운 대화체**: "집벤톤 아파트"에 대해 궁금해하는 실제 사용자처럼 친근하게 답변
-4. **✨ 구체적 정보 제공**: "지하철역이 있어요"가 아닌 "○○역(○호선), ××역(×호선)이 있어요"로 구체적으로
+1. **📊 데이터 기반 답변**: 위의 실제 데이터만을 인용하여 답변하세요
+2. **🗣️ 정정사항 반영**: 사용자가 정정한 내용이 있다면 즉시 인정하고 사과하세요
+3. **✨ 구체적 정보**: "지하철역이 있어요"가 아닌 실제 역명과 거리를 정확히 말하세요
+4. **📚 벡터DB 활용**: 관련 데이터베이스 정보가 있다면 이를 참고하여 정확한 테이블/컬럼 정보 제공
 5. **📝 마크다운 활용**: **굵은 글씨**, - 불릿 포인트로 가독성 높게 구성
 6. **💬 적절한 길이**: 200-400자 내외로 간결하면서도 유용하게
 7. **🤔 솔직한 소통**: 정보가 부족하면 솔직하게 알려주고 추가 질문 유도
 
-**특별 지침**: 사용자가 아파트 첨부블록을 통해 특정 아파트 정보를 제공했다면, 그 아파트에 대해 마치 잘 아는 전문가처럼 상세하고 정확한 정보를 제공해주세요.`;
+**절대 하지 마세요**:
+- 존재하지 않는 지하철역이나 시설을 만들어내기
+- 사용자의 정정사항을 무시하거나 반박하기
+- 일반적인 지식으로 추측하여 답변하기`;
 
             const completion = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
                 messages: [
                     {
                         role: "system",
-                        content: "당신은 친근하고 전문적인 부동산 임장 도우미입니다. 사용자가 구체적인 정보(지하철역명, 호선, 시설명 등)를 요청하면 수집된 데이터를 바탕으로 정확한 실명과 세부사항을 제공합니다. 단순히 '몇 개 있어요'가 아닌 '○○역, ××역이 있어요'처럼 구체적으로 답변합니다."
+                        content: "당신은 정확하고 신뢰할 수 있는 부동산 임장 도우미입니다. 절대 추측하지 마세요. 오직 제공된 실제 데이터와 벡터DB 검색 결과만을 사용하여 답변하세요. 사용자가 정정한 내용이 있다면 즉시 인정하고 사과하세요. 데이터에 없는 정보는 '모르겠습니다'라고 솔직히 말하세요. 관련 데이터베이스 스키마 정보가 제공되면 이를 활용하여 정확한 정보를 제공하세요."
                     },
                     {
-                        role: "user", 
+                        role: "user",
                         content: llmPrompt
                     }
                 ],
@@ -385,9 +538,9 @@ ${detailedDataPrompt}
             });
 
             reply = completion.choices[0]?.message?.content || "죄송해요, 응답 생성 중 오류가 발생했네요 😅";
-            
+
             console.log('🤖 OpenAI 응답 생성 완료:', reply.slice(0, 100) + '...');
-            
+
         } catch (llmError: any) {
             console.error('❌ OpenAI 응답 생성 오류:', llmError);
             // Fallback 메시지
@@ -410,5 +563,6 @@ ${detailedDataPrompt}
         }, 500);
     }
 });
+
 
 export default chatBotRoute;

@@ -24,7 +24,7 @@ export class RealEstateSearchBridge implements ActionHandler {
     const { includeHistory, maxResults, includeComparables, includeMarketData } = action.parameters || {};
 
     try {
-      // 기존 searchRealEstateDeals 함수 호출
+      // 기존 searchRealEstateDeals 함수 호출 - contextAptData 포함
       const params = {
         apartmentName: slots.apartmentName,
         region: slots.region,
@@ -34,7 +34,8 @@ export class RealEstateSearchBridge implements ActionHandler {
         areaRange: slots.areaRange,
         priceRange: slots.priceRange,
         limit: maxResults || 50,
-        userProfile
+        userProfile,
+        contextAptData: slots.contextAptData // chatBot.ts에서 전달된 아파트 정보
       };
 
       console.log('🏠 기존 함수 호출: searchRealEstateDeals', params);
@@ -67,11 +68,21 @@ export class POISearchBridge implements ActionHandler {
     const { radius, categories } = action.parameters || {};
 
     try {
-      // 🎯 단순화된 좌표 탐색 로직 - contextData → slots → DB 순서
+      // 🎯 단순화된 좌표 탐색 로직 - contextAptData → apartmentMetadata → slots → DB 순서
       let lat, lng;
       
+      // 0순위: contextAptData에서 좌표 추출 (chatBot.ts에서 전달된 것)
+      if (slots.contextAptData?.lat && (slots.contextAptData?.lng || slots.contextAptData?.lon)) {
+        lat = slots.contextAptData.lat;
+        lng = slots.contextAptData.lng || slots.contextAptData.lon;
+        console.log('🔧 [Bridge] contextAptData에서 좌표 발견:', { 
+          lat, lng, 
+          aptName: slots.contextAptData.aptName,
+          source: 'contextAptData' 
+        });
+      }
       // 1순위: apartmentMetadata에서 좌표 추출 (contextData에서 전달된 것)
-      if (slots.apartmentMetadata?.lat && (slots.apartmentMetadata?.lng || slots.apartmentMetadata?.lon)) {
+      else if (slots.apartmentMetadata?.lat && (slots.apartmentMetadata?.lng || slots.apartmentMetadata?.lon)) {
         lat = slots.apartmentMetadata.lat;
         lng = slots.apartmentMetadata.lng || slots.apartmentMetadata.lon; // lng 우선, lon fallback
         console.log('✅ [Bridge] apartmentMetadata에서 좌표 발견:', { lat, lng, source: 'apartmentMetadata' });
