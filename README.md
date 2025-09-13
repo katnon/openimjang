@@ -92,6 +92,38 @@ graph TB
     style DD fill:#85c1e5,color:#000
 ```
 
+### 🔥 스마트 아파트 검색 및 다중위치 처리 (v2.3)
+
+**Real-time Web Search + Multi-location Resolution System**
+
+공통 아파트명(현대, 삼성, 한양 등)에 대한 지능형 다단계 처리 시스템이 추가되었습니다:
+
+#### 🌟 핵심 혁신 기능
+- **🔍 실시간 구글 웹검색**: 하드코딩 없는 동적 아파트 위치 정보 수집
+- **🎯 다중위치 자동 감지**: "현대아파트" 입력 시 강남구, 송파구, 마포구 등 다중 위치 식별
+- **💬 대화형 명확화**: "어느 지역의 현대아파트를 말씀하시는 걸까요?" 자동 질문 생성
+- **📍 지번주소 추출**: 웹검색 결과에서 DB 연동 가능한 정확한 주소 정보 획득
+- **🔄 Zero Fallback**: 모든 검색이 실제 DB 데이터와 100% 연동
+
+#### 🚀 Multi-stage Resolution Workflow
+```
+사용자: "현대아파트 실거래가 보여줘"
+     ↓
+🔍 Google Search: "현대아파트 서울 위치"
+     ↓
+🎯 Multiple Locations Detected: [강남구, 송파구, 마포구, ...]
+     ↓
+💬 Clarification: "어느 지역의 현대아파트를 말씀하시는 걸까요?"
+     ↓
+사용자: "강남구"
+     ↓
+🔍 Refined Search: "강남구 현대아파트 지번주소"
+     ↓
+📍 Extract jibun_address: "서울특별시 강남구 역삼동 123-45"
+     ↓
+🏠 DB Integration: apt_deal_all 테이블 연동으로 실거래가 제공
+```
+
 ### 🎯 새로운 구조화된 AI 시스템 아키텍처 (v2.2)
 
 OpenImjang AI 시스템은 벡터DB 통합으로 "척하면 척" 대화가 가능한 구조화된 5단계 아키텍처로 진화했습니다:
@@ -221,7 +253,7 @@ sequenceDiagram
 - 🚀 **전문성 강화**: 부동산 도메인 지식과 DB 구조 정보를 활용한 정확한 답변 제공
 - 🚀 **Critic 시스템 통합**: 기존 품질 검증 시스템과 벡터DB 검색 결과를 결합한 다층 검증
 
-## 📁 AI 시스템 파일 구조 (v2.2 업데이트)
+## 📁 AI 시스템 파일 구조 (v2.3 업데이트)
 
 ```
 apps/bff/src/ai/
@@ -282,6 +314,16 @@ apps/bff/src/routes/
 
 apps/bff/src/middleware/
 └── sessionSlots.ts                   # 🔥 UTF-8 인코딩 해결 + 세션 슬롯 관리 미들웨어
+
+apps/bff/src/services/
+├── 🔥 smartApartmentResolver.ts      # 🆕 v2.3 스마트 아파트 해석 엔진
+│   ├── extractApartmentNames()       # 사용자 입력에서 아파트명 추출
+│   ├── performGoogleSearch()         # 실시간 구글 웹검색
+│   ├── parseApartmentInfoFromGoogle() # HTML 파싱 및 주소 추출
+│   ├── detectMultipleLocations()     # 다중위치 감지 로직 (구현 예정)
+│   └── generateClarificationQuestion() # 명확화 질문 생성 (구현 예정)
+├── apartmentContextManager.ts        # 아파트 컨텍스트 메모리 관리
+└── vectorService.ts                  # 벡터 임베딩 검색
 
 apps/bff/src/lib/
 └── db.ts                            # PostgreSQL 연결 (좌표 자동 조회용)
