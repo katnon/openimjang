@@ -389,14 +389,13 @@ BFF routes follow RESTful conventions:
 - **Backend**: Keep sensitive keys in `.env` (DATABASE_URL, API keys)
 - Never commit secrets; use separate `.env.local` for development
 
-#### 🔑 **중요: OpenAI API 키 확인**
-**확실히 존재함**: `C:\OpenImjang\apps\bff\.env` 파일에 다음 API 키가 저장되어 있음:
+#### 🔑 **중요: OpenAI API 키 설정**
+**설정 위치**: `C:\OpenImjang\apps\bff\.env` 파일에 API 키 저장됨
 ```
+OPENAI_API_KEY=your_openai_api_key_here
 ```
-- **API 키 길이**: 164자
-- **상태**: 활성 상태 (외부 테스트로 확인됨)
 - **접근 가능**: `process.env.OPENAI_API_KEY`로 정상 로딩됨
-- **⚠️ 문제**: AI 3.0 매니저들이 가끔 환경변수를 읽지 못하는 경우가 있음 (타이밍 문제)
+- **⚠️ 주의사항**: AI 시스템들이 가끔 환경변수를 읽지 못하는 경우가 있음 (타이밍 문제)
 - **해결책**: LLMMaster에서 명시적으로 API 키를 전달하도록 수정 완료
 
 ### Code Conventions  
