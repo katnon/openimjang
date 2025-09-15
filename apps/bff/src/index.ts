@@ -1,5 +1,6 @@
 // apps/bff/src/index.ts
 import 'dotenv/config';
+import { config } from 'dotenv';
 import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
@@ -28,7 +29,12 @@ import apartmentFullDataRoute from './routes/apartmentFullData';
 import presetPointsRoute from './routes/presetPoints';
 import uploadRoute from './routes/upload';
 
-console.log('💡 ENV URL:', process.env.DATABASE_URL);
+
+// 환경변수 명시적 로딩 확인
+config();
+console.log('🔑 OpenAI API Key exists:', !!process.env.OPENAI_API_KEY);
+console.log('🔑 OpenAI API Key length:', process.env.OPENAI_API_KEY?.length || 0);
+console.log('💡 DATABASE_URL:', process.env.DATABASE_URL?.substring(0, 20) + '...');
 
 const app = new Hono();
 
@@ -39,6 +45,38 @@ app.use('*', logger());
 app.use('*', bodyLimit({
     maxSize: 50 * 1024 * 1024 // 50MB
 }));
+
+// UTF-8 인코딩 강제 설정 미들웨어
+app.use('*', async (c, next) => {
+    // 요청 헤더에 UTF-8 charset 강제 설정
+    c.req.header('Content-Type')?.includes('application/json') && !c.req.header('Content-Type')?.includes('charset') 
+        && c.res.headers.set('Content-Type', 'application/json; charset=utf-8');
+    
+    await next();
+    
+    // 응답 헤더에 UTF-8 charset 강제 설정
+    if (c.res.headers.get('Content-Type')?.includes('application/json') && 
+        !c.res.headers.get('Content-Type')?.includes('charset')) {
+        c.res.headers.set('Content-Type', 'application/json; charset=utf-8');
+    }
+});
+
+// 🔧 간소화된 인코딩 지원 미들웨어 (SafeBinaryJsonParser 사용 권장)
+app.use('*', async (c, next) => {
+    // Content-Type UTF-8 charset 강제 설정
+    const contentType = c.req.header('Content-Type');
+    if (contentType?.includes('application/json') && !contentType.includes('charset')) {
+        c.res.headers.set('Content-Type', 'application/json; charset=utf-8');
+    }
+    
+    await next();
+    
+    // 응답 헤더 UTF-8 charset 보장
+    const responseContentType = c.res.headers.get('Content-Type');
+    if (responseContentType?.includes('application/json') && !responseContentType.includes('charset')) {
+        c.res.headers.set('Content-Type', 'application/json; charset=utf-8');
+    }
+});
 
 // CORS 설정
 app.use('*', cors({
@@ -56,8 +94,9 @@ app.route('/api/poi', poi);
 // app.route('/api/ai', aiAskRoute);
 // app.route('/api/ai', aiHybridRoute);
 
-// 🎯 플래너 기반 AI 시스템 (새로운 표준)
-// app.route('/api/ai', aiChatRoute);  // 구문 오류로 임시 비활성화
+// 🎯 AI 시스템들
+app.route('/api/ai', simpleAIRoute);  // 🆕 단순하고 효과적인 제너럴 LLM 시스템
+app.route('/api/ai', aiChatRoute);  // 🧠 LLM 라이프사이클 시스템 포함
 app.route('/api/ai', chatBotRoute);  // 🧪 정상 작동하는 플래너 시스템
 app.route('/api/ai', simpleAIRoute);  // 🆕 Simple LLM 시스템
 // app.route('/api/planner', plannerTestRoute);  // 🧪 플래너 테스트 전용 - 구문 오류로 임시 주석
@@ -95,4 +134,5 @@ console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
 export default {
   port: port,
   fetch: app.fetch,
+
 };
