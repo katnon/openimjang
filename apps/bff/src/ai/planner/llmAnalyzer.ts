@@ -108,26 +108,30 @@ ${JSON.stringify(userProfile, null, 2)}
     "apartmentName": "추출된 아파트명",
     "apartmentMetadata": { "lat": 37.123, "lng": 127.456 },
     "dealType": "매매|전세|월세",
-    "region": "지역명"
+    "region": "지역명",
+    "area": "전용면적 (숫자만, 84제곱 → 84)",
+    "period": "기간 (3개월, 6개월, 1년 등)"
   },
   "recommendedActions": ["searchNearbyPOI"]
 }
 \`\`\`
 
 **중요 규칙:**
-1. @mention 패턴 ("@삼성", "@마곡엠밸리" 등) → apartmentName 슬롯에 저장 + getBuildingInfo 액션
+1. 질문 의도에 맞는 액션만 선택하기 (불필요한 액션 추가 금지)
 2. "주변", "편의시설", "POI", "학교", "병원", "마트" → searchNearbyPOI 액션 (좌표 필수)
-3. "가격", "실거래", "매매", "전세", "월세" → searchRealEstate 액션 
-4. "최근", "3개월", "6개월" → period 슬롯에 저장
-5. "트렌드", "분석", "통계" → getPriceTrends 또는 getDealStatsSummary 액션
-6. 기존 슬롯의 아파트 정보(이름, 좌표 등)를 최대한 재활용
-7. confidence는 0.8 이상으로 설정 (확실한 의도만 처리)
-8. 복합 질문의 경우 여러 액션을 추천 가능
+3. "가격", "실거래", "매매", "전세", "월세", "84제곱" → searchRealEstate 액션
+4. "건물정보", "층수", "세대수", "건축년도", "구조" → getBuildingInfo 액션
+5. "84제곱", "59㎡", "114평" 등 → area 슬롯에 숫자만 저장 (84제곱 → 84)
+6. "최근", "3개월", "6개월" → period 슬롯에 저장
+7. "트렌드", "분석", "통계" → getPriceTrends 또는 getDealStatsSummary 액션
+8. 기존 슬롯의 아파트 정보(이름, 좌표 등)를 최대한 재활용
+9. confidence는 0.8 이상으로 설정 (확실한 의도만 처리)
 
-**액션 추천 우선순위:**
-- @mention → getBuildingInfo (아파트 기본정보 로드)
-- 아파트 정보 + "주변" → searchNearbyPOI  
-- 아파트 정보 + "가격" → searchRealEstate
+**액션 선택 가이드:**
+- 실거래가 질문 ("84제곱 매매가") → searchRealEstate만 (getBuildingInfo 불필요)
+- 건물정보 질문 ("몇 층인지", "세대수") → getBuildingInfo만 (searchRealEstate 불필요) 
+- 주변정보 질문 → searchNearbyPOI만
+- 복합 질문인 경우에만 여러 액션 추천
 - 복잡한 질문 → generateSelectQuery (RAG 활용)
 
 오직 JSON만 출력하세요. 다른 설명은 하지 마세요.`;

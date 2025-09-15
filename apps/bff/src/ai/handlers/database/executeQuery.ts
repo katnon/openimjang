@@ -1,6 +1,7 @@
 // SQL 쿼리 실행 핸들러
 import { db } from '../../../lib/db';
 import { sql } from 'kysely';
+import pg from 'pg';
 
 interface ExecuteQueryArgs {
   sql: string;
@@ -43,9 +44,17 @@ export async function executeQuery(args: ExecuteQueryArgs) {
       };
     }
 
-    // 3) 쿼리 실행
+    // 3) 쿼리 실행 (PostgreSQL Pool 직접 사용)
     const startTime = Date.now();
-    const result = await db.executeQuery(sql.raw(query));
+    
+    // 새로운 Pool 인스턴스 생성 (안전한 방법)
+    const { Pool } = pg;
+    const pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL 
+    });
+    
+    const result = await pool.query(query);
+    await pool.end(); // 연결 정리
     const executionTime = Date.now() - startTime;
 
     const rows = Array.isArray(result.rows) ? result.rows : [result.rows];

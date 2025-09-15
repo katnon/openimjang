@@ -54,7 +54,8 @@
       "Bash(claude config set permission-mode bypassPermissions)",
       "Bash(claude config set --global permission-mode bypassPermissions)",
       "Bash(taskkill:*)",
-      "Read(//c/Users/gunho/Pictures/Screenshots/**)"
+      "Read(//c/Users/gunho/Pictures/Screenshots/**)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

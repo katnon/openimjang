@@ -32,7 +32,8 @@ export class ActionExecutor {
   private registerDefaultHandlers() {
     this.actionHandlers.set('clarify', new ClarifyHandler());
     this.actionHandlers.set('validate', new ValidateHandler());
-    this.actionHandlers.set('rag', new RAGHandler());
+    // RAG 핸들러 제거: 의미 없는 벡터 검색 대신 실제 DB 데이터 활용
+    // this.actionHandlers.set('rag', new RAGHandler());
     this.actionHandlers.set('searchRealEstate', new SearchRealEstateHandler());
     this.actionHandlers.set('searchPOI', new SearchPOIHandler());
     this.actionHandlers.set('calculateStats', new CalculateStatsHandler());
@@ -120,8 +121,8 @@ export class ActionExecutor {
         execution.status = 'completed';
       }
 
-      // 2. Critic 검증 (실행 성공 시만)
-      if (this.criticEnabled && execution.status === 'completed') {
+      // 2. Critic 검증 (성공/실패 상관없이 항상 실행)
+      if (this.criticEnabled) {
         const criticResult = await this.runCriticValidation(execution, context, sessionMetadata);
         
         if (criticResult.hasIssue && criticResult.needsRetry) {
@@ -136,6 +137,9 @@ export class ActionExecutor {
               adjustedSlots: criticResult.adjustedSlots
             });
           }
+        } else {
+          // 이슈가 없어도 Critic 결과를 저장
+          execution.criticResult = criticResult;
         }
       }
 
@@ -351,15 +355,16 @@ class ValidateHandler implements ActionHandler {
 }
 
 /**
- * RAG 핸들러 - 외부 지식 검색
+ * RAG 핸들러 - 외부 지식 검색 (비활성화됨)
+ * 의미 없는 벡터 검색 대신 실제 DB 데이터에 집중
  */
+/*
 class RAGHandler implements ActionHandler {
   async execute(action: PlanAction, context: PlanContext): Promise<any> {
     const { topics } = action.parameters || {};
     
-    // 여기서는 스켈레톤만 구현
-    // 실제로는 벡터 DB나 외부 API를 호출
-    console.log('🔍 RAG 검색:', topics);
+    // 스켈레톤 구현: SQL 실행 실패 후에도 무의미하게 실행됨
+    console.log('🔍 RAG 검색 (비활성화됨):', topics);
     
     return {
       documents: [],
@@ -368,6 +373,7 @@ class RAGHandler implements ActionHandler {
     };
   }
 }
+*/
 
 /**
  * 부동산 검색 핸들러

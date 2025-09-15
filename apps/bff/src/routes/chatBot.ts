@@ -215,15 +215,16 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
             explanation: criticResult.explanation
         });
 
-        // 🔍 벡터DB RAG 검색으로 관련 컨텍스트 수집
-        console.log('🔍 벡터DB RAG 검색 시작:', message.slice(0, 50));
-        const vectorResults = await vectorService.search(message, { topK: 5 });
+        // 🔍 벡터DB RAG 검색 제거: 의미 없는 검색 대신 실제 DB 데이터에 집중
+        // console.log('🔍 벡터DB RAG 검색 시작:', message.slice(0, 50));
+        // const vectorResults = await vectorService.search(message, { topK: 5 });
+        const vectorResults: any[] = []; // 빈 배열로 대체
 
-        console.log('📊 벡터 검색 결과:', {
-            found: vectorResults.length,
-            topScore: vectorResults[0]?.metadata.score || 0,
-            schemas: [...new Set(vectorResults.map(r => r.metadata.schema_name).filter(Boolean))]
-        });
+        // console.log('📊 벡터 검색 결과:', {
+        //     found: vectorResults.length,
+        //     topScore: vectorResults[0]?.metadata.score || 0,
+        //     schemas: [...new Set(vectorResults.map(r => r.metadata.schema_name).filter(Boolean))]
+        // });
 
         // 디버깅용: 실행 결과 상세 로깅
         execution.results.forEach((result, index) => {
@@ -496,25 +497,19 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
                 ).join('\n\n')}`
                 : '';
 
-            const llmPrompt = `당신은 정확하고 신뢰할 수 있는 부동산 임장 도우미입니다.
-
-**🚨 중요 규칙**:
-1. **오직 제공된 실제 데이터만 사용**: 추측하거나 일반적인 지식을 사용하지 마세요
-2. **사용자 정정사항 반드시 인정**: 사용자가 "없어", "아니"라고 한 내용은 절대 반박하지 마세요
-3. **모르는 것은 솔직히 말하기**: 데이터에 없는 정보는 "모르겠습니다"라고 답변하세요
-
-**사용자 질문**: ${message}${correctionsContext}${correctionAlert}${criticAlert}${ragContext}
+            const llmPrompt = `**사용자 질문**: ${message}${correctionsContext}${correctionAlert}${criticAlert}
 
 ${dataValidation}
 
-**답변 가이드라인**:
-1. **📊 데이터 기반 답변**: 위의 실제 데이터만을 인용하여 답변하세요
-2. **🗣️ 정정사항 반영**: 사용자가 정정한 내용이 있다면 즉시 인정하고 사과하세요
-3. **✨ 구체적 정보**: "지하철역이 있어요"가 아닌 실제 역명과 거리를 정확히 말하세요
-4. **📚 벡터DB 활용**: 관련 데이터베이스 정보가 있다면 이를 참고하여 정확한 테이블/컬럼 정보 제공
-5. **📝 마크다운 활용**: **굵은 글씨**, - 불릿 포인트로 가독성 높게 구성
-6. **💬 적절한 길이**: 200-400자 내외로 간결하면서도 유용하게
-7. **🤔 솔직한 소통**: 정보가 부족하면 솔직하게 알려주고 추가 질문 유도
+**분석 지침**:
+- 실거래가 질문 시: 가장 활발한 면적대, 최근 시세 동향, 주변 단지 대비 경쟁력 분석
+- 주변환경 질문 시: 교통 접근성(역세권 여부), 생활편의시설 도보권, 인프라 종합 평가  
+- 건물정보 질문 시: 핵심 스펙(층수, 세대수, 구조 등)과 실용적 의미 설명
+
+**답변 예시 스타일**:
+"청구e편한세상은 2,5,6호선 청구역과 신당역 트리플역세권이라 교통이 정말 좋아요. 84㎡가 거래가 제일 활발한데, 최근 상승세로 3억 중반대를 유지하고 있고, 주변 단지들보다 입지가 좋아서 가격이 잘 떨어지지 않는 편이에요."
+
+**추가 컨텍스트**:${ragContext}
 
 **절대 하지 마세요**:
 - 존재하지 않는 지하철역이나 시설을 만들어내기
@@ -526,7 +521,30 @@ ${dataValidation}
                 messages: [
                     {
                         role: "system",
-                        content: "당신은 정확하고 신뢰할 수 있는 부동산 임장 도우미입니다. 절대 추측하지 마세요. 오직 제공된 실제 데이터와 벡터DB 검색 결과만을 사용하여 답변하세요. 사용자가 정정한 내용이 있다면 즉시 인정하고 사과하세요. 데이터에 없는 정보는 '모르겠습니다'라고 솔직히 말하세요. 관련 데이터베이스 스키마 정보가 제공되면 이를 활용하여 정확한 정보를 제공하세요."
+                        content: `당신은 10년 경력의 부동산 전문가입니다. 사용자와 친근하게 대화하며 전문적인 인사이트를 제공하세요.
+
+**응답 스타일:**
+- 친근하고 자연스러운 대화체 사용 ("~네요", "~어요", "~죠")
+- 데이터를 단순 나열하지 말고 분석하여 인사이트 제공
+- 예: "청구e편한세상은 2,5,6호선 트리플역세권이라 교통이 정말 좋아요" 
+- 예: "84㎡가 거래가 제일 활발한데, 최근 상승세로 3억대를 유지하고 있어요"
+- 예: "주변 단지들보다 입지가 좋아서 가격이 잘 떨어지지 않는 편이에요"
+
+**실거래가 분석 시:**
+- 가장 활발한 면적대 언급
+- 최근 시세 동향 분석 (상승/하락/보합)
+- 주변 단지와의 비교 우위 설명
+- 투자 관점에서의 조언
+
+**주변환경 설명 시:**
+- 교통 접근성 강조 (역세권, 버스노선)
+- 생활 편의시설 도보권 여부
+- 교육환경, 상업시설 등 종합적 평가
+
+**절대 금지:**
+- 데이터 없는 추측 금지
+- 단순 나열식 답변 금지
+- 사용자 정정 시 즉시 인정하고 사과`
                     },
                     {
                         role: "user",

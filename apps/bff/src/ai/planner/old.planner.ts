@@ -1,4 +1,10 @@
-// apps/bff/src/ai/planner/planner.ts
+/**
+ * @deprecated AI 3.0 시스템으로 대체되었습니다.
+ * 사용 금지: 새로운 AI 3.0 대화 인텔리전스 시스템을 사용하세요.
+ * 대안: apps/bff/src/services/ai3/ 의 새로운 매니저들
+ * 마이그레이션 예정일: 2025-01-15
+ */
+// apps/bff/src/ai/planner/planner.ts (LEGACY)
 // 핵심 플래너 구현 - 질문과 슬롯을 기반으로 실행 계획 생성
 
 import { v4 as uuidv4 } from 'uuid';
@@ -95,19 +101,24 @@ export class SmartPlanner implements IPlanner {
   }
 
   /**
-   * LLM 분석 기반 액션 생성 (중복 분석 제거)
+   * LLM 분석 기반 액션 생성
    */
   private async generateActions(context: PlanContext): Promise<PlanAction[]> {
     const actions: PlanAction[] = [];
     const { intent, slots } = context;
     
-    // 이미 createPlan에서 LLM 분석을 완료했으므로 intent.actions 사용
-    const recommendedActions = intent.actions || [];
+    // LLM이 분석한 recommendedActions를 우선 사용
+    const llmAnalysis = await analyzewithLLM(
+      context.question,
+      slots,
+      context.userProfile,
+      context.sessionHistory?.messageHistory
+    );
     
-    console.log('🎯 LLM 추천 액션 (캐시됨):', recommendedActions);
+    console.log('🎯 LLM 추천 액션:', llmAnalysis.recommendedActions);
     
     // LLM이 추천한 액션들을 기반으로 PlanAction 생성
-    for (const actionType of recommendedActions) {
+    for (const actionType of llmAnalysis.recommendedActions) {
       switch (actionType) {
         case 'searchNearbyPOI':
         case 'searchPOI':
@@ -117,7 +128,7 @@ export class SmartPlanner implements IPlanner {
               type: 'searchPOI',
               name: 'Search Nearby POIs',
               description: '주변 편의시설을 검색합니다',
-              reason: intent.reasoning || 'LLM이 POI 검색을 추천했습니다',
+              reason: llmAnalysis.intent.reasoning || 'LLM이 POI 검색을 추천했습니다',
               priority: ActionPriority.HIGH,
               parameters: {
                 apartmentName: slots.apartmentName,
@@ -135,7 +146,7 @@ export class SmartPlanner implements IPlanner {
             type: 'searchRealEstate',
             name: 'Search Real Estate Data',
             description: '부동산 실거래 데이터를 검색합니다',
-            reason: intent.reasoning || 'LLM이 부동산 검색을 추천했습니다',
+            reason: llmAnalysis.intent.reasoning || 'LLM이 부동산 검색을 추천했습니다',
             priority: ActionPriority.HIGH,
             parameters: {
               includeHistory: true,
@@ -151,7 +162,7 @@ export class SmartPlanner implements IPlanner {
               type: 'getBuildingInfo',
               name: 'Get Building Information',
               description: '건물 기본 정보를 조회합니다',
-              reason: intent.reasoning || 'LLM이 건물 정보 조회를 추천했습니다',
+              reason: llmAnalysis.intent.reasoning || 'LLM이 건물 정보 조회를 추천했습니다',
               priority: ActionPriority.MEDIUM,
               parameters: {
                 apartmentName: slots.apartmentName
@@ -546,18 +557,18 @@ export class SmartPlanner implements IPlanner {
   }
 
   /**
-   * 추천 데이터 액션 생성 (RAG 검색 제거)
+   * 추천 데이터 액션 생성
    */
   private generateRecommendationDataActions(context: PlanContext): PlanAction[] {
     const actions: PlanAction[] = [];
 
-    // 추천을 위한 종합 데이터 수집 (DB 데이터만 사용)
+    // 추천을 위한 종합 데이터 수집
     actions.push({
       id: uuidv4(),
       type: 'searchRealEstate',
       name: 'Collect Recommendation Data',
       description: '추천을 위한 종합 데이터를 수집합니다',
-      reason: '추천 근거가 될 실거래 데이터가 필요합니다',
+      reason: '추천 근거가 될 데이터가 필요합니다',
       priority: ActionPriority.HIGH,
       parameters: {
         includeMarketTrends: true,
@@ -565,10 +576,18 @@ export class SmartPlanner implements IPlanner {
       }
     });
 
-    // RAG 검색 제거: 의미 없는 외부 지식 검색 대신 실제 DB 데이터에 집중
-    // actions.push({
-    //   type: 'rag', // 제거됨: SQL 실행 실패 후에도 계속 실행되어 무의미
-    // });
+    // 외부 지식도 필요할 수 있음
+    actions.push({
+      id: uuidv4(),
+      type: 'rag',
+      name: 'Gather External Knowledge',
+      description: '외부 부동산 지식을 수집합니다',
+      reason: '시장 동향 등 추가 정보가 추천에 도움됩니다',
+      priority: ActionPriority.MEDIUM,
+      parameters: {
+        topics: ['market_trends', 'investment_tips', 'regional_development']
+      }
+    });
 
     return actions;
   }
@@ -756,13 +775,13 @@ export class SmartPlanner implements IPlanner {
   }
 
   /**
-   * 권한 확인 (RAG 제거됨)
+   * 권한 확인
    */
   private hasPermission(actionType: ActionType, permissions: string[]): boolean {
     const permissionMap: Record<ActionType, string> = {
       'clarify': 'basic',
       'validate': 'basic',
-      // 'rag': 'advanced', // 제거됨: 더 이상 지원하지 않음
+      'rag': 'advanced',
       'generateSQL': 'data_access',
       'executeSQL': 'data_access',
       'searchRealEstate': 'data_access',
@@ -780,13 +799,13 @@ export class SmartPlanner implements IPlanner {
   }
 
   /**
-   * 실행 시간 추정 (RAG 제거됨)
+   * 실행 시간 추정
    */
   private estimateDuration(actions: PlanAction[]): number {
     const baseDurations: Record<ActionType, number> = {
       'clarify': 0,          // 사용자 응답 대기이므로 시간 계산 안함
       'validate': 500,
-      // 'rag': 2000,        // 제거됨: 더 이상 지원하지 않음
+      'rag': 2000,
       'generateSQL': 1000,
       'executeSQL': 1500,
       'searchRealEstate': 2000,

@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
 import { bodyLimit } from 'hono/body-limit';
+import { serveStatic } from 'hono/bun';
 import { db } from './lib/db';
 import { searchRoute } from './routes/search';
 import { sql } from "kysely";
@@ -24,6 +25,8 @@ import embeddingRoute from './routes/embedding';
 import swaggerRoute from './routes/swagger';
 import { memoRoute } from './routes/memo';
 import apartmentFullDataRoute from './routes/apartmentFullData';
+import presetPointsRoute from './routes/presetPoints';
+import uploadRoute from './routes/upload';
 
 console.log('💡 ENV URL:', process.env.DATABASE_URL);
 
@@ -62,8 +65,13 @@ app.route('/api/embedding', embeddingRoute); // 🆕 임베딩 관리 라우터
 app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터
 app.route('/api/memo', memoRoute);    // 🆕 Firebase 메모 시스템 라우터
 // app.route('/api/apartment', apartmentFullDataRoute); // 🆕 아파트 전체 정보 일괄 조회 라우터
+app.route('/api/preset-points', presetPointsRoute); // 🆕 프리셋 포인트 시스템 라우터
+app.route('/api/upload', uploadRoute); // 🆕 파일 업로드 시스템 라우터
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
+
+// 정적 파일 서빙 (업로드된 파일들)
+app.use('/uploads/*', serveStatic({ root: './public' }));
 
 // 헬스체크 + DB 테스트
 app.get('/api/db/now', async (c) => {
@@ -79,4 +87,12 @@ app.get('/api/db/now', async (c) => {
     }
 });
 
-export default app;
+// 서버 시작
+const port = process.env.PORT || 8787;
+
+console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
+
+export default {
+  port: port,
+  fetch: app.fetch,
+};

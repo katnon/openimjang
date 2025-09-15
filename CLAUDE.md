@@ -232,6 +232,11 @@ No explicit test framework detected. When adding tests, check for:
 
 **⚠️ AI 쿼리 생성 시 반드시 아래 정확한 컬럼명 사용하기**
 
+#### 🔥 아파트명 표기 통일 규칙 (매우 중요)
+- **"이편한세상" → "e편한세상"** 으로 통일 (DB에 "청구e편한세상"으로 저장됨)
+- **"e-편한세상" → "e편한세상"** 으로 통일 (하이픈 제거)
+- 사용자가 "청구이편한세상"이라고 입력해도 "청구e편한세상"으로 검색해야 함
+
 #### `oi.apt_info` 테이블 (기본 아파트 정보)
 - `id` ✅ (기준 아파트 ID, 챗봇 및 LLM 전달 시 사용)
 - `apt_nm` ✅ (아파트명)
@@ -248,7 +253,25 @@ No explicit test framework detected. When adding tests, check for:
 
 #### `oi.apt_building_info` 테이블 (건물 상세 정보: 표제부등본, 총괄표제부)
 - `apt_id` ✅ (외래키: apt_info.id 참조)
-- 건축물 상세 정보 컬럼들
+- `type` ✅ (건물 유형)
+- `dongnm` ✅ (동명)
+- `bldnm` ✅ (건물명)
+- `platplc` ✅ (소재지)
+- `platarea` ✅ (대지면적)
+- `archarea` ✅ (건축면적)
+- `totarea` ✅ (총면적)
+- `grndflrcnt` ✅ (지상층수)
+- `ugrndflrcnt` ✅ (지하층수)
+- `mainpurpscdnm` ✅ (주용도명)
+- `strctcdnm` ✅ (구조명)
+- `roofcdnm` ✅ (지붕명)
+- `hhldcnt` ✅ (세대수)
+- `mainbldcnt` ✅ (주건축물수)
+- `atchbldcnt` ✅ (부속건축물수)
+- `totpkngcnt` ✅ (총주차대수)
+- `useaprday` ✅ (사용승인일)
+- `raw_data` ✅ (원본 데이터 JSON)
+- `created_at` ✅ (생성일시)
 
 ### 테이블 간 연결 방법
 ```sql

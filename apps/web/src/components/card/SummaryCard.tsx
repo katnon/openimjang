@@ -3,10 +3,19 @@ import RealEstateDealsTable from "./RealEstateDealsTable";
 import BuildingLandInfo from "./BuildingLandInfo";
 import NearbyInfoPanel from "./NearbyInfoPanel";
 import AiSummaryPanel from "./AiSummaryPanel";
+import ApartmentPreviewPanel from "./ApartmentPreviewPanel";
 import type { POIItem } from "@/types/poi";
 import { useAuth } from "@/auth/AuthProvider";
 import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "@/firebase";
+
+declare global {
+    interface Window {
+        MapPrime3DNavigator?: {
+            navigateToPreset: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
+        };
+    }
+}
 
 type PNUData = {
     pnu: string | null;
@@ -37,9 +46,12 @@ type SummaryCardProps = {
     onOpenChatbot?: (contextData: { aptId: number; aptName: string; aptAddress: string; type: 'apartment' }) => void; // 챗봇 열기 콜백
     onWriteMemo?: () => void; // 임장하기 (메모 작성) 콜백
     onOpenMyImjang?: () => void; // 내 임장 모달 열기 콜백
+    // 🆕 3D 지도 연동 콜백
+    onPresetSelect?: (preset: { lat: number; lon: number; dong: string; ho: string; exclu_use_ar: number }) => void; // 프리셋 선택 시 3D 카메라 이동
+    onFloorplanView?: (preset: { floorplan_image_url?: string; dong: string; ho: string }) => void; // 평면도 보기
 };
 
-export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot, onWriteMemo, onOpenMyImjang }: SummaryCardProps) {
+export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot, onWriteMemo, onOpenMyImjang, onPresetSelect, onFloorplanView }: SummaryCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("실거래가");
     const [pnuData, setPnuData] = useState<PNUData | null>(null);
@@ -134,7 +146,8 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
         { id: "실거래가", label: "실거래가" },
         { id: "건물/토지정보", label: "건물/토지정보" },
         { id: "주변정보", label: "주변정보" },
-        { id: "AI스마트요약", label: "AI 스마트 요약" }
+        { id: "AI스마트요약", label: "AI 스마트 요약" },
+        { id: "아파트미리보기", label: "🏠 아파트 미리보기" }
     ];
 
     const handleMoreClick = () => {
@@ -418,6 +431,30 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 lat={selectedApt.lat}
                                 lon={selectedApt.lon}
                                 jibunAddress={selectedApt.jibun_address}
+                            />
+                        )}
+                        {activeTab === "아파트미리보기" && selectedApt && (
+                            <ApartmentPreviewPanel
+                                aptId={selectedApt.id}
+                                aptName={selectedApt.apt_nm}
+                                onPresetSelect={(preset) => {
+                                    console.log('🏠 프리셋 선택됨:', preset);
+                                    
+                                    // 3D 지도 카메라 이동 (전역 함수 사용)
+                                    if (window.MapPrime3DNavigator?.navigateToPreset) {
+                                        window.MapPrime3DNavigator.navigateToPreset(preset);
+                                    } else {
+                                        console.warn('⚠️ 3D 지도가 준비되지 않음');
+                                    }
+                                    
+                                    // 추가 콜백 호출
+                                    onPresetSelect?.(preset);
+                                }}
+                                onFloorplanView={(preset) => {
+                                    console.log('📐 평면도 보기:', preset);
+                                    // 평면도 보기 콜백 호출
+                                    onFloorplanView?.(preset);
+                                }}
                             />
                         )}
                     </div>

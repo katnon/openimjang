@@ -245,7 +245,7 @@ searchRoute.get("/deals/:aptId", async (c) => {
             .select([
                 "deal_year", "deal_month", "deal_day",
                 "deal_amount", "deposit", "monthly_rent",
-                "exclu_use_ar", "floor"
+                "exclu_use_ar", "floor", "apt_dong"
             ]) as any)
             .where("apt_nm", "=", aptInfo.apt_nm)
             .where("jibun_address", "=", aptInfo.jibun_address);
@@ -277,11 +277,23 @@ searchRoute.get("/deals/:aptId", async (c) => {
             query = query.where("deposit", "is not", null);
         }
 
-        // 전용면적 필터 (기존과 동일)
+        // 전용면적 필터 (±1m² 범위 지원)
         if (area) {
             const areaNum = parseFloat(area);
+            const useRange = c.req.query("useRange") === "true"; // ±1m² 토글 지원
+
             if (!isNaN(areaNum)) {
-                query = query.where("exclu_use_ar", "=", areaNum);
+                if (useRange) {
+                    // ±1m² 범위 필터링
+                    query = query
+                        .where("exclu_use_ar", ">=", areaNum - 1)
+                        .where("exclu_use_ar", "<=", areaNum + 1);
+                    console.log(`🔍 면적 범위 필터: ${areaNum - 1}㎡ ~ ${areaNum + 1}㎡`);
+                } else {
+                    // 정확한 면적 매치
+                    query = query.where("exclu_use_ar", "=", areaNum);
+                    console.log(`🔍 정확한 면적 필터: ${areaNum}㎡`);
+                }
             }
         }
 

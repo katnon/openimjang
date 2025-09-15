@@ -71,7 +71,7 @@ export async function orchestrateSelect(options: OrchestrateOptions) {
   // 3) 실행
   const exec = await executeQuery({
     sql: gen.sql,
-    readOnly: safety?.readOnly ?? true,
+    explanation: enhancedQuestion, // 질문을 설명으로 사용
   });
 
   return {

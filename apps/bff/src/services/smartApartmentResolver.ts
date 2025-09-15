@@ -112,16 +112,20 @@ export class SmartApartmentResolver {
     
     console.log('🔍 아파트명 추출 시작:', { query });
     
-    // 1. @멘션 패턴 추출 (단순하고 확실한 패턴)
-    const mentionPattern = /@([가-힣a-zA-Z0-9\s\-_.()]+)/g;
+    // 1. @멘션 패턴 추출 - infoExtractor와 동일한 정확한 패턴 사용
+    const mentionPattern = /@([가-힣a-zA-Z0-9\-_.()]*(?:아파트|세상|캐슬|타워|빌라|힐스|푸르지오|래미안|위브|디에이치|엠밸리|롯데캐슬|현대|삼성|대우|LG|e편한세상)[가-힣a-zA-Z0-9\-_.()]*)/g;
     let match;
     console.log('🔍 @멘션 패턴 검색 시작, query:', JSON.stringify(query));
     while ((match = mentionPattern.exec(query)) !== null) {
       const mentioned = match[1].trim();
       console.log('📌 @멘션 발견:', mentioned, 'match:', match);
       
-      // "건물정보", "매매가" 같은 키워드 제거
-      let cleaned = mentioned.replace(/\s*(건물정보|매매가|전세|월세|정보|가격|시세|알려줘)\s*/g, '').trim();
+      // "건물정보", "매매가" 같은 키워드 및 불필요한 표현들 제거 (infoExtractor와 동일)
+      let cleaned = mentioned
+        .replace(/\s*(주변정보|주변|정보|가격|실거래|거래|POI|이거|말하는거야|알아|맞아|그거|그것|말하는|말씀하시는|하는|어때|어떻게|궁금|알려줘|보여줘|건물정보|매매가|전세|월세|시세)\s*$/gi, '')
+        .replace(/\s*(이야|야|요|다|죠|지|네|까|니까|구나|어요|군요)\s*$/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
       console.log('🧹 키워드 제거 후:', cleaned, 'length:', cleaned.length);
       
       if (cleaned && cleaned.length >= 1) { // 최소 길이를 1로 낮춤

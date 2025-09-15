@@ -264,9 +264,61 @@ const contextMismatchRule: CriticRule = {
 };
 
 /**
+ * SQL 실행 오류 체크 규칙
+ */
+const sqlExecutionErrorRule: CriticRule = {
+  id: 'sql_execution_error',
+  name: 'SQL 실행 오류 검증',
+  description: 'SQL 쿼리 실행 실패나 오류를 감지합니다',
+  condition: (context: CriticContext) => {
+    return context.actionResults.some(result => 
+      !result.success || result.error
+    );
+  },
+  check: (context: CriticContext): CriticResult => {
+    const failedResults = context.actionResults.filter(result => 
+      !result.success || result.error
+    );
+
+    if (failedResults.length === 0) {
+      return { hasIssue: false, needsRetry: false, confidence: 1.0 };
+    }
+
+    const errors = failedResults.map(result => result.error).filter(Boolean);
+    const errorTypes = errors.map(error => {
+      if (error.includes('cannot be compiled to SQL')) return 'kysely_compile_error';
+      if (error.includes('syntax error')) return 'sql_syntax_error';
+      if (error.includes('does not exist')) return 'schema_error';
+      if (error.includes('permission denied')) return 'permission_error';
+      return 'unknown_error';
+    });
+
+    const hasKyselyError = errorTypes.includes('kysely_compile_error');
+    const hasSchemaError = errorTypes.includes('schema_error');
+
+    return {
+      hasIssue: true,
+      issueType: 'execution_error',
+      recommendedAction: hasKyselyError || hasSchemaError ? 'regenerate_query' : 'provide_error_context',
+      needsRetry: hasKyselyError || hasSchemaError,
+      userMessage: hasKyselyError ? 
+        '쿼리 생성에 문제가 있어서 다시 시도해보겠습니다.' :
+        hasSchemaError ?
+        '데이터베이스 스키마 문제로 다시 시도해보겠습니다.' :
+        '데이터 조회 중 오류가 발생했습니다.',
+      explanation: `${failedResults.length}개 액션 실행 실패: ${errorTypes.join(', ')}`,
+      confidence: 0.95
+    };
+  },
+  priority: 0, // 최우선 순위
+  enabled: true
+};
+
+/**
  * 기본 Critic 규칙들
  */
 export const defaultCriticRules: CriticRule[] = [
+  sqlExecutionErrorRule, // 최우선으로 추가
   noResultsRule,
   insufficientDataRule,
   inconsistencyRule,
