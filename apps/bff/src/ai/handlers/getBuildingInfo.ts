@@ -1,20 +1,21 @@
 import { orchestrateSelect } from './utils/sqlOrchestrator';
 
 interface GetBuildingInfoParams {
-  aptId: number;
-  apartmentName?: string; // 힌트로 사용 가능
+  aptId?: number;
+  apartmentName?: string;
+  region?: string; // 지역 정보도 받을 수 있음
 }
 
 /**
  * 특정 아파트의 건물 정보를 조회합니다.
  */
 export async function getBuildingInfo(args: GetBuildingInfoParams): Promise<any> {
-  const { aptId, apartmentName } = args;
+  const { aptId, apartmentName, region } = args;
   
-  if (!aptId) {
+  if (!aptId && !apartmentName) {
     return {
       success: false,
-      error: '아파트 ID가 필요합니다.',
+      error: '아파트 ID 또는 아파트명이 필요합니다.',
       dataSchema: {
         type: '건물 유형 (recap: 요약, title: 등기원부)',
         dongnm: '동명',
@@ -31,18 +32,34 @@ export async function getBuildingInfo(args: GetBuildingInfoParams): Promise<any>
   try {
     console.log('🏢 건물 정보 조회 (RAG 오케스트레이션):', { aptId, apartmentName });
 
-    const question = [
-      `아파트 ID ${aptId}의 건물 정보를 상세히 조회해줘.`,
-      `건물 유형(type), 동명, 건물명, 대지면적, 건축면적, 지상층수, 세대수, 건물 구조 등 모든 정보를 포함해.`,
-      `건물 유형에 따라 정렬하고, recap 유형과 title 유형을 구분해서 반환해.`,
-      `스키마/컬럼은 RAG 문서에 맞춰 자동 선택.`,
-    ].join(' ');
+    // aptId가 있으면 ID 기준, 없으면 아파트명 기준으로 질문 생성
+    let question: string;
+    if (aptId) {
+      question = [
+        `아파트 ID ${aptId}의 건물 정보를 상세히 조회해줘.`,
+        `건물 유형(type), 동명, 건물명, 대지면적, 건축면적, 지상층수, 세대수, 건물 구조 등 모든 정보를 포함해.`,
+        `건물 유형에 따라 정렬하고, recap 유형과 title 유형을 구분해서 반환해.`,
+        `스키마/컬럼은 RAG 문서에 맞춰 자동 선택.`,
+      ].join(' ');
+    } else {
+      question = [
+        `"${apartmentName}" 아파트의 건물 정보를 상세히 조회해줘.`,
+        region ? `지역은 ${region}이야.` : '',
+        `먼저 apt_info 테이블에서 해당 아파트의 ID를 찾고, 그 ID로 apt_building_info 테이블에서 건물 정보를 조회해.`,
+        `건물 유형(type), 동명, 건물명, 대지면적, 건축면적, 지상층수, 세대수, 건물 구조 등 모든 정보를 포함해.`,
+        `건물 유형에 따라 정렬하고, recap 유형과 title 유형을 구분해서 반환해.`,
+      ].filter(Boolean).join(' ');
+    }
 
     const hints: string[] = [
       'oi.apt_building_info(apt_id, type, dongnm, bldnm, platplc, platarea, archarea, totarea, grndflrcnt, ugrndflrcnt, mainpurpscdnm, strctcdnm, roofcdnm, hhldcnt, mainbldcnt, atchbldcnt, totpkngcnt, useaprday, ...)',
+      'oi.apt_info(id, apt_nm, jibun_address, lat, lon, ...)', // 아파트명으로 검색할 때 필요
     ];
     if (apartmentName) {
       hints.push(`apartment name (hint): ${apartmentName}`);
+    }
+    if (region) {
+      hints.push(`region (hint): ${region}`);
     }
 
     const { success, sql, rows, rowCount, error } = await orchestrateSelect({

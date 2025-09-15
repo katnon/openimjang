@@ -4,12 +4,12 @@
 import { ConversationSlots, UserProfile } from '../types/slots';
 
 /**
- * 플랜 액션 유형
+ * 플랜 액션 유형 (RAG 제거됨)
  */
 export type ActionType = 
   | 'clarify'           // 사용자에게 추가 정보 요청
   | 'validate'          // 입력된 정보 검증
-  | 'rag'              // 외부 지식 검색 (RAG)
+  // | 'rag'              // 외부 지식 검색 (RAG) - 제거됨: 의미 없는 벡터 검색 대신 DB 데이터 활용
   | 'generateSQL'      // SQL 쿼리 생성
   | 'executeSQL'       // SQL 쿼리 실행
   | 'searchRealEstate' // 부동산 데이터 검색

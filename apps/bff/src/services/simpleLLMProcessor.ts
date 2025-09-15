@@ -1,429 +1,539 @@
-// 단순하고 직관적인 제너럴 LLM 기반 부동산 질의응답 시스템
-
+// apps/bff/src/services/simpleLLMProcessor.ts
 import OpenAI from 'openai';
-import { ConversationSession } from './conversationSession';
+import { db } from '../lib/db';
+import { sql } from 'kysely';
+import { WebSearchService } from '../utils/webSearchService';
 
-// 기존 데이터 핸들러들 유지
-import { searchRealEstateDeals } from '../ai/handlers/searchRealEstateDeals';
-import { getBuildingInfo } from '../ai/handlers/getBuildingInfo';
-import { searchNearbyPOI } from '../ai/handlers/searchNearbyPOI';
-
-// 웹 검색 서비스 추가
-import { WebSearchService, WebSearchResponse } from '../utils/webSearchService';
-
-export interface SimpleProcessResult {
-  reply: string;
-  needsMoreInfo: boolean;
-  suggestedQuestions?: string[];
-  dataUsed?: any;
+interface UserSession {
+  sessionId: string;
+  conversationHistory: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+  }>;
+  apartmentContext?: {
+    apartmentName?: string;
+    location?: string;
+    clarificationNeeded?: boolean;
+  };
+  createdAt: number;
+  lastActivity: number;
 }
 
-/**
- * 단순하고 효과적인 LLM 기반 처리기
- * 복잡한 규칙 대신 제너럴 LLM이 자연스럽게 의도를 파악하고 응답
- */
+interface IntentAnalysis {
+  intent: 'apartment_search' | 'price_inquiry' | 'area_inquiry' | 'general' | 'clarification';
+  apartmentName?: string;
+  location?: string;
+  areaSize?: number;
+  priceRange?: { min?: number; max?: number };
+  confidence: number;
+}
+
+interface DatabaseResult {
+  success: boolean;
+  data?: any[];
+  message?: string;
+  dataSchema?: Record<string, string>;
+}
+
 export class SimpleLLMProcessor {
   private openai: OpenAI;
-  private session: ConversationSession;
   private webSearchService: WebSearchService;
+  private sessions: Map<string, UserSession> = new Map();
+  private readonly SESSION_TIMEOUT = 30 * 60 * 1000; // 30분
 
-  constructor(session: ConversationSession, apiKey: string) {
-    this.session = session;
-    this.openai = new OpenAI({ apiKey });
+  constructor() {
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
     this.webSearchService = new WebSearchService();
+    
+    // 세션 정리 타이머 설정
+    setInterval(() => this.cleanupExpiredSessions(), 5 * 60 * 1000); // 5분마다 정리
   }
 
-  /**
-   * 메인 처리 함수: 사용자 질문을 이해하고 최선의 답변 제공
-   */
-  async processUserQuery(userMessage: string): Promise<SimpleProcessResult> {
-    console.log(`🧠 Simple LLM 처리 시작: "${userMessage.substring(0, 50)}..."`);
+  private cleanupExpiredSessions() {
+    const now = Date.now();
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (now - session.lastActivity > this.SESSION_TIMEOUT) {
+        this.sessions.delete(sessionId);
+        console.log(`🗑️ 세션 만료로 정리: ${sessionId}`);
+      }
+    }
+  }
+
+  private getOrCreateSession(sessionId: string): UserSession {
+    const existingSession = this.sessions.get(sessionId);
+    if (existingSession) {
+      existingSession.lastActivity = Date.now();
+      return existingSession;
+    }
+
+    const newSession: UserSession = {
+      sessionId,
+      conversationHistory: [],
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+    };
+    
+    this.sessions.set(sessionId, newSession);
+    console.log(`✨ 새 세션 생성: ${sessionId}`);
+    return newSession;
+  }
+
+  private addToConversationHistory(sessionId: string, role: 'user' | 'assistant', content: string) {
+    const session = this.getOrCreateSession(sessionId);
+    session.conversationHistory.push({
+      role,
+      content,
+      timestamp: Date.now(),
+    });
+
+    // 대화 기록이 너무 길어지면 오래된 것부터 제거 (최대 20개 유지)
+    if (session.conversationHistory.length > 20) {
+      session.conversationHistory = session.conversationHistory.slice(-20);
+    }
+  }
+
+  private buildConversationContext(session: UserSession): string {
+    if (session.conversationHistory.length === 0) {
+      return "";
+    }
+
+    const recentHistory = session.conversationHistory.slice(-10); // 최근 10개만
+    const contextLines = recentHistory.map(msg => {
+      const timeStr = new Date(msg.timestamp).toLocaleTimeString('ko-KR');
+      return `[${timeStr}] ${msg.role === 'user' ? '사용자' : '어시스턴트'}: ${msg.content}`;
+    });
+
+    return `\n\n=== 이전 대화 내용 ===\n${contextLines.join('\n')}\n=== 대화 내용 끝 ===\n`;
+  }
+
+  async analyzeUserIntent(userQuery: string, sessionId: string): Promise<IntentAnalysis> {
+    const session = this.getOrCreateSession(sessionId);
+    const conversationContext = this.buildConversationContext(session);
+
+    const prompt = `
+한국 부동산 상담 AI로서 사용자의 의도를 분석해주세요.
+
+${conversationContext}
+
+현재 사용자 질문: "${userQuery}"
+
+다음 중 하나의 의도로 분류하고 정보를 추출해주세요:
+
+1. apartment_search: 특정 아파트 정보 검색
+2. price_inquiry: 가격/시세 문의  
+3. area_inquiry: 면적별 분석 문의
+4. general: 일반적인 부동산 상담
+5. clarification: 이전 질문에 대한 명확화 응답
+
+추출할 정보:
+- apartmentName: 아파트명 (예: "래미안", "잠실래미안")
+- location: 지역명 (예: "잠실", "강남구", "목동")  
+- areaSize: 면적 (제곱미터, 예: 84)
+- priceRange: 가격대 {min?, max?} (만원 단위)
+
+JSON 형태로 응답:
+{
+  "intent": "분류된_의도",
+  "apartmentName": "아파트명_또는_null",
+  "location": "지역명_또는_null", 
+  "areaSize": 면적_숫자_또는_null,
+  "priceRange": {"min": 최소가격, "max": 최대가격} 또는 null,
+  "confidence": 0.0에서_1.0_사이의_신뢰도
+}
+
+예시:
+- "잠실 래미안 가격 알려줘" → {"intent": "price_inquiry", "apartmentName": "래미안", "location": "잠실", "confidence": 0.9}
+- "목동에서 어떤 아파트가 좋아?" → {"intent": "general", "location": "목동", "confidence": 0.8}  
+- "84형 시세 어때?" → {"intent": "area_inquiry", "areaSize": 84, "confidence": 0.9}
+`;
 
     try {
-      // 1. LLM에게 질문 의도 파악 및 필요한 액션 결정 요청
-      const intentAndAction = await this.analyzeIntentAndDecideAction(userMessage);
-      console.log(`🎯 LLM 분석 결과:`, intentAndAction);
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+      });
 
-      // 2. 필요한 데이터 수집 (LLM이 요청한 액션 기반)
-      const collectedData = await this.collectRelevantData(intentAndAction, userMessage);
+      const result = response.choices[0].message.content;
+      console.log('🧠 Intent Analysis Raw Response:', result);
       
-      // 3. 수집된 데이터와 함께 최종 응답 생성
-      const finalResponse = await this.generateFinalResponse(userMessage, collectedData, intentAndAction);
-      
-      return finalResponse;
+      if (!result) {
+        throw new Error('OpenAI 응답이 비어있습니다');
+      }
+
+      // JSON 파싱 시도
+      let parsedResult: IntentAnalysis;
+      try {
+        parsedResult = JSON.parse(result);
+      } catch (parseError) {
+        console.warn('⚠️ Intent Analysis JSON 파싱 실패:', parseError);
+        // 기본값으로 fallback
+        parsedResult = {
+          intent: 'general',
+          confidence: 0.5
+        };
+      }
+
+      console.log('🎯 Intent Analysis Result:', parsedResult);
+      return parsedResult;
       
     } catch (error) {
-      console.error('Simple LLM 처리 오류:', error);
+      console.error('❌ Intent Analysis 오류:', error);
       return {
-        reply: "죄송합니다. 처리 중 문제가 발생했습니다. 다시 시도해 주세요.",
-        needsMoreInfo: false
+        intent: 'general',
+        confidence: 0.3
       };
     }
   }
 
-  /**
-   * LLM이 사용자 질문을 분석하고 필요한 액션을 결정
-   */
-  private async analyzeIntentAndDecideAction(userMessage: string): Promise<any> {
-    const completion = await this.openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `한국 부동산 전문 AI입니다. 사용자 질문을 분석해주세요.
+  async collectDatabaseData(intentAnalysis: IntentAnalysis): Promise<DatabaseResult> {
+    const { intent, apartmentName, location, areaSize } = intentAnalysis;
 
-## 액션:
-- searchDeals: 실거래가 검색
-- getBuildingInfo: 아파트 정보
-- searchPOI: 주변 시설
-- general: 일반 상담
-
-## 도메인 지식:
-지역: 잠실=송파구, 강남=강남구, 서초=서초구, 역삼=강남구, 홍대=마포구
-브랜드: 래미안→삼성래미안/래미안월곡, 힐스테이트, 아이파크→삼성아이파크, 푸르지오, 자이→GS자이
-면적: 59형=59㎡, 74형=74㎡, 84형=84㎡, 100형=100㎡, 120형=120㎡, 124형=124㎡
-애매브랜드(지역필수): 현대, 자이, 삼성, SK, 대림
-특정브랜드(이름만으로식별): 아크로리버파크→반포동, 헬리오시티→송도, 롯데캐슬골드
-
-## 예시:
-1. "잠실 래미안 84형 매매가" → region="잠실", apartmentName="래미안", area=84, dealType="매매", actions=["searchDeals"]
-2. "강남 현대아파트 100형 전세" → region="강남", apartmentName="현대", area=100, dealType="전세", actions=["searchDeals"] 
-3. "헬리오시티 120형 매매" → region=null, apartmentName="헬리오시티", area=120, dealType="매매", actions=["searchDeals"]
-4. "자이 84형 월세" → region=null, apartmentName="자이", area=84, dealType="월세", hasEnoughInfo=false (지역필요)
-
-JSON 응답:
-{
-  "intent": "의도",
-  "confidence": 0.8,
-  "extractedInfo": {
-    "apartmentName": "브랜드명",
-    "region": "지역명",
-    "dealType": "매매/전세/월세",
-    "area": "면적(㎡)"
-  },
-  "suggestedActions": ["액션"],
-  "hasEnoughInfo": true/false,
-  "reasoning": "근거"
-}`
-        },
-        {
-          role: "user",
-          content: userMessage
-        }
-      ],
-      temperature: 0.3
-    });
-
-    const result = completion.choices[0].message.content;
     try {
-      return JSON.parse(result || '{}');
-    } catch {
-      return { intent: "일반 상담", hasEnoughInfo: false, suggestedActions: ["general"] };
+      if (intent === 'apartment_search' || intent === 'price_inquiry') {
+        if (apartmentName || location) {
+          return await this.searchApartmentData(apartmentName, location);
+        }
+      }
+
+      if (intent === 'area_inquiry' && areaSize) {
+        return await this.searchByArea(areaSize, location);
+      }
+
+      if (intent === 'general' && location) {
+        return await this.searchLocationData(location);
+      }
+
+      return {
+        success: false,
+        message: `${intent} 의도에 대한 충분한 검색 조건이 없습니다.`
+      };
+
+    } catch (error) {
+      console.error('❌ Database Query 오류:', error);
+      return {
+        success: false,
+        message: '데이터베이스 조회 중 오류가 발생했습니다.'
+      };
     }
   }
 
-  /**
-   * 필요한 데이터 수집
-   */
-  private async collectRelevantData(intentAnalysis: any, userMessage: string): Promise<any> {
-    const data: any = { sources: [] };
+  private async searchApartmentData(apartmentName?: string, location?: string): Promise<DatabaseResult> {
+    let query = sql`
+      SELECT 
+        ai.apt_nm,
+        ai.jibun_address,
+        ada.deal_amount,
+        ada.exclu_use_ar,
+        ada.deal_year,
+        ada.deal_month,
+        ada.floor,
+        ada.deposit,
+        ada.monthly_rent
+      FROM oi.apt_info ai
+      JOIN oi.apt_deal_all ada ON ai.jibun_address = ada.jibun_address
+      WHERE ai.jibun_address ILIKE '%서울%'
+    `;
 
-    console.log(`📊 Simple AI 데이터 수집 시작:`, intentAnalysis);
-
-    for (const action of intentAnalysis.suggestedActions || []) {
-      try {
-        switch (action) {
-          case 'searchDeals':
-            if (intentAnalysis.extractedInfo?.region || intentAnalysis.extractedInfo?.apartmentName) {
-              console.log('🔍 실거래가 검색 실행:', {
-                apartmentName: intentAnalysis.extractedInfo?.apartmentName,
-                region: intentAnalysis.extractedInfo?.region,
-                dealType: intentAnalysis.extractedInfo?.dealType,
-                area: intentAnalysis.extractedInfo?.area
-              });
-              const deals = await searchRealEstateDeals({
-                apartmentName: intentAnalysis.extractedInfo?.apartmentName,
-                region: intentAnalysis.extractedInfo?.region,
-                dealType: intentAnalysis.extractedInfo?.dealType,
-                area: intentAnalysis.extractedInfo?.area
-              });
-              console.log('📈 실거래가 검색 결과:', deals ? `${deals.length || 0}건` : '결과 없음');
-              data.deals = deals;
-              data.sources.push('실거래가 데이터');
-            } else {
-              console.log('⚠️ 실거래가 검색 건너뜀 - 지역/아파트명 정보 부족');
-            }
-            break;
-
-          case 'getBuildingInfo':
-            if (intentAnalysis.extractedInfo?.apartmentName) {
-              console.log('🏢 건물 정보 검색 중...');
-              const buildingInfo = await getBuildingInfo(intentAnalysis.extractedInfo.apartmentName);
-              data.buildingInfo = buildingInfo;
-              data.sources.push('건물 정보');
-            }
-            break;
-
-          case 'searchPOI':
-            if (intentAnalysis.extractedInfo?.region || intentAnalysis.extractedInfo?.apartmentName) {
-              console.log('📍 주변 시설 검색 중...');
-              const poi = await searchNearbyPOI({
-                apartmentName: intentAnalysis.extractedInfo?.apartmentName,
-                region: intentAnalysis.extractedInfo?.region
-              });
-              data.poi = poi;
-              data.sources.push('주변 시설 정보');
-            }
-            break;
-        }
-      } catch (error) {
-        console.warn(`액션 ${action} 실행 중 오류:`, error);
-      }
+    if (apartmentName) {
+      query = query.where('ai.apt_nm', 'ilike', `%${apartmentName}%`);
     }
 
-    // 웹 검색 통합: 내부 데이터가 부족하거나 general 케이스인 경우
-    const shouldPerformWebSearch = this.shouldUseWebSearch(intentAnalysis, data, userMessage);
-    
-    if (shouldPerformWebSearch) {
-      try {
-        console.log('🌐 웹 검색 수행 결정됨');
-        
-        // 인코딩 문제 해결을 위해 의도 분석 결과로 더 나은 검색 쿼리 생성
-        const enhancedQuery = this.generateWebSearchQuery(intentAnalysis, userMessage);
-        console.log(`🔍 웹 검색 쿼리 생성: "${enhancedQuery}"`);
-        
-        const webSearchResult = await this.webSearchService.searchRealEstate(enhancedQuery);
-        
-        if (webSearchResult.results.length > 0) {
-          data.webSearch = webSearchResult;
-          data.sources.push('웹 검색 정보');
-          console.log(`✅ 웹 검색 완료: ${webSearchResult.results.length}건`);
-        } else {
-          console.log('⚠️ 웹 검색 결과 없음');
-        }
-      } catch (error) {
-        console.warn('웹 검색 실행 중 오류:', error);
-      }
-    } else {
-      console.log('ℹ️ 웹 검색 건너뜀 - 충분한 내부 데이터 확보');
+    if (location) {
+      query = query.where('ai.jibun_address', 'ilike', `%${location}%`);
     }
 
-    return data;
+    query = query
+      .orderBy(['ada.deal_year', 'ada.deal_month'], 'desc')
+      .limit(20);
+
+    const result = await query.execute(db);
+
+    return {
+      success: result.length > 0,
+      data: result,
+      dataSchema: {
+        apt_nm: "아파트명",
+        jibun_address: "지번주소", 
+        deal_amount: "매매가 (만원 단위, 예: 30000 = 3억원)",
+        exclu_use_ar: "전용면적 (제곱미터)",
+        deal_year: "거래년도",
+        deal_month: "거래월",
+        floor: "층수",
+        deposit: "보증금 (만원 단위)",
+        monthly_rent: "월세 (만원 단위)"
+      },
+      message: result.length > 0 ? 
+        `${apartmentName || ''}${location || ''} 관련 ${result.length}건의 거래 정보를 찾았습니다.` :
+        `${apartmentName || ''}${location || ''} 관련 거래 정보를 찾을 수 없습니다.`
+    };
   }
 
-  /**
-   * 웹 검색 수행 여부 결정 로직
-   */
-  private shouldUseWebSearch(intentAnalysis: any, collectedData: any, userMessage: string): boolean {
-    // 1. General 액션이 포함된 경우 - 웹 검색 적극 활용
-    const hasGeneralAction = intentAnalysis.suggestedActions?.includes('general');
-    if (hasGeneralAction) {
-      console.log('🔍 웹 검색 필요: General 액션 감지');
+  private async searchByArea(areaSize: number, location?: string): Promise<DatabaseResult> {
+    // ±1㎡ 허용 오차 적용
+    const minArea = areaSize - 1;
+    const maxArea = areaSize + 1;
+
+    let query = sql`
+      SELECT 
+        apt_nm,
+        jibun_address,
+        deal_amount,
+        exclu_use_ar,
+        deal_year,
+        deal_month,
+        COUNT(*) OVER () as total_count
+      FROM oi.apt_deal_all
+      WHERE jibun_address ILIKE '%서울%'
+        AND exclu_use_ar BETWEEN ${minArea} AND ${maxArea}
+    `;
+
+    if (location) {
+      query = query.where('jibun_address', 'ilike', `%${location}%`);
+    }
+
+    query = query
+      .orderBy(['deal_year', 'deal_month'], 'desc')
+      .limit(20);
+
+    const result = await query.execute(db);
+
+    return {
+      success: result.length > 0,
+      data: result,
+      dataSchema: {
+        apt_nm: "아파트명",
+        jibun_address: "지번주소",
+        deal_amount: "매매가 (만원 단위, 예: 30000 = 3억원)", 
+        exclu_use_ar: "전용면적 (제곱미터)",
+        deal_year: "거래년도",
+        deal_month: "거래월"
+      },
+      message: result.length > 0 ? 
+        `${areaSize}㎡ (±1㎡ 범위) 관련 ${result.length}건의 거래 정보를 찾았습니다.` :
+        `${areaSize}㎡ 관련 거래 정보를 찾을 수 없습니다.`
+    };
+  }
+
+  private async searchLocationData(location: string): Promise<DatabaseResult> {
+    const query = sql`
+      SELECT 
+        apt_nm,
+        jibun_address,
+        AVG(deal_amount) as avg_price,
+        COUNT(*) as trade_count,
+        MIN(exclu_use_ar) as min_area,
+        MAX(exclu_use_ar) as max_area
+      FROM oi.apt_deal_all
+      WHERE jibun_address ILIKE '%서울%'
+        AND jibun_address ILIKE ${`%${location}%`}
+        AND deal_year >= 2023
+      GROUP BY apt_nm, jibun_address
+      ORDER BY trade_count DESC
+      LIMIT 15
+    `;
+
+    const result = await query.execute(db);
+
+    return {
+      success: result.length > 0,
+      data: result,
+      dataSchema: {
+        apt_nm: "아파트명",
+        jibun_address: "지번주소",
+        avg_price: "평균 매매가 (만원 단위, 예: 30000 = 3억원)",
+        trade_count: "거래 건수",
+        min_area: "최소 면적 (제곱미터)",
+        max_area: "최대 면적 (제곱미터)"
+      },
+      message: result.length > 0 ? 
+        `${location} 지역의 ${result.length}개 아파트 정보를 찾았습니다.` :
+        `${location} 지역의 아파트 정보를 찾을 수 없습니다.`
+    };
+  }
+
+  shouldUseWebSearch(intentAnalysis: IntentAnalysis, databaseResult: DatabaseResult): boolean {
+    // 데이터베이스에서 충분한 결과를 얻었다면 웹 검색 불필요
+    if (databaseResult.success && databaseResult.data && databaseResult.data.length >= 5) {
+      return false;
+    }
+
+    // general 의도이거나 위치 정보가 있다면 웹 검색 활용
+    if (intentAnalysis.intent === 'general' || intentAnalysis.location) {
       return true;
     }
 
-    // 2. 의도 분석이 충분하지 않은 경우
-    if (!intentAnalysis.hasEnoughInfo) {
-      console.log('🔍 웹 검색 필요: 의도 분석 정보 부족');
-      return true;
-    }
-
-    // 3. 내부 데이터 소스가 부족한 경우 (1개 이하)
-    const internalSources = collectedData.sources?.length || 0;
-    if (internalSources <= 1) {
-      console.log(`🔍 웹 검색 필요: 내부 데이터 부족 (${internalSources}개)`);
-      return true;
-    }
-
-    // 4. 특정 패턴의 질문 감지 - "어떤", "추천", "좋은" 등
-    const consultationPatterns = [
-      /어떤.*아파트.*좋을까/,
-      /추천.*아파트/,
-      /좋은.*아파트/,
-      /어디.*살까/,
-      /투자.*어디/,
-      /지역.*추천/
-    ];
-    
-    const isConsultationQuery = consultationPatterns.some(pattern => 
-      pattern.test(userMessage)
-    );
-    
-    if (isConsultationQuery) {
-      console.log('🔍 웹 검색 필요: 상담형 질문 패턴 감지');
-      return true;
-    }
-
-    // 5. 의도 분석 자체가 실패한 경우 (빈 객체 등)
-    if (!intentAnalysis.intent || Object.keys(intentAnalysis).length < 3) {
-      console.log('🔍 웹 검색 필요: 의도 분석 실패 감지');
+    // 데이터가 부족하고 아파트명이나 위치가 있다면 웹 검색
+    if (!databaseResult.success && (intentAnalysis.apartmentName || intentAnalysis.location)) {
       return true;
     }
 
     return false;
   }
 
-  /**
-   * 웹 검색용 쿼리 생성 - 인코딩 문제 해결 및 의도 기반 쿼리 개선
-   */
-  private generateWebSearchQuery(intentAnalysis: any, originalMessage: string): string {
-    const extracted = intentAnalysis.extractedInfo || {};
-    
-    // 의도 분석에서 추출된 정보가 충분한 경우 이를 활용
-    if (extracted.region || extracted.apartmentName || extracted.area || extracted.dealType) {
-      const queryParts: string[] = [];
+  async generateResponse(
+    userQuery: string,
+    sessionId: string,
+    intentAnalysis: IntentAnalysis,
+    databaseResult: DatabaseResult,
+    webSearchResult?: any
+  ): Promise<string> {
+    const session = this.getOrCreateSession(sessionId);
+    const conversationContext = this.buildConversationContext(session);
+
+    // Few-shot 학습 예시들
+    const fewShotExamples = `
+=== Few-shot 학습 예시 ===
+
+예시 1 - 아파트 검색:
+사용자: "잠실 래미안 가격 알려줘"
+어시스턴트: "잠실 래미안의 최근 거래 정보를 확인해드릴게요. 2024년 기준으로 84㎡는 약 13억~15억원대에 거래되고 있습니다."
+
+예시 2 - 면적별 분석: 
+사용자: "84형 시세 어때?"
+어시스턴트: "84㎡ 아파트의 서울 평균 시세를 알려드릴게요. 지역별로 차이가 있지만 강남권은 15억~20억, 강북권은 8억~12억원대입니다."
+
+예시 3 - 유연한 대안 제시:
+사용자: "200형 있어?"
+어시스턴트: "200㎡ 이상의 대형 평형은 흔하지 않습니다. 혹시 가장 큰 평형대를 찾으시는 걸까요? 해당 단지에서 가장 큰 타입은 114㎡로 최근 거래가는 12억원입니다."
+
+예시 4 - 지역별 추천:
+사용자: "목동에서 어떤 아파트가 좋아?"
+어시스턴트: "목동은 교육환경이 좋은 지역이죠. 주요 아파트로는 목동아파트(리모델링), 월드컵파크, 롯데캐슬이 인기가 높습니다."
+
+=== Few-shot 예시 끝 ===
+`;
+
+    const prompt = `
+당신은 친근한 한국 부동산 상담 전문가입니다. 사용자의 질문에 자연스럽고 도움이 되는 답변을 해주세요.
+
+${fewShotExamples}
+
+${conversationContext}
+
+현재 사용자 질문: "${userQuery}"
+
+의도 분석 결과: ${JSON.stringify(intentAnalysis)}
+
+데이터베이스 조회 결과:
+${databaseResult.success ? 
+  `성공 - ${databaseResult.data?.length || 0}건의 데이터\n데이터 스키마: ${JSON.stringify(databaseResult.dataSchema)}\n실제 데이터: ${JSON.stringify(databaseResult.data?.slice(0, 3))}` :
+  `실패 - ${databaseResult.message}`
+}
+
+${webSearchResult ? `\n웹 검색 결과:\n${JSON.stringify(webSearchResult)}` : ''}
+
+답변 가이드라인:
+1. 항상 친근하고 전문적인 톤 유지
+2. 구체적인 숫자와 데이터 활용 (예: "84㎡ 13억원")
+3. 데이터가 부족할 때는 유연한 대안 제시
+4. "정보가 없습니다" 같은 딱딱한 표현 금지
+5. 사용자의 숨겨진 의도 파악하여 도움되는 정보 제공
+6. 필요시 명확화 질문으로 대화 이어가기
+
+답변을 250자 이내로 자연스럽게 작성해주세요.
+`;
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 300,
+      });
+
+      const result = response.choices[0].message.content || "죄송합니다. 응답을 생성할 수 없습니다.";
       
-      if (extracted.region) {
-        queryParts.push(extracted.region);
-      }
+      // 대화 기록에 추가
+      this.addToConversationHistory(sessionId, 'user', userQuery);
+      this.addToConversationHistory(sessionId, 'assistant', result);
       
-      if (extracted.apartmentName && extracted.apartmentName !== "브랜드명") {
-        queryParts.push(extracted.apartmentName);
-      }
+      return result;
       
-      if (extracted.area) {
-        queryParts.push(`${extracted.area}형`);
-      }
-      
-      if (extracted.dealType) {
-        queryParts.push(extracted.dealType);
-      }
-      
-      // 기본 키워드 추가
-      if (queryParts.length > 0) {
-        queryParts.push('아파트');
-        const generatedQuery = queryParts.join(' ');
-        console.log(`🔧 의도 기반 쿼리 생성: "${generatedQuery}"`);
-        return generatedQuery;
-      }
+    } catch (error) {
+      console.error('❌ Response Generation 오류:', error);
+      return "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
     }
-    
-    // 패턴 매칭으로 일반적인 쿼리 생성 (인코딩 문제 회피)
-    const intent = intentAnalysis.intent || '';
-    const hasGeneral = intentAnalysis.suggestedActions?.includes('general');
-    
-    if (hasGeneral || intent.includes('일반')) {
-      // "어떤 아파트가 좋을까" 패턴 처리
-      if (originalMessage.includes('어떤') || originalMessage.includes('좋을까') || originalMessage.includes('추천')) {
-        if (extracted.region) {
-          return `${extracted.region} 추천 아파트 좋은 단지`;
-        }
-        return '서울 추천 아파트 좋은 단지 인기 브랜드';
-      }
-    }
-    
-    // 구체적 질문 패턴 처리
-    if (originalMessage.includes('매매가') || originalMessage.includes('매매')) {
-      const baseQuery = '아파트 매매가 시세 정보';
-      if (extracted.region) {
-        return `${extracted.region} ${baseQuery}`;
-      }
-      return baseQuery;
-    }
-    
-    if (originalMessage.includes('전세')) {
-      const baseQuery = '아파트 전세가 시세 정보';
-      if (extracted.region) {
-        return `${extracted.region} ${baseQuery}`;
-      }
-      return baseQuery;
-    }
-    
-    // 기본 대안 쿼리
-    console.log(`⚠️ 패턴 매칭 실패, 기본 쿼리 사용`);
-    return '서울 아파트 부동산 시세 정보';
   }
 
-  /**
-   * 최종 응답 생성 - LLM이 자연스럽고 유용한 답변 작성
-   */
-  private async generateFinalResponse(
-    userMessage: string, 
-    collectedData: any, 
-    intentAnalysis: any
-  ): Promise<SimpleProcessResult> {
-    
-    const completion = await this.openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `당신은 친근하고 전문적인 부동산 컨설턴트입니다. 
+  async processUserQuery(userQuery: string, sessionId: string): Promise<string> {
+    console.log(`\n🚀 === SimpleLLMProcessor 시작 ===`);
+    console.log(`👤 사용자 질문: "${userQuery}"`);
+    console.log(`🔑 세션 ID: ${sessionId}`);
 
-핵심 원칙:
-1. 항상 도움이 되는 정보를 우선 제공하세요
-2. 정보가 부족하거나 정확한 매칭이 없어도 "정보가 없다"고 하지 말고, 적극적으로 대안을 제시하세요:
-   - 비현실적 면적(200형 등) → "가장 큰 타입인 124형은 어떠세요?"
-   - 지역 없는 브랜드 → "여러 지역에 있는데, 인기 지역 기준으로는..."  
-   - 브랜드 없는 지역 → "그 지역 인기 브랜드로는 래미안, 자이 등이..."
-   - 존재하지 않는 조합 → "그 조합은 없지만 비슷한 대안으로는..."
-   - 애매한 정보 → 현재 가능한 정보를 최대한 활용해서 도움이 되는 답변
-3. 추가 질문은 정보 제공 후에 자연스럽게 유도하세요
-4. 구체적인 데이터가 있으면 활용하고, 없어도 경험과 일반적인 지식으로 도움을 주세요
+    try {
+      // 1단계: 의도 분석
+      console.log('\n📊 1단계: 사용자 의도 분석 중...');
+      const intentAnalysis = await this.analyzeUserIntent(userQuery, sessionId);
+      console.log('🎯 의도 분석 완료:', intentAnalysis);
 
-데이터 소스 활용 가이드:
-- **실거래가 데이터**: dealamount는 만원 단위 (30000 = 3억원), area는 제곱미터 단위
-- **웹 검색 정보**: 최신 시장 동향, 일반적인 부동산 지식, 지역별 특성 등 보완 정보로 활용
-- **내부 DB + 웹 검색 결합**: 두 소스를 종합해서 더 풍부하고 정확한 답변 제공
+      // 2단계: 데이터베이스 조회
+      console.log('\n💾 2단계: 데이터베이스 조회 중...');
+      const databaseResult = await this.collectDatabaseData(intentAnalysis);
+      console.log('📈 DB 조회 완료:', {
+        success: databaseResult.success,
+        dataCount: databaseResult.data?.length || 0,
+        message: databaseResult.message
+      });
 
-정보 소스별 활용 방법:
-- 내부 실거래가 데이터가 있으면 구체적인 수치 우선 제공
-- 웹 검색 정보는 맥락과 보완 설명으로 활용
-- 두 소스가 모두 있으면 실거래가는 구체적 수치로, 웹 검색은 시장 해석으로 활용
-
-응답 스타일:
-- 자연스럽고 대화하는 느낌
-- 핵심 정보를 먼저, 부가 설명은 나중에  
-- 정보 출처를 자연스럽게 언급 (예: "최신 거래 현황에 따르면..." / "일반적으로 이 지역은...")
-- "더 궁금한 점이 있으시면..." 식으로 자연스럽게 추가 질문 유도`
-        },
-        {
-          role: "user",
-          content: `사용자 질문: "${userMessage}"
-
-분석 결과: ${JSON.stringify(intentAnalysis)}
-
-수집된 데이터: ${JSON.stringify(collectedData, null, 2)}
-
-위 정보를 바탕으로 사용자에게 도움이 되는 응답을 작성해주세요. 정보가 부분적이라도 최대한 활용해서 유용한 답변을 만들어주세요.`
+      // 3단계: 웹 검색 필요성 판단
+      let webSearchResult;
+      if (this.shouldUseWebSearch(intentAnalysis, databaseResult)) {
+        console.log('\n🌐 3단계: 웹 검색 실행 중...');
+        try {
+          const searchQuery = `${intentAnalysis.apartmentName || ''} ${intentAnalysis.location || ''} 아파트 시세`.trim();
+          webSearchResult = await this.webSearchService.search(searchQuery);
+          console.log('🔍 웹 검색 완료:', webSearchResult ? '성공' : '실패');
+        } catch (searchError) {
+          console.warn('⚠️ 웹 검색 실패:', searchError);
         }
-      ],
-      temperature: 0.7
-    });
+      } else {
+        console.log('\n🔍 3단계: 웹 검색 불필요 (충분한 DB 데이터 확보)');
+      }
 
-    const reply = completion.choices[0].message.content || "죄송합니다. 답변을 생성할 수 없습니다.";
-    
-    // 간단한 후속 질문 제안
-    const suggestedQuestions = this.generateSuggestedQuestions(intentAnalysis, collectedData);
-    
+      // 4단계: 응답 생성
+      console.log('\n🤖 4단계: AI 응답 생성 중...');
+      const response = await this.generateResponse(
+        userQuery,
+        sessionId,
+        intentAnalysis,
+        databaseResult,
+        webSearchResult
+      );
+
+      console.log('✅ 응답 생성 완료');
+      console.log('📝 최종 응답:', response);
+      console.log(`\n🏁 === SimpleLLMProcessor 완료 ===\n`);
+
+      return response;
+
+    } catch (error) {
+      console.error('❌ SimpleLLMProcessor 전체 오류:', error);
+      return "죄송합니다. 요청을 처리하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+    }
+  }
+
+  // 세션 정보 조회 (디버깅용)
+  getSessionInfo(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return null;
+    }
+
     return {
-      reply,
-      needsMoreInfo: !intentAnalysis.hasEnoughInfo,
-      suggestedQuestions,
-      dataUsed: collectedData.sources
+      sessionId: session.sessionId,
+      conversationCount: session.conversationHistory.length,
+      apartmentContext: session.apartmentContext,
+      createdAt: new Date(session.createdAt).toLocaleString('ko-KR'),
+      lastActivity: new Date(session.lastActivity).toLocaleString('ko-KR'),
     };
   }
 
-  /**
-   * 상황에 맞는 후속 질문 제안
-   */
-  private generateSuggestedQuestions(intentAnalysis: any, collectedData: any): string[] {
-    const suggestions: string[] = [];
-    
-    if (collectedData.deals && collectedData.deals.length > 0) {
-      suggestions.push("이 지역의 시세 변화 추이가 궁금하신가요?");
-      suggestions.push("주변 다른 아파트와 비교해 보시겠어요?");
-    }
-    
-    if (intentAnalysis.extractedInfo?.region) {
-      suggestions.push("이 지역의 개발 계획이나 투자 전망은 어떤가요?");
-      suggestions.push("주변 편의시설이나 교통편도 확인해보시겠어요?");
-    }
-    
-    if (!intentAnalysis.extractedInfo?.apartmentName && intentAnalysis.extractedInfo?.region) {
-      suggestions.push("특정 아파트 단지가 있으시면 더 정확한 정보를 드릴 수 있어요");
-    }
-    
-    return suggestions.slice(0, 2); // 최대 2개만
+  // 전체 세션 개수 조회
+  getActiveSessionCount(): number {
+    return this.sessions.size;
   }
 }

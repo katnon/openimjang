@@ -43,10 +43,11 @@ export async function normalizeApartmentName(
       console.log('📍 지역 기반 검색 결과:', candidates.length + '개');
     }
 
-    // 2️⃣ 지역 기반 검색 실패 또는 지역 정보 없음 → 전체에서 부분 일치 검색
+    // 2️⃣ 지역 기반 검색 실패 또는 지역 정보 없음 → 전체에서 다중 검색 전략
     if (candidates.length === 0) {
-      console.log('🔍 전체 범위 부분 일치 검색');
+      console.log('🔍 전체 범위 다중 검색 전략');
       
+      // 2-1: 정확한 부분 일치 검색
       candidates = await db
         .selectFrom('oi.apt_info as apt')
         .select(['id', 'apt_nm', 'jibun_address'])
@@ -54,7 +55,37 @@ export async function normalizeApartmentName(
         .limit(50)
         .execute();
 
-      console.log('🔍 전체 검색 결과:', candidates.length + '개');
+      console.log('🔍 부분 일치 검색 결과:', candidates.length + '개');
+
+      // 2-2: 부분 일치 실패 시 키워드 분리 검색
+      if (candidates.length === 0) {
+        console.log('🔍 키워드 분리 검색 시도');
+        
+        // "청구이편한세상" → ["청구", "이편한세상", "편한세상"] 등으로 분리
+        const keywords = extractApartmentKeywords(inputName);
+        console.log('🔑 추출된 키워드들:', keywords);
+        
+        for (const keyword of keywords) {
+          if (keyword.length >= 2) { // 2글자 이상만 검색
+            const keywordResults = await db
+              .selectFrom('oi.apt_info as apt')
+              .select(['id', 'apt_nm', 'jibun_address'])
+              .where('apt_nm', 'ilike', `%${keyword}%`)
+              .limit(20)
+              .execute();
+            
+            console.log(`🔍 키워드 "${keyword}" 검색 결과:`, keywordResults.length + '개');
+            candidates.push(...keywordResults);
+          }
+        }
+        
+        // 중복 제거
+        const uniqueCandidates = candidates.filter((item, index, self) => 
+          index === self.findIndex(t => t.id === item.id)
+        );
+        candidates = uniqueCandidates;
+        console.log('🔍 중복 제거 후 총 결과:', candidates.length + '개');
+      }
     }
 
     if (candidates.length === 0) {
@@ -118,7 +149,66 @@ function cleanApartmentName(name: string): string {
     .replace(/[\s\-_\.]/g, '') // 공백, 하이픈, 언더스코어, 점 제거
     .replace(/아파트|아파트단지|단지/g, '') // '아파트' 키워드 제거
     .replace(/[동]/g, '') // '동' 제거
+    // 🔥 이편한세상 표기 통일: "이편한세상" → "e편한세상"
+    .replace(/이편한세상/g, 'e편한세상')
+    .replace(/e-편한세상/g, 'e편한세상') // "e-편한세상" → "e편한세상"
     .trim();
+}
+
+/**
+ * 아파트명에서 검색 가능한 키워드들을 추출
+ * 예: "청구이편한세상" → ["청구", "이편한세상", "편한세상", "한세상"]
+ */
+function extractApartmentKeywords(inputName: string): string[] {
+  const keywords: string[] = [];
+  const cleanName = inputName.trim();
+  
+  // 1. 원본 이름
+  keywords.push(cleanName);
+  
+  // 2. 알려진 아파트 브랜드명들로 분리 시도 (표기 통일 적용)
+  let normalizedName = cleanName
+    .replace(/이편한세상/g, 'e편한세상')
+    .replace(/e-편한세상/g, 'e편한세상');
+    
+  const brandPatterns = [
+    'e편한세상', '편한세상', '래미안', '푸르지오', '위브', '디에이치', '엠밸리', 
+    '롯데캐슬', '힐스테이트', '현대', '삼성', '대우', 'LG', '자이', '센트럴', 
+    '파크', '뷰', '타워', '캐슬', '힐스', '빌라'
+  ];
+  
+  for (const brand of brandPatterns) {
+    if (normalizedName.includes(brand)) {
+      // 브랜드 앞부분 (지역명)
+      const beforeBrand = normalizedName.split(brand)[0];
+      if (beforeBrand && beforeBrand.length >= 2) {
+        keywords.push(beforeBrand);
+      }
+      
+      // 브랜드 자체
+      keywords.push(brand);
+      
+      // 브랜드 뒷부분
+      const afterBrand = normalizedName.split(brand)[1];
+      if (afterBrand && afterBrand.length >= 2) {
+        keywords.push(afterBrand);
+      }
+    }
+  }
+  
+  // 3. 2글자씩 슬라이딩 윈도우로 부분 키워드 생성
+  if (cleanName.length >= 4) {
+    for (let i = 0; i <= cleanName.length - 2; i++) {
+      const substring = cleanName.substr(i, Math.min(4, cleanName.length - i));
+      if (substring.length >= 2) {
+        keywords.push(substring);
+      }
+    }
+  }
+  
+  // 중복 제거 및 정렬 (긴 것부터)
+  const uniqueKeywords = [...new Set(keywords)];
+  return uniqueKeywords.sort((a, b) => b.length - a.length);
 }
 
 /**

@@ -58,21 +58,23 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
       searchHints.push(`apartment_id: ${aptId}`);
       console.log('✅ 아파트 ID 사용:', aptId, apartmentName);
     } else if (apartmentName) {
-      // ID가 없으면 이름으로 정규화
-      const normalizedApt = await findBestApartmentMatch(apartmentName, region);
+      // ID가 없으면 이름으로 정규화 (중복 호출 방지: 1번만 실행)
+      const candidates = await normalizeApartmentName(apartmentName, region);
       
-      if (normalizedApt) {
-        finalApartmentName = normalizedApt.aptName;
-        finalAptId = normalizedApt.aptId;
-        searchHints.push(`apartment_id: ${normalizedApt.aptId}`);
-        console.log('✅ 아파트명 정규화 성공:', {
-          입력: apartmentName,
-          정규화: finalApartmentName,
-          점수: normalizedApt.score.toFixed(3)
-        });
-      } else {
-        const candidates = await normalizeApartmentName(apartmentName, region);
-        if (candidates && candidates.length > 1) {
+      if (candidates && candidates.length > 0) {
+        if (candidates.length === 1 || candidates[0].score <= 0.3) {
+          // 유일한 후보이거나 첫 번째 후보의 유사도가 높은 경우
+          const bestMatch = candidates[0];
+          finalApartmentName = bestMatch.aptName;
+          finalAptId = bestMatch.aptId;
+          searchHints.push(`apartment_id: ${bestMatch.aptId}`);
+          console.log('✅ 아파트명 정규화 성공:', {
+            입력: apartmentName,
+            정규화: finalApartmentName,
+            점수: bestMatch.score.toFixed(3)
+          });
+        } else {
+          // 여러 후보가 있고 불확실한 경우
           return {
             success: false,
             error: '여러 아파트가 검색되었습니다.',
@@ -80,6 +82,7 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
             candidates: candidates.map(c => ({ aptId: c.aptId, aptName: c.aptName, region: c.region }))
           };
         }
+      } else {
         console.log('⚠️ 아파트명 정규화 실패, 원본 이름 사용:', apartmentName);
       }
     } else if (!aptId && !apartmentName) {
@@ -115,18 +118,22 @@ export async function searchRealEstateDeals(args: SearchRealEstateDealsParams): 
       `${what} 조건에 맞는 거래 목록을 최신순으로 ${limit}건 이내로 조회해줘.`,
       `반드시 날짜, 거래금액(deal_amount), 보증금(deposit), 월세(monthly_rent), 전용면적(exclu_use_ar), 층(floor) 컬럼을 포함해.`,
       `거래유형 구분: deal_amount 존재=매매, deal_amount 없음+monthly_rent=0=전세, deal_amount 없음+monthly_rent>0=월세.`,
+      area ? `전용면적 ${area}㎡의 경우 ±1㎡ 허용 범위 적용: exclu_use_ar BETWEEN ${area-1} AND ${area+1}.` : '',
       `oi.apt_deal_all 테이블을 사용해서 스키마/컬럼 자동 선택.`,
-    ].join(' ');
+    ].filter(Boolean).join(' ');
 
     const { success, sql, rows, rowCount, error } = await orchestrateSelect({
       question,
       forceSchemaHints: [
-        'oi.apt_deal_all(deal_amount, deposit, monthly_rent, exclu_use_ar, floor, deal_year, deal_month, deal_day, apt_nm, ...)',
+        'oi.apt_deal_all(deal_amount, deposit, monthly_rent, exclu_use_ar, floor, deal_year, deal_month, deal_day, apt_nm, jibun_address)',
         '거래유형: deal_amount 존재=매매, deal_amount 없음+monthly_rent=0=전세, deal_amount 없음+monthly_rent>0=월세',
+        '지역 필터링: jibun_address 컬럼 사용 (umdnm 컬럼 없음)',
+        '날짜 정렬: ORDER BY deal_year DESC, deal_month DESC, deal_day DESC (MAKE_DATE 함수 사용 금지)',
+        '단순한 SQL 생성: 복잡한 함수나 논리적 모순 조건 피하기',
         ...searchHints
       ],
       requireColumns: ['exclu_use_ar', 'floor'],
-      userProfile,
+      // userProfile: 단순 실거래가 조회에서는 개인 프로필 조건 제외 (원본 데이터 우선 전달)
       safety: { maxRows: limit, readOnly: true },
     });
 

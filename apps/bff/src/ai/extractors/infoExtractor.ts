@@ -382,16 +382,22 @@ function extractMentionedApartments(message: string): {
   
   console.log('🔍 extractMentionedApartments 함수 호출:', message);
   
-  // @아파트명 패턴 매칭 (한글, 영문, 숫자, 하이픈, 특수문자 모두 포함)
-  const mentionPattern = /@([가-힣a-zA-Z0-9\s\-_.()]+?)(?:\s(?![가-힣a-zA-Z0-9\-_.])|$)/g;
+  // @아파트명 패턴 매칭 - 더 정확한 아파트명만 추출
+  // 아파트명 특성: 브랜드명 + 지역명 + "아파트/세상/캐슬" 등의 접미사로 구성
+  const mentionPattern = /@([가-힣a-zA-Z0-9\-_.()]*(?:아파트|세상|캐슬|타워|빌라|힐스|푸르지오|래미안|위브|디에이치|엠밸리|롯데캐슬|현대|삼성|대우|LG|e편한세상)[가-힣a-zA-Z0-9\-_.()]*)/g;
   console.log('📝 사용된 패턴:', mentionPattern.toString());
   const matches = Array.from(message.matchAll(mentionPattern));
   console.log('🎯 패턴 매칭 결과:', matches);
   
   for (const match of matches) {
     let apartmentName = match[1];
-    // 아파트명 정리: 공백 트림, "주변정보" 등 불필요한 단어 제거
-    apartmentName = apartmentName.replace(/\s*(주변정보|주변|정보|가격|실거래|거래|POI)\s*$/gi, '').trim();
+    
+    // 아파트명 정리: 불필요한 표현들 제거
+    apartmentName = apartmentName
+      .replace(/\s*(주변정보|주변|정보|가격|실거래|거래|POI|이거|말하는거야|알아|맞아|그거|그것|말하는|말씀하시는|하는|어때|어떻게|궁금|알려줘|보여줘)\s*$/gi, '')
+      .replace(/\s*(이야|야|요|다|죠|지|네|까|니까|구나|어요|군요)\s*$/gi, '') // 어미 제거
+      .replace(/\s+/g, ' ') // 연속 공백을 하나로 통합
+      .trim();
     
     if (apartmentName && apartmentName.length >= 2) {
       apartments.push({

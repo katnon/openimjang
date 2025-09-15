@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "@/auth/AuthProvider";
+import { useDeveloperMode } from "@/contexts/DeveloperModeProvider";
 
 type TopBarProps = {
     onOpen3D?: () => void;
@@ -25,6 +26,7 @@ export type AptInfo = {
 const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onOpen2D, mapViewMode = '2D', onSearchResult, onOpenAuth, onOpenMyImjang, onOpenProfile }) => {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
+    const { isDeveloperMode, toggleDeveloperMode } = useDeveloperMode();
     const [query, setQuery] = useState("");
     const [suggestions, setSuggestions] = useState<AptInfo[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -282,6 +284,19 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onOpen2D, mapViewMode = '2D',
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                     >
                                         API 문서
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            toggleDeveloperMode();
+                                            // 메뉴는 닫지 않고 유지 (상태 확인을 위해)
+                                        }}
+                                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                                            isDeveloperMode 
+                                                ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' 
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        🔧 개발자 모드 {isDeveloperMode ? '(활성)' : '(비활성)'}
                                     </button>
                                     <hr className="my-1" />
                                     <button

@@ -9,6 +9,7 @@ type Deal = {
     monthly_rent: number | null;
     exclu_use_ar: number;
     floor: number | null;
+    apt_dong: string | null; // 🆕 동 정보 추가
 };
 
 type Props = {
@@ -25,6 +26,7 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
     const [selectedDealTypes, setSelectedDealTypes] = useState<string[]>(["매매", "전세", "월세"]);
     const [selectedArea, setSelectedArea] = useState<string>("전체");
     const [selectedPeriod, setSelectedPeriod] = useState<string>("1년");
+    const [useAreaRange, setUseAreaRange] = useState<boolean>(false); // 🆕 ±1m² 토글
     const [isLoading, setIsLoading] = useState(true);
 
     // ✅ 페이지네이션 상태
@@ -57,7 +59,10 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
             setIsLoading(true);
             try {
                 const params = new URLSearchParams();
-                if (selectedArea !== "전체") params.append("area", selectedArea);
+                if (selectedArea !== "전체") {
+                    params.append("area", selectedArea);
+                    if (useAreaRange) params.append("useRange", "true"); // 🆕 ±1m² 토글 파라미터
+                }
                 params.append("period", selectedPeriod);
 
                 console.log(`🔍 선택된 기간: "${selectedPeriod}"`);
@@ -103,7 +108,7 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
             setIsLoading(false);
         };
         fetchDeals();
-    }, [aptId, selectedDealTypes, selectedArea, selectedPeriod]);
+    }, [aptId, selectedDealTypes, selectedArea, selectedPeriod, useAreaRange]);
 
     // ✅ 표시할 데이터 계산 로그 강화
     useEffect(() => {
@@ -198,6 +203,16 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
         return `${year}.${month}.${day}`;
     };
 
+    // 🆕 동 표시 포맷팅 (매매가만 표시, "동" 제거)
+    const formatDong = (deal: Deal): string => {
+        // 매매가가 있는 경우에만 동 표시
+        if (deal.deal_amount !== null && deal.apt_dong) {
+            // "101동" → "101" (끝의 "동" 제거)
+            return deal.apt_dong.replace(/동$/, '');
+        }
+        return "-"; // 전월세는 빈칸
+    };
+
     // ✅ 컨텐츠 렌더링
     const content = (
         <>
@@ -272,6 +287,21 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
                                 </option>
                             ))}
                         </select>
+
+                        {/* 🆕 ±1m² 토글 버튼 */}
+                        {selectedArea !== "전체" && (
+                            <button
+                                onClick={() => setUseAreaRange(!useAreaRange)}
+                                className={`px-2 py-1 text-xs font-medium rounded border transition-all ${
+                                    useAreaRange
+                                        ? "bg-blue-100 text-blue-800 border-blue-200"
+                                        : "bg-white text-gray-600 border-gray-300 hover:bg-blue-50 hover:text-blue-700"
+                                }`}
+                                title="전용면적 ±1㎡ 범위로 검색"
+                            >
+                                {useAreaRange && "✓ "}±1㎡
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -288,11 +318,12 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
                         <table className="w-full">
                             <thead className="bg-gray-50 sticky top-0">
                                 <tr>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">거래일</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">거래</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">가격</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">전용면적</th>
-                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">층</th>
+                                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-20">거래일</th>
+                                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-14">거래</th>
+                                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">가격</th>
+                                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-16">면적</th>
+                                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-12">동</th>
+                                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-12">층</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -300,21 +331,24 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
                                     const dealType = getDealType(deal);
                                     return (
                                         <tr key={index} className="hover:bg-gray-50">
-                                            <td className="px-3 py-2 text-xs text-gray-900 whitespace-nowrap">
+                                            <td className="px-2 py-2 text-xs text-gray-900 whitespace-nowrap">
                                                 {formatDate(deal)}
                                             </td>
-                                            <td className="px-3 py-2 whitespace-nowrap">
-                                                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${getDealTypeColorClass(dealType)}`}>
+                                            <td className="px-2 py-2 whitespace-nowrap">
+                                                <span className={`inline-flex px-1 py-0.5 text-xs font-medium rounded-full border ${getDealTypeColorClass(dealType)}`}>
                                                     {dealType}
                                                 </span>
                                             </td>
-                                            <td className="px-3 py-2 text-xs font-medium text-gray-900 whitespace-nowrap">
+                                            <td className="px-2 py-2 text-xs font-medium text-gray-900 whitespace-nowrap">
                                                 {formatPrice(deal)}
                                             </td>
-                                            <td className="px-3 py-2 text-xs text-gray-900 whitespace-nowrap">
+                                            <td className="px-2 py-2 text-xs text-gray-900 whitespace-nowrap">
                                                 {deal.exclu_use_ar}㎡
                                             </td>
-                                            <td className="px-3 py-2 text-xs text-gray-900 whitespace-nowrap">
+                                            <td className="px-2 py-2 text-xs text-gray-900 whitespace-nowrap text-center">
+                                                {formatDong(deal)}
+                                            </td>
+                                            <td className="px-2 py-2 text-xs text-gray-900 whitespace-nowrap text-center">
                                                 {deal.floor ? `${deal.floor}층` : "-"}
                                             </td>
                                         </tr>

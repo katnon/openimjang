@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
 import { bodyLimit } from 'hono/body-limit';
+import { serveStatic } from 'hono/bun';
 import { db } from './lib/db';
 import { searchRoute } from './routes/search';
 import { sql } from "kysely";
@@ -20,11 +21,14 @@ import poi from './routes/poi';
 import aiChatRoute from './routes/aiChat';
 // import plannerTestRoute from './routes/plannerTest';  // 구문 오류로 임시 주석
 import chatBotRoute from './routes/chatBot';
+import simpleAIRoute from './routes/simpleAI';
 import embeddingRoute from './routes/embedding';
 import swaggerRoute from './routes/swagger';
 import { memoRoute } from './routes/memo';
 import apartmentFullDataRoute from './routes/apartmentFullData';
-import simpleAIRoute from './routes/simpleAI';
+import presetPointsRoute from './routes/presetPoints';
+import uploadRoute from './routes/upload';
+
 
 // 환경변수 명시적 로딩 확인
 config();
@@ -94,13 +98,19 @@ app.route('/api/poi', poi);
 app.route('/api/ai', simpleAIRoute);  // 🆕 단순하고 효과적인 제너럴 LLM 시스템
 app.route('/api/ai', aiChatRoute);  // 🧠 LLM 라이프사이클 시스템 포함
 app.route('/api/ai', chatBotRoute);  // 🧪 정상 작동하는 플래너 시스템
+app.route('/api/ai', simpleAIRoute);  // 🆕 Simple LLM 시스템
 // app.route('/api/planner', plannerTestRoute);  // 🧪 플래너 테스트 전용 - 구문 오류로 임시 주석
 app.route('/api/embedding', embeddingRoute); // 🆕 임베딩 관리 라우터
 app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터
 app.route('/api/memo', memoRoute);    // 🆕 Firebase 메모 시스템 라우터
 // app.route('/api/apartment', apartmentFullDataRoute); // 🆕 아파트 전체 정보 일괄 조회 라우터
+app.route('/api/preset-points', presetPointsRoute); // 🆕 프리셋 포인트 시스템 라우터
+app.route('/api/upload', uploadRoute); // 🆕 파일 업로드 시스템 라우터
 app.route('/api', upisGeoRouter);
 app.route('/api', buildings);
+
+// 정적 파일 서빙 (업로드된 파일들)
+app.use('/uploads/*', serveStatic({ root: './public' }));
 
 // 헬스체크 + DB 테스트
 app.get('/api/db/now', async (c) => {
@@ -116,7 +126,13 @@ app.get('/api/db/now', async (c) => {
     }
 });
 
+// 서버 시작
+const port = process.env.PORT || 8787;
+
+console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
+
 export default {
-    port: 8787,
-    fetch: app.fetch,
+  port: port,
+  fetch: app.fetch,
+
 };

@@ -440,6 +440,18 @@ No explicit test framework detected. When adding tests, check for:
 
 ### 🏢 핵심 부동산 테이블 (`oi` 스키마)
 
+
+#### 🔥 아파트명 표기 통일 규칙 (매우 중요)
+- **"이편한세상" → "e편한세상"** 으로 통일 (DB에 "청구e편한세상"으로 저장됨)
+- **"e-편한세상" → "e편한세상"** 으로 통일 (하이픈 제거)
+- 사용자가 "청구이편한세상"이라고 입력해도 "청구e편한세상"으로 검색해야 함
+
+#### `oi.apt_info` 테이블 (기본 아파트 정보)
+- `id` ✅ (기준 아파트 ID, 챗봇 및 LLM 전달 시 사용)
+- `apt_nm` ✅ (아파트명)
+- `jibun_address` ✅ (지번주소, 실거래가 연결용)
+- `lat`, `lon` ✅ (위도, 경도)
+
 #### `oi.apt_info` - 기본 아파트 정보 (마스터 테이블)
 **목적**: 모든 아파트의 기본 정보와 좌표 관리
 ```sql
@@ -555,6 +567,7 @@ sig_cd (varchar)                 -- 시군구코드
 geom (geometry)                  -- PostGIS 지오메트리
 ```
 
+
 #### 기타 테이블들
 - `public.landuse_code` - 토지이용코드
 - `public.al_d002_11_*` - 행정구역도
@@ -563,7 +576,10 @@ geom (geometry)                  -- PostGIS 지오메트리
 - `public.spatial_ref_sys` - PostGIS 공간참조시스템
 - `oi.landuse_included` - 토지이용 포함 정보
 
+
+
 ### 🔗 테이블 연결 관계
+
 
 ```sql
 -- 1. 기본 아파트 정보 → 거래 정보 (jibun_address 기준)
