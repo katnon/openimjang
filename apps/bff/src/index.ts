@@ -19,6 +19,7 @@ import poi from './routes/poi';
 import aiChatRoute from './routes/aiChat';
 // import plannerTestRoute from './routes/plannerTest';  // 구문 오류로 임시 주석
 import chatBotRoute from './routes/chatBot';
+import simpleAIRoute from './routes/simpleAI';
 import embeddingRoute from './routes/embedding';
 import swaggerRoute from './routes/swagger';
 import { memoRoute } from './routes/memo';
@@ -55,6 +56,7 @@ app.route('/api/poi', poi);
 // 🎯 플래너 기반 AI 시스템 (새로운 표준)
 // app.route('/api/ai', aiChatRoute);  // 구문 오류로 임시 비활성화
 app.route('/api/ai', chatBotRoute);  // 🧪 정상 작동하는 플래너 시스템
+app.route('/api/ai', simpleAIRoute);  // 🆕 Simple LLM 시스템
 // app.route('/api/planner', plannerTestRoute);  // 🧪 플래너 테스트 전용 - 구문 오류로 임시 주석
 app.route('/api/embedding', embeddingRoute); // 🆕 임베딩 관리 라우터
 app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터
