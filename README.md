@@ -406,12 +406,12 @@ graph TB
     FB -->|임장 메모 첨부| AI
     FB -->|사용자 인증| AI
 
-    %% 스타일링
-    classDef aiSystem fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px
-    classDef cardSystem fill:#fff3e0,stroke:#f57c00,stroke-width:3px
-    classDef map2dSystem fill:#e1f5fe,stroke:#0277bd,stroke-width:3px
-    classDef map3dSystem fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
-    classDef dataSystem fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    %% 스타일링 (검정색 텍스트로 가독성 향상)
+    classDef aiSystem fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px,color:#000000
+    classDef cardSystem fill:#fff3e0,stroke:#f57c00,stroke-width:3px,color:#000000
+    classDef map2dSystem fill:#e1f5fe,stroke:#0277bd,stroke-width:3px,color:#000000
+    classDef map3dSystem fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000000
+    classDef dataSystem fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000000
 
     class AI,AI_LLM,AI_SUMMARY,AI_RAG,AI_ATTACH aiSystem
     class CARD,CARD_DEAL,CARD_BUILD,CARD_POI,CARD_AI,CARD_PRESET cardSystem
