@@ -306,205 +306,170 @@ OpenImjang/
         └── 환경별 설정 관리
 ```
 
-## 🎯 전체 기능 구조 (Mermaid)
+## 🎯 시스템 아키텍처 (Mermaid)
 
 ```mermaid
 graph TB
-    subgraph "🗺️ 지도 시각화 시스템"
-        A1[3D 지도 뷰어<br/>MapPrime3D/Cesium 기반] --> A1a[그림자 분석<br/>시간대별 일조권 분석]
-        A1 --> A1b[스카이라인 분석<br/>조망권 및 시야 분석]
-        A1 --> A1c[창문 뷰 모드<br/>실제 거주 시점 미리보기]
-        A1 --> A1d[워킹 모드<br/>보행자 시점 거리 탐색]
-        A1 --> A1e[1인칭 시점<br/>자유로운 카메라 조작]
-        A1 --> A1f[건물 높이 표시<br/>3차원 볼륨감 제공]
-        A1 --> A1g[프리셋 포인트<br/>동/호수별 저장된 위치]
+    %% 중앙 데이터 허브
+    PG[(PostgreSQL<br/>📊 실거래가 170만건<br/>📍 PostGIS 공간데이터<br/>🏗️ 건물정보)]
+    FB[(Firebase<br/>🔐 사용자 인증<br/>📝 임장 메모<br/>⭐ 즐겨찾기)]
 
-        A1g --> A1g1[원클릭 이동<br/>저장된 위치로 즉시 이동]
-        A1g --> A1g2[프리셋 창가뷰<br/>저장 위치에서 창문뷰 실행]
-        A1g --> A1g3[프리셋 음영분석<br/>저장 위치에서 그림자 분석]
-        A1g --> A1g4[아파트별 관리<br/>동/호수 정보 연동]
-
-        A2[2D 지도 뷰어<br/>Kakao Maps 기반] --> A2a[실시간 위치 추적<br/>사용자 GPS 기반]
-        A2 --> A2b[마커 클러스터링<br/>아파트 밀집도 시각화]
-        A2 --> A2c[히트맵 오버레이<br/>시세 분포 색상 표시]
-        A2 --> A2d[반경 검색 UI<br/>드래그로 검색 범위 설정]
-
-        A3[WMS 레이어 관리<br/>공간정보 오버레이] --> A3a[V-World 연동<br/>국가공간정보포털 활용]
-        A3 --> A3b[용도지역 표시<br/>주거/상업/공업지역 구분]
-        A3 --> A3c[지적도 오버레이<br/>필지 경계 표시]
-        A3 --> A3d[교통정보 레이어<br/>지하철/버스 노선도]
-
-        A4[사용자 인터랙션] --> A4a[줌/팬 제스처<br/>멀티터치 지원]
-        A4 --> A4b[POI 정보창<br/>아파트 기본정보 팝업]
-        A4 --> A4c[루트 탐색<br/>최적 경로 안내]
-        A4 --> A4d[즐겨찾기 관리<br/>관심 지역 저장]
-    end
-
-    subgraph "🏢 실거래가 검색 시스템"
-        B1[통합 검색 엔진<br/>PostgreSQL + PostGIS] --> B1a[아파트명 검색<br/>유사명 자동 매칭]
-        B1 --> B1b[지역 기반 검색<br/>행정구역별 필터링]
-        B1 --> B1c[면적 조건 검색<br/>전용면적 범위 설정]
-        B1 --> B1d[가격대 필터<br/>매매/전월세 범위]
-
-        B2[실거래가 데이터<br/>170만+ 건 통합] --> B2a[매매 거래<br/>실제 성사된 매매가]
-        B2 --> B2b[전월세 거래<br/>보증금/월세 정보]
-        B2 --> B2c[거래 시기 정보<br/>년/월/일 상세 기록]
-        B2 --> B2d[층수별 분석<br/>고층/저층 시세 차이]
-
-        B3[공간 검색 알고리즘] --> B3a[반경 내 검색<br/>Haversine 거리 계산]
-        B3 --> B3b[경계 박스 검색<br/>사각형 영역 조회]
-        B3 --> B3c[행정구역 검색<br/>법정동 기준 필터링]
-        B3 --> B3d[근접성 분석<br/>지하철역/학교 근처]
-
-        B4[검색 최적화] --> B4a[GIST 인덱스<br/>공간 검색 성능 향상]
-        B4 --> B4b[부분 일치 검색<br/>ILIKE 퍼지 매칭]
-        B4 --> B4c[페이지네이션<br/>대용량 결과 분할 조회]
-        B4 --> B4d[캐싱 전략<br/>자주 조회되는 데이터]
-    end
-
+    %% 4개 주요 시스템
     subgraph "🤖 AI 챗봇 시스템"
-        C1[GPT-4o-mini 엔진<br/>OpenAI API 통합] --> C1a[멀티모달 처리<br/>텍스트 + 이미지 분석]
-        C1 --> C1b[RAG 시스템<br/>pgvector 임베딩 검색]
-        C1 --> C1c[웹 검색 통합<br/>실시간 부동산 정보]
-        C1 --> C1d[세션 관리<br/>대화 컨텍스트 유지]
+        AI[AI 챗봇<br/>ChatbotSidebar]
+        AI_LLM[Simple LLM<br/>GPT-4o-mini]
+        AI_SUMMARY[확장카드 분석<br/>ApartmentSummaryService]
+        AI_RAG[RAG 시스템<br/>pgvector 임베딩]
+        AI_ATTACH[첨부 시스템<br/>이미지+메모+멘션]
 
-        C2[Simple LLM 프로세서<br/>직관적 자연어 처리] --> C2a[Few-shot 학습<br/>부동산 도메인 지식]
-        C2 --> C2b[인코딩 문제 해결<br/>다중 인코딩 지원]
-        C2 --> C2c[의도 분석<br/>사용자 질문 이해]
-        C2 --> C2d[유연한 응답<br/>고정 로직 대신 추론]
-
-        C25[확장카드 종합 분석<br/>ApartmentSummaryService] --> C25a[실거래가 월별 추이<br/>매매/전세/월세 통합 분석]
-        C25 --> C25b[건물+토지+주변환경<br/>종합 데이터 통합]
-        C25 --> C25c[전문 브리핑 생성<br/>1200-1800자 친근한 어조]
-        C25 --> C25d[DB 저장/조회<br/>ai_smart_summary 테이블]
-
-        C3[첨부 시스템] --> C3a[이미지 직접 업로드<br/>드롭다운 파일 선택]
-        C3 --> C3b[메모 첨부<br/>Firebase 메모 연동]
-        C3 --> C3c[멘션 아파트<br/>아파트명으로 정보 첨부]
-        C3 --> C3d[Base64 변환<br/>모든 이미지 통합 처리]
-
-        C4[AI 3.0 대화 인텔리전스] --> C4a[감정 컨텍스트 분석<br/>8가지 감정 상태 인식]
-        C4 --> C4b[사용자 유형 분석<br/>5가지 성향별 맞춤 대응]
-        C4 --> C4c[자연스러운 플로우<br/>기계적 명확화 대체]
-        C4 --> C4d[다중 턴 관리<br/>복잡한 대화 추적]
+        AI --> AI_LLM
+        AI --> AI_SUMMARY
+        AI --> AI_RAG
+        AI --> AI_ATTACH
     end
 
-    subgraph "📝 임장 메모 시스템"
-        D1[Firebase 연동<br/>실시간 데이터 동기화] --> D1a[Firestore 메모 저장<br/>사용자별 컬렉션 관리]
-        D1 --> D1b[Firebase Storage<br/>이미지 업로드/다운로드]
-        D1 --> D1c[실시간 동기화<br/>멀티 디바이스 지원]
-        D1 --> D1d[보안 규칙<br/>사용자별 접근 제어]
+    subgraph "🏠 아파트 카드 시스템"
+        CARD[아파트 카드<br/>SummaryCard]
+        CARD_DEAL[실거래가<br/>RealEstateDealsTable]
+        CARD_BUILD[건물정보<br/>BuildingLandInfo]
+        CARD_POI[주변정보<br/>NearbyInfoPanel]
+        CARD_AI[AI요약<br/>AiSummaryPanel]
+        CARD_PRESET[프리셋포인트<br/>ApartmentPreviewPanel]
 
-        D2[메모 작성 기능] --> D2a[아파트 연관 메모<br/>자동 위치 태깃팅]
-        D2 --> D2b[다중 사진 업로드<br/>현장 사진 여러 장]
-        D2 --> D2c[마크다운 렌더링<br/>서식있는 텍스트 지원]
-        D2 --> D2d[즐겨찾기 기능<br/>중요 메모 구분]
-
-        D3[메모 관리 UI] --> D3a[메모 목록 뷰<br/>날짜순/아파트별 정렬]
-        D3 --> D3b[검색 및 필터<br/>키워드/아파트명 검색]
-        D3 --> D3c[편집/삭제 기능<br/>CRUD 완전 지원]
-        D3 --> D3d[이미지 갤러리<br/>사진 확대/슬라이드]
-
-        D4[챗봇 연동] --> D4a[메모 선택 모달<br/>기존 메모 첨부 선택]
-        D4 --> D4b[이미지 자동 변환<br/>URL → Base64 처리]
-        D4 --> D4c[메타데이터 표시<br/>작성일/연관 아파트 정보]
-        D4 --> D4d[보라색 테마 UI<br/>메모 첨부 시각적 구분]
+        CARD --> CARD_DEAL
+        CARD --> CARD_BUILD
+        CARD --> CARD_POI
+        CARD --> CARD_AI
+        CARD --> CARD_PRESET
     end
 
-    subgraph "👤 사용자 관리 시스템"
-        E1[Firebase 인증<br/>보안 로그인 시스템] --> E1a[이메일/비밀번호<br/>기본 회원가입/로그인]
-        E1 --> E1b[구글 소셜 로그인<br/>OAuth 2.0 연동]
-        E1 --> E1c[익명 로그인<br/>게스트 사용자 지원]
-        E1 --> E1d[보안 규칙 설정<br/>사용자별 데이터 보호]
+    subgraph "🗺️ 2D 지도 시각화"
+        MAP2D[2D 지도<br/>MapContainer]
+        MAP2D_KAKAO[Kakao Maps<br/>기본 지도 엔진]
+        MAP2D_CLUSTER[마커 클러스터링<br/>아파트 밀집도]
+        MAP2D_POI[POI 오버레이<br/>주변시설 표시]
+        MAP2D_FAV[즐겨찾기 핀<br/>사용자 관심지역]
 
-        E2[사용자 프로필 관리] --> E2a[온보딩 설문<br/>7단계 초기 설정]
-        E2 --> E2b[선호도 설정<br/>관심 지역/가격대 저장]
-        E2 --> E2c[검색 히스토리<br/>최근 조회 아파트 추적]
-        E2 --> E2d[맞춤 추천<br/>AI 기반 개인화]
-
-        E3[권한 관리] --> E3a[읽기 전용 권한<br/>미인증 사용자 제한]
-        E3 --> E3b[메모 작성 권한<br/>인증 사용자만 가능]
-        E3 --> E3c[데이터 소유권<br/>사용자별 격리된 데이터]
-        E3 --> E3d[관리자 권한<br/>시스템 관리 기능]
-
-        E4[세션 관리] --> E4a[자동 로그인 유지<br/>토큰 기반 인증]
-        E4 --> E4b[로그아웃 처리<br/>세션 정리 및 보안]
-        E4 --> E4c[토큰 갱신<br/>만료 시 자동 연장]
-        E4 --> E4d[디바이스 추적<br/>다중 로그인 관리]
+        MAP2D --> MAP2D_KAKAO
+        MAP2D --> MAP2D_CLUSTER
+        MAP2D --> MAP2D_POI
+        MAP2D --> MAP2D_FAV
     end
 
-    subgraph "🔧 시스템 관리"
-        F1[API 관리<br/>BFF 아키텍처] --> F1a[Rate Limiting<br/>요청 제한으로 서버 보호]
-        F1 --> F1b[CORS 정책<br/>크로스 오리진 요청 제어]
-        F1 --> F1c[에러 핸들링<br/>일관된 오류 응답]
-        F1 --> F1d[Swagger 문서화<br/>API 명세 자동 생성]
+    subgraph "🌍 3D 지도 시각화"
+        MAP3D[3D 지도<br/>MapPrime3DViewer]
+        MAP3D_CESIUM[Cesium 엔진<br/>3차원 렌더링]
+        MAP3D_PRESET[프리셋 포인트<br/>동호수별 저장위치]
+        MAP3D_VIEW[창문뷰/음영분석<br/>실거주 시뮬레이션]
+        MAP3D_WALK[워킹모드<br/>보행자 시점]
 
-        F2[모니터링 시스템] --> F2a[구조화 로깅<br/>Pino 기반 로그 수집]
-        F2 --> F2b[성능 메트릭<br/>응답 시간/처리량 추적]
-        F2 --> F2c[AI 품질 추적<br/>응답 정확도 모니터링]
-        F2 --> F2d[사용자 행동 분석<br/>UX 개선 데이터 수집]
-
-        F3[배포 및 운영] --> F3a[Bun 런타임<br/>Node.js 대비 3-4배 성능]
-        F3 --> F3b[PostgreSQL 풀링<br/>DB 커넥션 최적화]
-        F3 --> F3c[환경별 설정<br/>dev/staging/prod 분리]
-        F3 --> F3d[보안 설정<br/>환경변수 암호화 관리]
-
-        F4[데이터 파이프라인] --> F4a[ETL 스크립트<br/>공공데이터 자동 수집]
-        F4 --> F4b[데이터 정제<br/>중복 제거 및 표준화]
-        F4 --> F4c[스케줄링<br/>정기적 데이터 업데이트]
-        F4 --> F4d[백업 전략<br/>데이터 손실 방지]
+        MAP3D --> MAP3D_CESIUM
+        MAP3D --> MAP3D_PRESET
+        MAP3D --> MAP3D_VIEW
+        MAP3D --> MAP3D_WALK
     end
+
+    %% 시스템 간 상호작용 (실선: 주요 데이터 흐름, 점선: 이벤트 트리거)
+
+    %% AI 챗봇 ↔ 아파트 카드
+    AI -.->|멘션 아파트 첨부| CARD
+    AI_SUMMARY -->|종합 분석 결과| CARD_AI
+
+    %% 아파트 카드 ↔ 3D 지도
+    CARD_PRESET -.->|프리셋 선택| MAP3D_PRESET
+    CARD_PRESET -.->|창문뷰 실행| MAP3D_VIEW
+    CARD_PRESET -.->|음영분석 실행| MAP3D_VIEW
+
+    %% 아파트 카드 ↔ 2D 지도
+    CARD -.->|아파트 위치 이동| MAP2D
+    CARD_POI -->|POI 데이터| MAP2D_POI
+
+    %% 2D 지도 ↔ 아파트 카드
+    MAP2D -.->|아파트 클릭| CARD
+    MAP2D_FAV <-->|즐겨찾기 동기화| CARD
+
+    %% 3D 지도 ↔ 2D 지도
+    MAP3D -.->|카메라 시야 범위| MAP2D
+    MAP2D <-->|위치 동기화| MAP3D
+
+    %% 데이터베이스 연결
+    PG -->|실거래가 데이터| CARD_DEAL
+    PG -->|건물정보 데이터| CARD_BUILD
+    PG -->|공간검색 데이터| MAP2D_CLUSTER
+    PG -->|프리셋 포인트 데이터| MAP3D_PRESET
+    PG -->|AI 분석용 데이터| AI_SUMMARY
+    PG -->|RAG 스키마 정보| AI_RAG
+
+    %% Firebase 연결
+    FB -->|사용자 메모| AI_ATTACH
+    FB -->|즐겨찾기 데이터| MAP2D_FAV
+    FB -->|임장 메모 첨부| AI
+    FB -->|사용자 인증| AI
 
     %% 스타일링
-    classDef mapSystem fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    classDef searchSystem fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef aiSystem fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef memoSystem fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    classDef userSystem fill:#fce4ec,stroke:#c2185b,stroke-width:2px
-    classDef adminSystem fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
+    classDef aiSystem fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px
+    classDef cardSystem fill:#fff3e0,stroke:#f57c00,stroke-width:3px
+    classDef map2dSystem fill:#e1f5fe,stroke:#0277bd,stroke-width:3px
+    classDef map3dSystem fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
+    classDef dataSystem fill:#fce4ec,stroke:#c2185b,stroke-width:2px
 
-    class A1,A1a,A1b,A1c,A1d,A1e,A1f,A1g,A1g1,A1g2,A1g3,A1g4,A2,A2a,A2b,A2c,A2d,A3,A3a,A3b,A3c,A3d,A4,A4a,A4b,A4c,A4d mapSystem
-    class B1,B1a,B1b,B1c,B1d,B2,B2a,B2b,B2c,B2d,B3,B3a,B3b,B3c,B3d,B4,B4a,B4b,B4c,B4d searchSystem
-    class C1,C1a,C1b,C1c,C1d,C2,C2a,C2b,C2c,C2d,C25,C25a,C25b,C25c,C25d,C3,C3a,C3b,C3c,C3d,C4,C4a,C4b,C4c,C4d aiSystem
-    class D1,D1a,D1b,D1c,D1d,D2,D2a,D2b,D2c,D2d,D3,D3a,D3b,D3c,D3d,D4,D4a,D4b,D4c,D4d memoSystem
-    class E1,E1a,E1b,E1c,E1d,E2,E2a,E2b,E2c,E2d,E3,E3a,E3b,E3c,E3d,E4,E4a,E4b,E4c,E4d userSystem
-    class F1,F1a,F1b,F1c,F1d,F2,F2a,F2b,F2c,F2d,F3,F3a,F3b,F3c,F3d,F4,F4a,F4b,F4c,F4d adminSystem
+    class AI,AI_LLM,AI_SUMMARY,AI_RAG,AI_ATTACH aiSystem
+    class CARD,CARD_DEAL,CARD_BUILD,CARD_POI,CARD_AI,CARD_PRESET cardSystem
+    class MAP2D,MAP2D_KAKAO,MAP2D_CLUSTER,MAP2D_POI,MAP2D_FAV map2dSystem
+    class MAP3D,MAP3D_CESIUM,MAP3D_PRESET,MAP3D_VIEW,MAP3D_WALK map3dSystem
+    class PG,FB dataSystem
 ```
 
-### 📊 기능별 상세 설명
-
-#### 🗺️ 지도 시각화 시스템
-- **3D 뷰어**: MapPrime3D(Cesium 기반)로 실제 건물 높이와 형태를 3차원으로 표현
-- **그림자 분석**: 특정 시간대의 일조권 영향을 시뮬레이션하여 주거 환경 평가
-- **스카이라인 분석**: 해당 위치에서의 조망권과 시야 차단 정도 분석
-- **창문 뷰 모드**: 실제 거주 시 창문에서 보이는 전망을 미리 체험
-- **워킹 모드**: 보행자 시점에서 주변 환경과 접근성 확인
-- **프리셋 포인트**: 특정 동/호수 위치 저장하고 원클릭으로 이동, 해당 위치에서 창가뷰/음영분석 자동 실행
-
-#### 🏢 실거래가 검색 시스템
-- **통합 데이터**: 매매 + 전월세 총 170만+ 건의 실거래가 정보 통합 관리
-- **공간 검색**: PostGIS 기반 지리적 검색으로 반경/경계 기준 정확한 위치 검색
-- **면적 조건**: 전용면적 기준 ±1㎡ 허용 오차로 원하는 크기의 아파트 검색
-- **시계열 분석**: 년/월/일 단위 거래 시기별 시세 변동 추적
+### 📊 시스템별 상세 설명
 
 #### 🤖 AI 챗봇 시스템
-- **멀티모달**: GPT-4o-mini로 텍스트 + 이미지 동시 분석
+- **멀티모달 분석**: GPT-4o-mini로 텍스트 + 이미지 동시 처리, 임장 메모 사진 분석 지원
 - **확장카드 종합 분석**: ApartmentSummaryService로 실거래가/건물/토지/주변환경 통합 분석, 1200-1800자 전문 브리핑 생성
-- **RAG 시스템**: pgvector 임베딩으로 정확한 DB 스키마 정보 검색
-- **첨부 시스템**: 직접 이미지 업로드 + Firebase 메모 첨부 + @아파트명 멘션
-- **AI 3.0**: 감정 분석 기반 공감적 대화, 사용자 유형별 맞춤 응답
+- **RAG 시스템**: pgvector 임베딩으로 정확한 DB 스키마 정보 검색, 컨텍스트 기반 정확한 답변
+- **첨부 시스템**: 직접 이미지 업로드 + Firebase 메모 첨부 + @아파트명 멘션으로 풍부한 상담 지원
+- **세션 관리**: 30분 TTL 대화 컨텍스트 유지, 연속적인 자연스러운 대화
 
-#### 📝 임장 메모 시스템
-- **Firebase 연동**: 실시간 동기화로 언제 어디서나 메모 접근
-- **멀티미디어**: 텍스트 + 다중 사진으로 현장감 있는 기록
-- **위치 연동**: 아파트 정보와 자동 연결로 체계적 관리
-- **챗봇 통합**: 기존 메모를 AI 상담에 첨부하여 맥락있는 분석
+#### 🏠 아파트 카드 시스템 (통합 정보 허브)
+- **실거래가 정보**: 170만+ 건 매매/전월세 데이터, 월별 추이 분석, 면적별 시세 비교
+- **건물정보**: 표제부등본 기반 상세 건축 정보, 세대수/주차면수/층수 등 핵심 스펙
+- **토지정보**: PNU 연동 토지이용계획, 용도지역 정보, 개발제한구역 확인
+- **AI 요약**: 종합 데이터 기반 전문 브리핑, 투자/거주 관점 분석
+- **프리셋 포인트**: 특정 동/호수 위치 저장, 3D 지도 연동으로 원클릭 카메라 이동 및 분석 실행
+- **POI 정보**: 반경 500m 주변시설 (지하철/학교/병원/상권) 거리별 정보
 
-#### 👤 사용자 관리 시스템
-- **다중 인증**: 이메일/구글/익명 로그인으로 다양한 접근 방식 지원
-- **개인화**: 7단계 온보딩으로 사용자 선호도 파악 및 맞춤 서비스
-- **보안**: Firebase 규칙 기반 사용자별 데이터 격리 및 권한 관리
-- **히스토리**: 검색 기록과 행동 패턴 학습으로 개선된 추천
+#### 🗺️ 2D 지도 시각화
+- **Kakao Maps 기반**: 정확한 한국 지도 데이터, 위성/일반 지도 전환
+- **아파트 마커**: 클러스터링으로 밀집도 시각화, 줌 레벨별 적응형 표시
+- **즐겨찾기 핀**: 사용자 관심 아파트 구분 표시, Firebase 실시간 동기화
+- **POI 오버레이**: 주변시설 카테고리별 아이콘 표시, 호버 시 상세정보
+- **검색 UI**: 반경 드래그 설정, 지역명 자동완성, 실시간 검색 결과
+
+#### 🌍 3D 지도 시각화
+- **MapPrime3D/Cesium**: 실제 건물 높이와 형태의 3차원 정확한 렌더링
+- **프리셋 포인트**: 동/호수별 정확한 위치 저장, 아파트 카드에서 원클릭 이동
+- **창문뷰/음영분석**: 실거주 시뮬레이션, 특정 시간대 일조권 분석, 조망권 확인
+- **워킹모드**: 보행자 시점 거리 탐색, 실제 접근성과 주변 환경 체험
+- **카메라 시야**: 3D 시점을 2D 미니맵에 실시간 표시, 위치 동기화
+
+### 🔄 시스템 간 상호작용 플로우
+
+#### **AI 챗봇 → 아파트 카드**
+1. 사용자가 @아파트명으로 멘션 → 해당 아파트 카드 데이터 로딩
+2. AI 확장카드 분석 완료 → 아파트 카드 AI요약 탭에 결과 표시
+
+#### **아파트 카드 → 3D 지도**
+1. 프리셋 포인트 선택 → 3D 지도 해당 위치로 카메라 이동
+2. 창문뷰 버튼 클릭 → 3D 지도에서 자동으로 창문뷰 모드 실행
+3. 음영분석 버튼 클릭 → 3D 지도에서 해당 위치 그림자 분석 시작
+
+#### **2D 지도 ↔ 아파트 카드**
+1. 2D 지도 아파트 마커 클릭 → 해당 아파트 카드 정보 표시
+2. 아파트 카드에서 위치 보기 → 2D 지도 해당 위치로 이동
+3. 즐겨찾기 토글 → 2D 지도 핀 색상 실시간 변경
+
+#### **3D 지도 ↔ 2D 지도**
+1. 3D 카메라 이동 → 2D 미니맵에 시야 범위 실시간 표시
+2. 2D 지도 위치 변경 → 3D 지도 동기화 이동
 
 ## 🚀 시작하기
 
