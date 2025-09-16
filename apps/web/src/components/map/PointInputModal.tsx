@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 interface PointData {
     lat: number;
     lon: number;
+    height?: number;
     detectedApt: any;
     dong: string;
     ho: string;

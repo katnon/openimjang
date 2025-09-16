@@ -139,6 +139,35 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
             });
         }
 
+        // 대화 히스토리에서 이전 질문들의 상세 정보 추출
+        const previousQuestions = c.session?.messageHistory
+            ?.filter((msg: any) => msg.extractedSlots || msg.message)
+            ?.map((msg: any) => {
+                const slots = msg.extractedSlots || {};
+                return {
+                    message: msg.message?.slice(0, 50) + (msg.message?.length > 50 ? '...' : ''),
+                    apartmentName: slots.apartmentName,
+                    area: slots.area,
+                    dealType: slots.dealType,
+                    region: slots.region
+                };
+            })
+            ?.filter((q: any) => q.apartmentName || q.area || q.dealType) // 의미있는 정보가 있는 것만
+            ?.slice(-3) || []; // 최근 3개만
+
+        // 연속 질문 패턴 감지 (같은 아파트, 다른 면적)
+        const hasAreaComparison = previousQuestions.length >= 2 && 
+            previousQuestions.some(q => q.area && q.apartmentName === finalApartmentName);
+
+        // 풍부한 대화 컨텍스트 구성
+        const conversationContext = previousQuestions.length > 0
+            ? `\n\n=== 대화 맥락 ===\n${previousQuestions.map((q, idx) => 
+                `${idx + 1}번째 질문: "${q.message}" (아파트: ${q.apartmentName || '미지정'}, 면적: ${q.area || '미지정'}, 유형: ${q.dealType || '미지정'})`
+              ).join('\n')}
+현재 질문 대상: ${finalApartmentName} ${c.slots?.area ? c.slots.area + '㎡' : ''} ${c.slots?.dealType || ''}
+${hasAreaComparison ? '⚠️ 면적 비교 질문 패턴 감지됨 - 이전 질문과의 연관성 고려 필요' : ''}`
+            : '';
+
         // 플랜 컨텍스트 생성 - 현재 @멘션이 우선되도록 순서 변경
         const planContext: PlanContext = {
             question: message,
@@ -157,6 +186,9 @@ chatBotRoute.post('/chat', slotMiddleware, async (c) => {
             sessionHistory: {
                 messageCount: context?.messages?.length || 1,
                 lastQuestionTypes: [],
+                previousQuestions, // 이전 질문들의 상세 정보
+                hasAreaComparison, // 면적 비교 패턴 감지 여부
+                conversationContext, // 대화 맥락
                 completedActions: [],
                 failedActions: []
             },
@@ -404,17 +436,6 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
                 }
             }
 
-            // 대화 히스토리에서 이전 아파트들 추출
-            const previousApartments = c.session?.messageHistory
-                ?.filter((msg: any) => msg.extractedSlots?.apartmentName)
-                ?.map((msg: any) => msg.extractedSlots.apartmentName)
-                ?.filter((name: string, index: number, arr: string[]) => arr.indexOf(name) === index) // 중복 제거
-                ?.slice(-3) || []; // 최근 3개만
-
-            const conversationContext = previousApartments.length > 0
-                ? `\n\n=== 대화 히스토리 ===\n이전에 언급된 아파트들: ${previousApartments.join(', ')}\n현재 주 대상: ${finalApartmentName}`
-                : '';
-
             // 🔍 사용자 정정사항 추적 (대화 히스토리에서)
             const userCorrections = context?.messages
                 ?.filter((msg: any) =>
@@ -497,54 +518,143 @@ ${detailedPOIData.otherPOIs?.slice(0, 8).map(poi =>
                 ).join('\n\n')}`
                 : '';
 
-            const llmPrompt = `**사용자 질문**: ${message}${correctionsContext}${correctionAlert}${criticAlert}
+            // 🎯 플래너 실행 결과 데이터 구성 (면적별 정보 강조)
+            const plannerDataContext = execution.results && execution.results.length > 0
+                ? `\n\n📊 **실제 수집된 데이터 (절대적 기준)**:\n${execution.results.filter(r => r.success && r.data).map((result, idx) => {
+                    if (typeof result.data === 'string') {
+                        return `${idx + 1}. ${result.data}`;
+                    } else if (result.data && result.data.rows) {
+                        const rowCount = result.data.rows.length;
+                        
+                        // 거래 유형별 실제 가격 정보 추출
+                        const dealAnalysis = {
+                            매매: [],
+                            전세: [],
+                            월세: []
+                        };
+                        
+                        result.data.rows.forEach(row => {
+                            const area = Math.round(row.exclu_use_ar || row.area || 0);
+                            const dealAmount = row.deal_amount;
+                            const deposit = row.deposit;
+                            const monthlyRent = row.monthly_rent;
+                            
+                            if (dealAmount) {
+                                dealAnalysis.매매.push(`${area}㎡: ${dealAmount.toLocaleString()}만원`);
+                            } else if (deposit && (!monthlyRent || monthlyRent === 0)) {
+                                dealAnalysis.전세.push(`${area}㎡: ${deposit.toLocaleString()}만원`);
+                            } else if (deposit && monthlyRent > 0) {
+                                dealAnalysis.월세.push(`${area}㎡: 보증금${deposit.toLocaleString()}만원/월세${monthlyRent.toLocaleString()}만원`);
+                            }
+                        });
+                        
+                        let priceBreakdown = '';
+                        if (dealAnalysis.매매.length > 0) {
+                            priceBreakdown += `\n   🏷️ 매매가 (${dealAnalysis.매매.length}건): ${dealAnalysis.매매.slice(0, 5).join(', ')}`;
+                        }
+                        if (dealAnalysis.전세.length > 0) {
+                            priceBreakdown += `\n   🏠 전세가 (${dealAnalysis.전세.length}건): ${dealAnalysis.전세.slice(0, 5).join(', ')}`;
+                        }
+                        if (dealAnalysis.월세.length > 0) {
+                            priceBreakdown += `\n   🏡 월세 (${dealAnalysis.월세.length}건): ${dealAnalysis.월세.slice(0, 3).join(', ')}`;
+                        }
+                        
+                        return `${idx + 1}. 🚨 **반드시 이 데이터만 사용하세요** (총 ${rowCount}건):${priceBreakdown}`;
+                    } else if (result.data && result.data.results) {
+                        return `${idx + 1}. 검색 결과: ${JSON.stringify(result.data.results.slice(0, 2))}...`;
+                    } else {
+                        return `${idx + 1}. 처리 완료: ${result.actionType}`;
+                    }
+                }).join('\n\n')}`
+                : '';
+
+            const llmPrompt = `🚨 **매우 중요**: 아래 실제 거래 데이터의 정확한 가격만 사용하세요! 절대 추측하거나 다른 가격을 말하지 마세요!
+
+**사용자 질문**: ${message}${correctionsContext}${correctionAlert}${criticAlert}${conversationContext}${apartmentContextInfo}
 
 ${dataValidation}
 
+**🔥 필수 준수사항**:
+1. 매매가는 deal_amount 값만 사용 (예: 73500만원 → "7억 3천 5백만원")
+2. 전세가는 deposit 값 중 monthly_rent가 0인 것만 사용 (예: 30000만원 → "3억원")  
+3. 월세는 deposit + monthly_rent 조합만 사용
+4. 실제 데이터에 없는 가격은 절대 말하지 말 것
+
 **분석 지침**:
-- 실거래가 질문 시: 가장 활발한 면적대, 최근 시세 동향, 주변 단지 대비 경쟁력 분석
+- 실거래가 질문 시: 거래 유형별(매매/전세/월세) 분석, 가장 활발한 면적대, 최근 시세 동향, 주변 단지 대비 경쟁력
 - 주변환경 질문 시: 교통 접근성(역세권 여부), 생활편의시설 도보권, 인프라 종합 평가  
 - 건물정보 질문 시: 핵심 스펙(층수, 세대수, 구조 등)과 실용적 의미 설명
+- 연속 질문 시: 이전 대화 맥락을 고려하여 "84㎡는 3억대, 59㎡는 2억 중반대" 같은 자연스러운 비교 답변
 
-**답변 예시 스타일**:
-"청구e편한세상은 2,5,6호선 청구역과 신당역 트리플역세권이라 교통이 정말 좋아요. 84㎡가 거래가 제일 활발한데, 최근 상승세로 3억 중반대를 유지하고 있고, 주변 단지들보다 입지가 좋아서 가격이 잘 떨어지지 않는 편이에요."
+**거래 유형별 답변 스타일**:
+- 매매: "청구e편한세상 84㎡ 매매가는 최근 3억 2천만원대에서 거래되고 있어요. 작년 대비 5% 정도 올랐는데..."
+- 전세: "전세는 2억 8천만원 선에서 형성되고 있고, 요즘 전세 물건이 많이 나오지 않아서 구하기가 쉽지 않아요"
+- 월세: "월세는 보증금 5천만원에 월 120만원 정도가 시세인데, 최근 전세 대신 월세 선호하는 분들이 늘고 있어요"
+- 통합: "84㎡ 기준으로 매매 3억대, 전세 2억 8천, 월세 보증금 5천에 120만원 정도가 현재 시세예요"
 
-**추가 컨텍스트**:${ragContext}
+**면적별 비교 질문 처리**:
+- 같은 아파트의 다른 면적을 물어볼 때는 이전 대화를 참고하여 비교 형태로 답변
+- 예: "84㎡는 3억 2천 정도인데, 59㎡는 2억 7천 정도에서 거래되고 있어요. 84㎡가 더 인기가 많아서..."
+- 예: "앞에서 말씀드린 84㎡보다 59㎡가 약간 더 저렴하죠. 면적 차이만큼 가격도 비례해서..."
 
-**절대 하지 마세요**:
+**추가 컨텍스트**:${ragContext}${plannerDataContext}
+
+**⚠️ 절대 금지사항 (매우 중요)**:
+- 실제 데이터에 없는 면적이나 거래가를 지어내서 답변하기
+- 59㎡ 데이터가 없으면 "59㎡ 거래 데이터가 없습니다"라고 정확히 말하기
 - 존재하지 않는 지하철역이나 시설을 만들어내기
 - 사용자의 정정사항을 무시하거나 반박하기
-- 일반적인 지식으로 추측하여 답변하기`;
+- 일반적인 지식으로 추측하여 답변하기
+- 이전 대화 맥락을 무시하고 매번 처음부터 설명하기
+
+**데이터 검증 필수**:
+- 수집된 데이터에서 해당 면적이 실제로 존재하는지 반드시 확인
+- 데이터에 없는 면적을 물어보면 "해당 면적 거래 데이터가 없어요" 명확히 답변
+- 실제 거래된 면적만 언급하고 가격도 실제 데이터 기준으로만 답변`;
 
             const completion = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
                 messages: [
                     {
                         role: "system",
-                        content: `당신은 10년 경력의 부동산 전문가입니다. 사용자와 친근하게 대화하며 전문적인 인사이트를 제공하세요.
+                        content: `당신은 10년 경력의 부동산 중개사입니다. 마치 친한 중개사 선배가 조언해주듯이 자연스럽고 전문적으로 대화하세요.
 
-**응답 스타일:**
-- 친근하고 자연스러운 대화체 사용 ("~네요", "~어요", "~죠")
-- 데이터를 단순 나열하지 말고 분석하여 인사이트 제공
-- 예: "청구e편한세상은 2,5,6호선 트리플역세권이라 교통이 정말 좋아요" 
-- 예: "84㎡가 거래가 제일 활발한데, 최근 상승세로 3억대를 유지하고 있어요"
-- 예: "주변 단지들보다 입지가 좋아서 가격이 잘 떨어지지 않는 편이에요"
+**🚨 최우선 원칙 - 데이터 정확성:**
+- 제공된 실제 거래 데이터에만 기반해서 답변
+- 존재하지 않는 면적(예: 59㎡)을 물어보면 "59㎡ 거래 데이터가 없어요"라고 명확히 답변
+- 절대로 추측하거나 일반적인 지식으로 답변하지 말 것
+- 실제 데이터에서 확인된 면적과 가격만 언급
 
-**실거래가 분석 시:**
-- 가장 활발한 면적대 언급
-- 최근 시세 동향 분석 (상승/하락/보합)
-- 주변 단지와의 비교 우위 설명
-- 투자 관점에서의 조언
+**말투와 스타일:**
+- 자연스러운 구어체 사용 ("~거든요", "~어요", "~죠", "~네요")
+- 전문용어와 일상어를 적절히 섞어서 친근하게
+- 부동산 전문가의 살아있는 경험과 인사이트 반영
+- 예: "청구e편한세상이요? 여기 진짜 좋아요! 2,5,6호선 트리플역세권이라 교통은 말할 것도 없고"
+- 예: "84㎡가 거래가 제일 많은데, 요즘 3억대 초중반에서 움직이고 있어요"
+- 예: "이 단지는 워낙 입지가 좋아서 가격이 잘 안 떨어지는 편이거든요"
 
-**주변환경 설명 시:**
-- 교통 접근성 강조 (역세권, 버스노선)
-- 생활 편의시설 도보권 여부
-- 교육환경, 상업시설 등 종합적 평가
+**실거래가 분석할 때:**
+- 거래 유형별로 구분해서 설명 (매매/전세/월세)
+- 실제 데이터에 존재하는 면적대만 언급
+- 최근 3-6개월 시세 흐름 설명 ("요즘 ~하는 추세", "작년 대비 ~정도")
+- 거래 유형별 특징 설명 (매매는 가격 상승률, 전세는 구하기 어려움, 월세는 보증금/월세 비율)
+- 왜 그런 가격인지 근거 설명 (교통, 학군, 개발호재 등)
+- 매수/매도 타이밍에 대한 솔직한 의견
 
-**절대 금지:**
-- 데이터 없는 추측 금지
-- 단순 나열식 답변 금지
-- 사용자 정정 시 즉시 인정하고 사과`
+**면적 관련 질문 처리:**
+- 데이터에 없는 면적을 물어보면: "59㎡ 거래 데이터가 없네요. 실제로는 84㎡, 85㎡ 위주로 거래되고 있어요"
+- 실제 존재하는 면적만 언급하고 가격 정보 제공
+
+**주변환경 설명할 때:**
+- "도보 5분", "걸어서 10분" 같은 구체적인 거리
+- "아이 키우기 좋은 환경", "직장인이 살기 편한 곳" 등 라이프스타일 관점
+- "요즘 이 동네가 뜨고 있어요" 같은 트렌드 설명
+
+**절대 주의사항:**
+- 데이터 없는 내용은 절대 지어내지 말 것
+- 존재하지 않는 면적의 가격을 만들어내지 말 것
+- 로봇 같은 딱딱한 나열 금지
+- 틀렸을 때는 바로 인정하고 "죄송해요, 제가 착각했네요"식으로 자연스럽게`
                     },
                     {
                         role: "user",

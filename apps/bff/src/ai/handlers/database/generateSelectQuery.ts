@@ -52,9 +52,11 @@ export async function generateSelectQuery(args: GenerateSelectQueryArgs) {
    - 사용자가 말한 아파트명은 aptnm 컬럼에서 ILIKE '%이름%'로 검색
    - 예: "마곡엠밸리" → WHERE aptnm ILIKE '%마곡엠밸리%'
 
-2. **거래 유형 자동 판별**
-   - 매매 관련 질문 → oi.apt_deal_trade_raw 테이블
-   - 전월세 관련 질문 → oi.apt_deal_rent_raw 테이블
+2. **거래 유형 구분 로직 (oi.apt_deal_all 통합 테이블 사용)**
+   - 매매: deal_amount가 NULL이 아닌 경우
+   - 전세: deal_amount가 NULL이고 monthly_rent = 0 또는 NULL인 경우  
+   - 월세: deal_amount가 NULL이고 monthly_rent > 0인 경우
+   - 구분 쿼리: CASE WHEN deal_amount IS NOT NULL THEN '매매' WHEN monthly_rent > 0 THEN '월세' ELSE '전세' END AS deal_type
    
 3. **시간 기간 변환**
    - "최근 N개월" → WHERE MAKE_DATE(dealyear, dealmonth, dealday) >= CURRENT_DATE - INTERVAL 'N months'
@@ -84,8 +86,17 @@ export async function generateSelectQuery(args: GenerateSelectQueryArgs) {
   * excluusear: 전용면적 (㎡)
 
 **자연어 → SQL 변환 예시:**
-- "마곡엠밸리 최근 3개월 평균 매매가" 
-  → SELECT AVG(dealamount) FROM oi.apt_deal_trade_raw WHERE aptnm ILIKE '%마곡엠밸리%' AND MAKE_DATE(dealyear, dealmonth, dealday) >= CURRENT_DATE - INTERVAL '3 months';
+- "청구e편한세상 84㎡ 최근 거래" 
+  → SELECT 
+      deal_year, deal_month, deal_day, 
+      deal_amount, deposit, monthly_rent, exclu_use_ar, floor,
+      CASE WHEN deal_amount IS NOT NULL THEN '매매' 
+           WHEN monthly_rent > 0 THEN '월세' 
+           ELSE '전세' END AS deal_type
+    FROM oi.apt_deal_all 
+    WHERE apt_nm ILIKE '%청구e편한세상%' 
+      AND exclu_use_ar BETWEEN 83 AND 85
+    ORDER BY deal_year DESC, deal_month DESC, deal_day DESC;
 
 **스키마 정보:**
 ${schemaContext}

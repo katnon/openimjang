@@ -55,7 +55,10 @@
       "Bash(claude config set --global permission-mode bypassPermissions)",
       "Bash(taskkill:*)",
       "Read(//c/Users/gunho/Pictures/Screenshots/**)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(PGPASSWORD=1212 psql -h localhost -U postgres -d openimjang -c \"\\d oi.preset_points\")",
+      "Bash(PGPASSWORD=1212 psql -h localhost -U postgres -d openimjang -c \"SELECT id, apt_nm, apt_id, dong, ho, lat, lon FROM oi.preset_points ORDER BY created_at DESC LIMIT 10;\")",
+      "Bash(PGPASSWORD=1212 psql -h localhost -U postgres -d openimjang -c \"SELECT COUNT(*) as total_presets, COUNT(apt_id) as with_apt_id, COUNT(*) - COUNT(apt_id) as missing_apt_id FROM oi.preset_points;\")"
     ],
     "deny": [],
     "ask": []

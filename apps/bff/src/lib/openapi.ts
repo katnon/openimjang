@@ -378,6 +378,317 @@ export function generateOpenAPISpec(): OpenAPISpec {
     }
   };
 
+  // 🏠 아파트 종합 분석 API 추가
+  paths['/api/ai/apartment-summary'] = {
+    post: {
+      tags: ['AI Summary'],
+      summary: '아파트 종합 분석 (확장카드용)',
+      description: '실거래가, 건물정보, 주변환경, PNU, 토지이용계획 등 5가지 데이터를 종합하여 전문적인 부동산 브리핑 생성',
+      operationId: 'apartmentSummary',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['type', 'data'],
+              properties: {
+                type: {
+                  type: 'string',
+                  enum: ['apartment_summary'],
+                  example: 'apartment_summary'
+                },
+                data: {
+                  type: 'object',
+                  required: ['aptInfo'],
+                  properties: {
+                    aptInfo: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string', example: '청구e편한세상' },
+                        address: { type: 'string', example: '서울특별시 중구 신당동 123' },
+                        lat: { type: 'number', example: 37.5665 },
+                        lon: { type: 'number', example: 126.9780 }
+                      }
+                    },
+                    deals: {
+                      type: 'array',
+                      description: '실거래가 데이터',
+                      items: { type: 'object' }
+                    },
+                    building: {
+                      type: 'object',
+                      description: '건물 상세 정보'
+                    },
+                    landuse: {
+                      type: 'object', 
+                      description: '토지이용계획 정보'
+                    },
+                    nearby: {
+                      type: 'object',
+                      description: '주변 환경 정보 (반경 500m POI)'
+                    },
+                    pnu: {
+                      type: 'object',
+                      description: 'PNU 정보'
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      responses: {
+        '200': {
+          description: 'AI 종합 분석 완료',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: true },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      summary: { type: 'string', description: 'AI 생성 종합 브리핑' },
+                      aptInfo: { type: 'object' },
+                      dataQuality: {
+                        type: 'object',
+                        properties: {
+                          deals: { type: 'boolean' },
+                          building: { type: 'boolean' },
+                          landuse: { type: 'boolean' },
+                          nearby: { type: 'boolean' },
+                          pnu: { type: 'boolean' }
+                        }
+                      },
+                      timestamp: { type: 'string', format: 'date-time' },
+                      processingTime: { type: 'string', example: '1250ms' }
+                    }
+                  },
+                  meta: {
+                    type: 'object',
+                    properties: {
+                      apiVersion: { type: 'string', example: '1.0.0' },
+                      model: { type: 'string', example: 'gpt-4o-mini' },
+                      dataSourcesUsed: { type: 'object' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '400': {
+          description: '잘못된 요청 데이터',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: false },
+                  error: { type: 'string', example: 'Invalid input data' },
+                  message: { type: 'string' },
+                  validationErrors: { type: 'array', items: { type: 'string' } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  // AI 요약 저장 API
+  paths['/api/ai/summary/save'] = {
+    post: {
+      tags: ['AI Summary'],
+      summary: 'AI 요약 결과 DB 저장',
+      description: '생성된 AI 요약 결과를 PostgreSQL에 저장하여 다른 사용자와 공유',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['aptId', 'aptName', 'jibunAddress', 'summary', 'userId'],
+              properties: {
+                aptId: { type: 'integer', example: 39367 },
+                aptName: { type: 'string', example: '청구e편한세상' },
+                jibunAddress: { type: 'string', example: '서울특별시 중구 신당동 123' },
+                summary: { type: 'string', description: 'AI 생성 요약 텍스트' },
+                userId: { type: 'string', example: 'user_12345' }
+              }
+            }
+          }
+        }
+      },
+      responses: {
+        '200': {
+          description: '저장 성공',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: true },
+                  message: { type: 'string', example: 'AI 요약이 성공적으로 저장되었습니다.' },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      aptId: { type: 'integer' },
+                      aptName: { type: 'string' },
+                      savedAt: { type: 'string', format: 'date-time' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  // AI 요약 조회 API  
+  paths['/api/ai/summary/{aptId}'] = {
+    get: {
+      tags: ['AI Summary'],
+      summary: '저장된 AI 요약 조회',
+      description: '특정 아파트의 저장된 AI 요약 조회 (7일 이내)',
+      parameters: [
+        {
+          name: 'aptId',
+          in: 'path',
+          required: true,
+          schema: { type: 'integer' },
+          example: 39367,
+          description: '아파트 ID'
+        }
+      ],
+      responses: {
+        '200': {
+          description: '저장된 요약 발견',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: true },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      summary: { type: 'string' },
+                      createdAt: { type: 'string', format: 'date-time' },
+                      userId: { type: 'string' },
+                      aptId: { type: 'integer' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '404': {
+          description: '저장된 요약 없음',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: false },
+                  error: { type: 'string', example: 'Summary not found' },
+                  message: { type: 'string', example: '저장된 AI 요약이 없습니다.' }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  // AI 요약 시스템 헬스체크
+  paths['/api/ai/summary-health'] = {
+    get: {
+      tags: ['AI Summary'],
+      summary: 'AI 요약 시스템 헬스체크',
+      description: 'AI 요약 시스템의 상태 및 기능 확인',
+      responses: {
+        '200': {
+          description: '시스템 정상',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: true },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      status: { type: 'string', example: 'healthy' },
+                      timestamp: { type: 'string', format: 'date-time' },
+                      services: {
+                        type: 'object',
+                        properties: {
+                          apartmentSummaryService: { type: 'string', example: 'ok' },
+                          database: { type: 'string', example: 'ok' },
+                          openai: { type: 'string', example: 'ok' }
+                        }
+                      },
+                      features: {
+                        type: 'object',
+                        properties: {
+                          comprehensiveAnalysis: { type: 'string', example: 'enabled' },
+                          dataValidation: { type: 'string', example: 'enabled' },
+                          summaryStorage: { type: 'string', example: 'enabled' },
+                          model: { type: 'string', example: 'gpt-4o-mini' }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  // AI 요약 테스트 API
+  paths['/api/ai/summary-test'] = {
+    post: {
+      tags: ['AI Summary'],
+      summary: 'AI 요약 시스템 테스트',
+      description: '더미 데이터로 AI 요약 시스템 테스트 실행',
+      responses: {
+        '200': {
+          description: '테스트 완료',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: true },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      testData: { type: 'object' },
+                      analysisResult: { type: 'object' },
+                      timestamp: { type: 'string', format: 'date-time' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
   return {
     openapi: '3.0.0',
     info: {

@@ -500,27 +500,139 @@ export class SmartPlanner implements IPlanner {
   }
 
   /**
-   * 분석 데이터 액션 생성
+   * 분석 데이터 액션 생성 (면적별 비교 지원)
    */
   private generateAnalysisDataActions(context: PlanContext): PlanAction[] {
     const actions: PlanAction[] = [];
-
-    // 분석을 위한 기본 데이터 수집
-    actions.push({
-      id: uuidv4(),
-      type: 'searchRealEstate',
-      name: 'Collect Analysis Data',
-      description: '분석을 위한 부동산 데이터를 수집합니다',
-      reason: '분석 작업에 필요한 데이터를 준비하기 위해',
-      priority: ActionPriority.HIGH,
-      parameters: {
-        includeHistory: true,
-        includeStatistics: true,
-        extendedPeriod: true
+    const { slots, sessionHistory } = context;
+    
+    // 면적별 비교 패턴 감지
+    const hasAreaComparison = this.detectAreaComparisonPattern(context);
+    
+    if (hasAreaComparison && slots.apartmentName) {
+      console.log('🔄 면적별 비교 분석 모드 감지:', {
+        apartment: slots.apartmentName,
+        currentArea: slots.area,
+        dealType: slots.dealType
+      });
+      
+      // 현재 면적 데이터 수집
+      if (slots.area) {
+        actions.push({
+          id: uuidv4(),
+          type: 'searchRealEstate',
+          name: `Collect ${slots.area}㎡ Data`,
+          description: `${slots.area}㎡ 면적 부동산 데이터를 수집합니다`,
+          reason: `현재 질문한 ${slots.area}㎡ 면적 데이터 필요`,
+          priority: ActionPriority.HIGH,
+          parameters: {
+            includeHistory: true,
+            specificArea: slots.area,
+            apartmentName: slots.apartmentName,
+            dealType: slots.dealType
+          }
+        });
       }
-    });
+      
+      // 이전 대화에서 언급된 다른 면적들도 수집
+      const previousAreas = this.extractPreviousAreas(sessionHistory);
+      previousAreas.forEach(area => {
+        if (area !== slots.area) {
+          actions.push({
+            id: uuidv4(),
+            type: 'searchRealEstate',
+            name: `Collect ${area}㎡ Comparison Data`,
+            description: `비교를 위한 ${area}㎡ 면적 데이터를 수집합니다`,
+            reason: `이전에 언급된 ${area}㎡와 비교 분석을 위해`,
+            priority: ActionPriority.MEDIUM,
+            parameters: {
+              includeHistory: true,
+              specificArea: area,
+              apartmentName: slots.apartmentName,
+              dealType: slots.dealType || 'all'
+            }
+          });
+        }
+      });
+    } else {
+      // 일반 분석 데이터 수집
+      actions.push({
+        id: uuidv4(),
+        type: 'searchRealEstate',
+        name: 'Collect Analysis Data',
+        description: '분석을 위한 부동산 데이터를 수집합니다',
+        reason: '분석 작업에 필요한 데이터를 준비하기 위해',
+        priority: ActionPriority.HIGH,
+        parameters: {
+          includeHistory: true,
+          includeStatistics: true,
+          extendedPeriod: true
+        }
+      });
+    }
 
     return actions;
+  }
+  
+  /**
+   * 면적별 비교 패턴 감지
+   */
+  private detectAreaComparisonPattern(context: PlanContext): boolean {
+    const { sessionHistory } = context;
+    
+    if (!sessionHistory?.messageHistory || sessionHistory.messageHistory.length < 2) {
+      return false;
+    }
+    
+    // 최근 2개 메시지에서 면적 변경 패턴 찾기
+    const recentMessages = sessionHistory.messageHistory.slice(-2);
+    const hasAreaInMessages = recentMessages.some(msg => {
+      const slots = msg.extractedSlots || {};
+      return slots.area || /\d+형|\d+㎡/.test(msg.message || '');
+    });
+    
+    // "84형은 어때", "59형 어떤지", "그럼 다른 평수는" 같은 패턴
+    const comparisonPatterns = [
+      /\d+형[은는]?\s*어때/,
+      /\d+㎡[은는]?\s*어떤지/,
+      /그럼?\s*다른\s*평수/,
+      /비교해서\s*봐/,
+      /다른\s*면적/
+    ];
+    
+    const hasComparisonKeywords = recentMessages.some(msg => 
+      comparisonPatterns.some(pattern => pattern.test(msg.message || ''))
+    );
+    
+    return hasAreaInMessages && (hasComparisonKeywords || recentMessages.length >= 2);
+  }
+  
+  /**
+   * 이전 대화에서 언급된 면적들 추출
+   */
+  private extractPreviousAreas(sessionHistory: any): number[] {
+    if (!sessionHistory?.messageHistory) return [];
+    
+    const areas = new Set<number>();
+    
+    sessionHistory.messageHistory.forEach((msg: any) => {
+      const slots = msg.extractedSlots || {};
+      if (slots.area && typeof slots.area === 'number') {
+        areas.add(slots.area);
+      }
+      
+      // 메시지 텍스트에서도 면적 추출
+      const message = msg.message || '';
+      const areaMatches = message.match(/\b(\d+)(형|㎡)\b/g) || [];
+      areaMatches.forEach(match => {
+        const areaNum = parseInt(match.match(/\d+/)?.[0] || '0');
+        if (areaNum > 0 && areaNum < 300) { // 합리적인 면적 범위
+          areas.add(areaNum);
+        }
+      });
+    });
+    
+    return Array.from(areas);
   }
 
   /**

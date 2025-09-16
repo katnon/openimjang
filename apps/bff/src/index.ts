@@ -22,6 +22,7 @@ import aiChatRoute from './routes/aiChat';
 // import plannerTestRoute from './routes/plannerTest';  // 구문 오류로 임시 주석
 import chatBotRoute from './routes/chatBot';
 import simpleAIRoute from './routes/simpleAI';
+import aiSummaryRoute from './routes/aiSummary';
 import embeddingRoute from './routes/embedding';
 import swaggerRoute from './routes/swagger';
 import { memoRoute } from './routes/memo';
@@ -94,11 +95,11 @@ app.route('/api/poi', poi);
 // app.route('/api/ai', aiAskRoute);
 // app.route('/api/ai', aiHybridRoute);
 
-// 🎯 AI 시스템들
+// 🎯 AI 시스템들 (순서 중요: chatBot이 먼저!)
+app.route('/api/ai', chatBotRoute);  // 🧪 정상 작동하는 플래너 시스템 (우선순위)
 app.route('/api/ai', simpleAIRoute);  // 🆕 단순하고 효과적인 제너럴 LLM 시스템
-app.route('/api/ai', aiChatRoute);  // 🧠 LLM 라이프사이클 시스템 포함
-app.route('/api/ai', chatBotRoute);  // 🧪 정상 작동하는 플래너 시스템
-app.route('/api/ai', simpleAIRoute);  // 🆕 Simple LLM 시스템
+app.route('/api/ai', aiSummaryRoute);  // 🏠 확장카드 전용 아파트 종합 분석 시스템
+// app.route('/api/ai', aiChatRoute);  // 🧠 LLM 라이프사이클 시스템 포함 (임시 비활성화)
 // app.route('/api/planner', plannerTestRoute);  // 🧪 플래너 테스트 전용 - 구문 오류로 임시 주석
 app.route('/api/embedding', embeddingRoute); // 🆕 임베딩 관리 라우터
 app.route('/api/docs', swaggerRoute);   // 🆕 Swagger API 문서 라우터

@@ -894,4 +894,37 @@ aiChatRoute.post('/test-chat', slotMiddleware, async (c) => {
     }
 });
 
+/**
+ * 플래너 실행 결과들을 종합하여 최종 메시지 생성
+ */
+function generateFinalMessage(results: any[], planContext: PlanContext): string {
+    const successfulResults = results.filter(r => r.success && r.data);
+    
+    if (successfulResults.length === 0) {
+        return "죄송해요, 요청하신 정보를 찾지 못했습니다.";
+    }
+    
+    // 가장 마지막 성공한 결과의 데이터를 사용
+    const lastResult = successfulResults[successfulResults.length - 1];
+    
+    if (lastResult.data && typeof lastResult.data === 'string') {
+        return lastResult.data;
+    }
+    
+    // 데이터가 객체인 경우 간단한 요약 생성
+    if (lastResult.data && typeof lastResult.data === 'object') {
+        if (lastResult.data.rows && Array.isArray(lastResult.data.rows)) {
+            const rowCount = lastResult.data.rows.length;
+            return `요청하신 정보를 찾았습니다. 총 ${rowCount}건의 데이터가 있어요.`;
+        }
+        
+        if (lastResult.data.results && Array.isArray(lastResult.data.results)) {
+            const resultCount = lastResult.data.results.length;
+            return `검색 결과를 찾았습니다. 총 ${resultCount}건의 정보가 있네요.`;
+        }
+    }
+    
+    return "요청하신 정보를 처리했습니다.";
+}
+
 export default aiChatRoute;

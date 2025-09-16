@@ -13,6 +13,8 @@ declare global {
     interface Window {
         MapPrime3DNavigator?: {
             navigateToPreset: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
+            executeWindowViewAtPreset: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
+            executeShadeAnalysisAtPreset: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
         };
     }
 }
@@ -144,10 +146,10 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
 
     const tabs = [
         { id: "실거래가", label: "실거래가" },
-        { id: "건물/토지정보", label: "건물/토지정보" },
+        { id: "건물/토지정보", label: "건물정보" },
         { id: "주변정보", label: "주변정보" },
-        { id: "AI스마트요약", label: "AI 스마트 요약" },
-        { id: "아파트미리보기", label: "🏠 아파트 미리보기" }
+        { id: "AI스마트요약", label: "AI요약" },
+        { id: "아파트미리보기", label: "🏠 미리보기" }
     ];
 
     const handleMoreClick = () => {
@@ -381,12 +383,12 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                         </div>
 
                         {/* ✅ 탭 네비게이션 */}
-                        <div className="flex border-b border-gray-200">
+                        <div className="flex border-b border-gray-200 overflow-x-auto">
                             {tabs.map((tab) => (
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
-                                    className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === tab.id
+                                    className={`px-2 py-2 text-xs font-medium transition-colors relative whitespace-nowrap flex-shrink-0 ${activeTab === tab.id
                                             ? 'text-white bg-primary-500 rounded-t-lg border-b-2 border-primary-500'
                                             : 'text-gray-600 hover:text-gray-800 hover:bg-primary-50 rounded-t-lg'
                                         }`}
@@ -452,8 +454,48 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 }}
                                 onFloorplanView={(preset) => {
                                     console.log('📐 평면도 보기:', preset);
+                                    console.log('🔍 onFloorplanView 콜백 존재 여부:', !!onFloorplanView);
                                     // 평면도 보기 콜백 호출
-                                    onFloorplanView?.(preset);
+                                    if (onFloorplanView) {
+                                        console.log('✅ 평면도 콜백 호출');
+                                        onFloorplanView(preset);
+                                    } else {
+                                        console.warn('⚠️ onFloorplanView 콜백이 전달되지 않음');
+                                    }
+                                }}
+                                onWindowViewAction={(preset) => {
+                                    console.log('🪟 창가뷰 자동 실행:', preset);
+
+                                    // 3D 지도에서 해당 프리셋으로 이동 후 창가뷰 자동 실행
+                                    if (window.MapPrime3DNavigator?.executeWindowViewAtPreset) {
+                                        window.MapPrime3DNavigator.executeWindowViewAtPreset({
+                                            lat: preset.lat,
+                                            lon: preset.lon,
+                                            dong: preset.dong,
+                                            ho: preset.ho
+                                        });
+                                    } else {
+                                        console.warn('⚠️ 3D 지도가 준비되지 않음');
+                                    }
+                                }}
+                                onShadeAnalysisAction={(preset) => {
+                                    console.log('☀️ 음영분석 자동 실행:', preset);
+
+                                    // 3D 지도에서 해당 프리셋으로 이동 후 음영분석 자동 실행
+                                    if (window.MapPrime3DNavigator?.executeShadeAnalysisAtPreset) {
+                                        window.MapPrime3DNavigator.executeShadeAnalysisAtPreset({
+                                            lat: preset.lat,
+                                            lon: preset.lon,
+                                            dong: preset.dong,
+                                            ho: preset.ho
+                                        });
+                                    } else {
+                                        console.warn('⚠️ 3D 지도가 준비되지 않음');
+                                    }
+                                }}
+                                onDeletePreset={(presetId) => {
+                                    console.log('🗑️ 프리셋 삭제됨:', presetId);
+                                    // 3D 지도에서 해당 프리셋 포인트 제거하도록 알림
                                 }}
                             />
                         )}

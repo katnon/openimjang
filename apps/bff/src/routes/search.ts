@@ -213,32 +213,46 @@ searchRoute.get("/deals/:aptId", async (c) => {
 
         console.log(`💰 조회할 아파트: ${aptInfo.apt_nm}, ${aptInfo.jibun_address}`);
 
-        // ✅ 2단계: 선택된 기간에 따른 날짜 계산 (최대한 단순하게)
-        const currentYear = 2025; // 하드코딩으로 일단 고정
-        let startYear;
-        
-        console.log(`📅 현재: ${currentYear}년, 선택된 기간: "${period}"`);
-        
-        // 기간에 따른 시작 년도 (아주 단순)
+        // ✅ 2단계: 선택된 기간에 따른 날짜 계산 (정확한 날짜 기반)
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1; // 0-based to 1-based
+
+        let startYear = currentYear;
+        let startMonth = 1;
+
+        console.log(`📅 현재: ${currentYear}년 ${currentMonth}월, 선택된 기간: "${period}"`);
+
+        // 기간에 따른 시작 날짜 계산 (정확한 월 기준)
         switch (period) {
             case "3개월":
+                const threeMonthsAgo = new Date(currentYear, currentMonth - 4, 1); // 3개월 전
+                startYear = threeMonthsAgo.getFullYear();
+                startMonth = threeMonthsAgo.getMonth() + 1;
+                break;
             case "6개월":
-                startYear = 2024; // 작년부터 안전하게
+                const sixMonthsAgo = new Date(currentYear, currentMonth - 7, 1); // 6개월 전
+                startYear = sixMonthsAgo.getFullYear();
+                startMonth = sixMonthsAgo.getMonth() + 1;
                 break;
             case "1년":
-                startYear = 2024; // 2024~2025
+                startYear = currentYear - 1; // 작년 같은 달부터
+                startMonth = currentMonth;
                 break;
             case "3년":
-                startYear = 2022; // 2022~2025
+                startYear = currentYear - 3; // 3년 전부터
+                startMonth = currentMonth;
                 break;
             case "전체":
-                startYear = 2000; // 2000~2025 (정말 모든 데이터)
+                startYear = 2000; // 2000년부터 모든 데이터
+                startMonth = 1;
                 break;
             default:
-                startYear = 2024;
+                startYear = currentYear - 1;
+                startMonth = currentMonth;
         }
 
-        console.log(`📅 조회 기간: ${startYear}년 ~ ${currentYear}년 (${period})`);
+        console.log(`📅 조회 기간: ${startYear}년 ${startMonth}월 ~ ${currentYear}년 ${currentMonth}월 (${period})`);
 
         let query = (db
             .selectFrom("oi.apt_deal_all" as any)
@@ -250,14 +264,28 @@ searchRoute.get("/deals/:aptId", async (c) => {
             .where("apt_nm", "=", aptInfo.apt_nm)
             .where("jibun_address", "=", aptInfo.jibun_address);
 
-        // ✅ 날짜 필터링 (가장 단순한 방법)
-        console.log(`🔍 날짜 필터링 시작: ${startYear} <= deal_year <= ${currentYear}`);
-        
-        query = query
-            .where("deal_year", ">=", startYear)
-            .where("deal_year", "<=", currentYear);
-            
-        console.log(`🔍 날짜 필터링 완료`);
+        // ✅ 날짜 필터링 (년도 + 월 기준)
+        console.log(`🔍 날짜 필터링 시작: ${startYear}년 ${startMonth}월 ~ ${currentYear}년 ${currentMonth}월`);
+
+        query = query.where((eb: any) => eb.or([
+            // 시작년도보다 이후 년도는 모두 포함
+            eb("deal_year", ">", startYear),
+            // 시작년도와 같은 경우 월을 확인
+            eb.and([
+                eb("deal_year", "=", startYear),
+                eb("deal_month", ">=", startMonth)
+            ])
+        ])).where((eb: any) => eb.or([
+            // 현재년도보다 이전 년도는 모두 포함
+            eb("deal_year", "<", currentYear),
+            // 현재년도와 같은 경우 월을 확인
+            eb.and([
+                eb("deal_year", "=", currentYear),
+                eb("deal_month", "<=", currentMonth)
+            ])
+        ]));
+
+        console.log(`🔍 날짜 필터링 완료 (월 단위)`);
 
         // 거래 유형 필터 (기존과 동일)
         if (dealType === "매매") {
@@ -278,26 +306,42 @@ searchRoute.get("/deals/:aptId", async (c) => {
         }
 
         // 전용면적 필터 (±1m² 범위 지원)
+        console.log(`🔍 전용면적 필터 파라미터: area="${area}", useRange="${c.req.query("useRange")}"`);
         if (area) {
             const areaNum = parseFloat(area);
             const useRange = c.req.query("useRange") === "true"; // ±1m² 토글 지원
 
+            console.log(`🔍 면적 파싱 결과: areaNum=${areaNum}, useRange=${useRange}, isNaN=${isNaN(areaNum)}`);
+
             if (!isNaN(areaNum)) {
                 if (useRange) {
                     // ±1m² 범위 필터링
+                    const minArea = areaNum - 1;
+                    const maxArea = areaNum + 1;
                     query = query
-                        .where("exclu_use_ar", ">=", areaNum - 1)
-                        .where("exclu_use_ar", "<=", areaNum + 1);
-                    console.log(`🔍 면적 범위 필터: ${areaNum - 1}㎡ ~ ${areaNum + 1}㎡`);
+                        .where("exclu_use_ar", ">=", minArea)
+                        .where("exclu_use_ar", "<=", maxArea);
+                    console.log(`✅ 면적 범위 필터 적용: ${minArea}㎡ ~ ${maxArea}㎡`);
                 } else {
                     // 정확한 면적 매치
                     query = query.where("exclu_use_ar", "=", areaNum);
-                    console.log(`🔍 정확한 면적 필터: ${areaNum}㎡`);
+                    console.log(`✅ 정확한 면적 필터 적용: ${areaNum}㎡`);
                 }
+            } else {
+                console.log(`❌ 면적 파싱 실패: "${area}"`);
             }
+        } else {
+            console.log(`📍 면적 필터 없음 (전체 면적)`);
         }
 
-        // ✅ 정렬만 적용, 어떤 LIMIT도 없음 - 모든 데이터 반환
+        // ✅ 쿼리 실행 전 최종 상태 로그
+        console.log(`🔍 최종 쿼리 파라미터:`);
+        console.log(`   - 아파트명: ${aptInfo.apt_nm}`);
+        console.log(`   - 지번주소: ${aptInfo.jibun_address}`);
+        console.log(`   - 기간: ${period} (${startYear}년 ${startMonth}월 ~ ${currentYear}년 ${currentMonth}월)`);
+        console.log(`   - 면적: ${area} (범위: ${c.req.query("useRange")})`);
+        console.log(`   - 거래유형: ${dealType || '전체'}`);
+
         const results = await query
             .orderBy("deal_year", "desc")
             .orderBy("deal_month", "desc")
@@ -305,9 +349,25 @@ searchRoute.get("/deals/:aptId", async (c) => {
             .execute();
 
         console.log(`💰 실거래가 조회 완료: ${results.length}건`);
-        console.log(`📅 기간: ${startYear}~${currentYear} (${period})`);
+        console.log(`📅 기간: ${startYear}년 ${startMonth}월 ~ ${currentYear}년 ${currentMonth}월 (${period})`);
         console.log(`🔍 거래유형 필터: ${dealType || '없음'}`);
-        console.log(`🔍 면적 필터: ${area || '없음'}`);
+        console.log(`🔍 면적 필터: ${area || '없음'} (범위: ${c.req.query("useRange")})`);
+
+        // 면적별 분포 확인 (처음 10개만)
+        if (results.length > 0) {
+            console.log(`🏠 결과 데이터 샘플 (처음 5개):`);
+            results.slice(0, 5).forEach((result, idx) => {
+                console.log(`   ${idx + 1}. 면적: ${result.exclu_use_ar}㎡, 거래: ${result.deal_year}.${result.deal_month}, 매매: ${result.deal_amount}, 전세: ${result.deposit}, 동: ${result.apt_dong}`);
+            });
+
+            // 면적 분포 통계
+            const areaStats = results.reduce((acc: any, result: any) => {
+                const area = result.exclu_use_ar;
+                acc[area] = (acc[area] || 0) + 1;
+                return acc;
+            }, {});
+            console.log(`📊 면적별 거래 건수:`, Object.keys(areaStats).sort((a, b) => parseFloat(a) - parseFloat(b)).map(area => `${area}㎡(${areaStats[area]}건)`).join(', '));
+        }
 
         return c.json(results);
     } catch (err) {
@@ -735,3 +795,79 @@ searchRoute.get('/location', async (c) => {
 // @아파트명 블록 클릭 시에는 기본 검색 API (/api/search?q=아파트명)를 사용합니다
 
 // @아파트명 블록은 일반 검색과 동일하게 처리됩니다
+
+// 📍 좌표 기반 아파트 검색 (프리셋 포인트 생성용 fallback)
+searchRoute.get("/find-nearest-apartment", async (c) => {
+    const lat = parseFloat(c.req.query("lat") ?? "");
+    const lng = parseFloat(c.req.query("lng") ?? "");
+    const radius = parseFloat(c.req.query("radius") ?? "500"); // 기본 500m
+
+    if (isNaN(lat) || isNaN(lng)) {
+        return c.json({
+            success: false,
+            error: "위도와 경도는 필수 파라미터입니다"
+        }, 400);
+    }
+
+    try {
+        console.log(`🔍 좌표 기반 아파트 검색: lat=${lat}, lng=${lng}, radius=${radius}m`);
+
+        // 원시 SQL을 사용하여 지정된 반경 내의 아파트들을 거리순으로 검색
+        const apartmentResult = await sql<any>`
+            SELECT id, apt_nm, jibun_address, lat, lon,
+                   ST_Distance(
+                       geography(ST_MakePoint(lon, lat)),
+                       geography(ST_MakePoint(${lng}, ${lat}))
+                   ) AS distance_meters
+            FROM oi.apt_info
+            WHERE lat IS NOT NULL AND lon IS NOT NULL
+            AND ST_DWithin(
+                geography(ST_MakePoint(lon, lat)),
+                geography(ST_MakePoint(${lng}, ${lat})),
+                ${radius}
+            )
+            ORDER BY distance_meters ASC
+            LIMIT 5
+        `.execute(db);
+
+        const apartments = apartmentResult.rows;
+
+        console.log(`🏠 검색 결과: ${apartments.length}개 아파트 발견`);
+
+        if (apartments.length === 0) {
+            return c.json({
+                success: false,
+                error: `반경 ${radius}m 내에 아파트가 없습니다`,
+                data: null
+            });
+        }
+
+        // 가장 가까운 아파트 반환
+        const nearestApt = apartments[0];
+        console.log(`📍 가장 가까운 아파트: ${nearestApt.apt_nm} (거리: ${Math.round(Number(nearestApt.distance_meters))}m)`);
+
+        return c.json({
+            success: true,
+            data: {
+                id: nearestApt.id,
+                apt_nm: nearestApt.apt_nm,
+                jibun_address: nearestApt.jibun_address,
+                lat: nearestApt.lat,
+                lon: nearestApt.lon,
+                distance_meters: Math.round(Number(nearestApt.distance_meters))
+            },
+            alternatives: apartments.slice(1).map(apt => ({
+                id: apt.id,
+                apt_nm: apt.apt_nm,
+                distance_meters: Math.round(Number(apt.distance_meters))
+            }))
+        });
+
+    } catch (error) {
+        console.error('❌ 좌표 기반 아파트 검색 실패:', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '알 수 없는 오류'
+        }, 500);
+    }
+});

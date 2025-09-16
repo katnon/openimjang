@@ -16,6 +16,8 @@ import UserOnboardingModal from "@/components/onboarding/UserOnboardingModal";
 import UserProfileModal from "@/components/profile/UserProfileModal";
 import ChatbotSidebar from "@/components/chatbot/ChatbotSidebar";
 import type { POIItem } from "@/types/poi";
+import type { CameraFrustum } from "@/hooks/useCameraFrustum";
+import { useMiniMapPopup } from "@/hooks/useMiniMapPopup";
 
 type AptInfo = {
     id: number;
@@ -24,6 +26,7 @@ type AptInfo = {
     lat: number;
     lon: number;
 };
+
 
 export default function Home() {
     const { user, needsOnboarding, markOnboardingComplete } = useAuth();
@@ -38,6 +41,7 @@ export default function Home() {
     const [showAuth, setShowAuth] = useState(false);
     const [showMemoModal, setShowMemoModal] = useState(false);
     const [showProfile, setShowProfile] = useState(false);
+    const [showOnboardingFromProfile, setShowOnboardingFromProfile] = useState(false);
     const [currentMapType, setCurrentMapType] = useState<'ROADMAP' | 'SATELLITE'>('ROADMAP');
     const [favorites, setFavorites] = useState<Set<number>>(new Set());
     const [showFavoritePopup, setShowFavoritePopup] = useState(false);
@@ -66,6 +70,23 @@ export default function Home() {
         lon: number;
     } | null>(null);
 
+    // 평면도 모달 상태
+    const [showFloorplanModal, setShowFloorplanModal] = useState(false);
+    const [selectedFloorplan, setSelectedFloorplan] = useState<{
+        imageUrl: string;
+        aptName: string;
+        dong: string;
+        ho: string;
+        area: string;
+    } | null>(null);
+
+    // 🎯 3D 카메라 시야 범위 상태 (미니맵용)
+    const [cameraFrustum, setCameraFrustum] = useState<CameraFrustum | null>(null);
+    const [showCameraFrustum, setShowCameraFrustum] = useState(true); // 3D 시야 토글
+
+    // 🎯 미니맵 팝업 훅
+    const miniMapPopup = useMiniMapPopup();
+
     // ✅ 지도 인스턴스 ref 추가
     const mapInstanceRef = useRef<kakao.maps.Map | null>(null);
     const refreshFavoritesRef = useRef<(() => void) | null>(null);
@@ -77,11 +98,11 @@ export default function Home() {
         try {
             const favoritesRef = collection(db, 'users', user.uid, 'favorites');
             const snapshot = await getDocs(favoritesRef);
-            
+
             const favoriteIds = new Set(
                 snapshot.docs.map(doc => parseInt(doc.id))
             );
-            
+
             setFavorites(favoriteIds);
         } catch (error) {
             console.error('즐겨찾기 로드 실패:', error);
@@ -107,7 +128,7 @@ export default function Home() {
         if (!mapInstanceRef.current || !window.kakao?.maps?.MapTypeId) return;
 
         const map = mapInstanceRef.current;
-        const kakaoMapType = mapType === 'SATELLITE' 
+        const kakaoMapType = mapType === 'SATELLITE'
             ? window.kakao.maps.MapTypeId.SKYVIEW  // SATELLITE 대신 SKYVIEW 사용
             : window.kakao.maps.MapTypeId.ROADMAP;
 
@@ -162,25 +183,25 @@ export default function Home() {
     // 지도 네비게이션 핸들러 (스마트 링크용)
     const handleMapNavigate = async (data: { lat: number; lon: number; name: string; type: string }) => {
         console.log('🗺️ 지도 네비게이션:', data);
-        
+
         if (!mapInstanceRef.current) {
             console.warn('⚠️ 지도 인스턴스가 없습니다.');
             return;
         }
 
         const map = mapInstanceRef.current;
-        
+
         // 지도 중심을 해당 위치로 이동
         const newCenter = new kakao.maps.LatLng(data.lat, data.lon);
         map.setCenter(newCenter);
         map.setLevel(3); // 확대
-        
+
         // 아파트인 경우 검색 API로 정확한 정보 가져와서 요약카드 표시
         if (data.type === 'apartment') {
             try {
                 const response = await fetch(`/api/search?q=${encodeURIComponent(data.name)}`);
                 const searchResults = await response.json();
-                
+
                 if (searchResults && searchResults.length > 0) {
                     const apt = searchResults[0];
                     setSelectedApt(apt);
@@ -192,7 +213,7 @@ export default function Home() {
                 console.error('❌ 아파트 정보 조회 오류:', error);
             }
         }
-        
+
         // 아파트가 아니거나 아파트 조회 실패한 경우 임시 마커 표시
         const markerPosition = new kakao.maps.LatLng(data.lat, data.lon);
         const marker = new kakao.maps.Marker({
@@ -245,7 +266,7 @@ export default function Home() {
             infoWindow.close();
             marker.setMap(null);
         }, 5000);
-        
+
         // point 상태도 업데이트
         setPoint({ lat: data.lat, lng: data.lon });
     };
@@ -256,7 +277,7 @@ export default function Home() {
             <div className={mapViewMode === '3D' ? 'relative z-[300]' : 'relative'}>
                 <TopBar
                     onOpen3D={() => setShow3D(true)}
-                    onOpen2D={() => setShowMiniMap(prev => !prev)}
+                    onOpen2D={() => miniMapPopup.toggle()}
                     mapViewMode={mapViewMode}
                     onSearchResult={(results) => {
                         if (results.length > 0) {
@@ -266,7 +287,11 @@ export default function Home() {
                     }}
                     onOpenAuth={() => setShowAuth(true)}
                     onOpenMyImjang={() => setShowMyImjang(true)}
-                    onOpenProfile={() => setShowProfile(true)}
+                    onOpenProfile={() => {
+                        console.log('🔄 Home에서 프로필 모달 열기 요청됨');
+                        setShowProfile(true);
+                        console.log('✅ showProfile 상태를 true로 설정 완료');
+                    }}
                 />
             </div>
 
@@ -311,17 +336,18 @@ export default function Home() {
                     }
                     selectedApt={selectedApt}
                     mapViewMode={mapViewMode === '3D' ? '3D' : '2D'}
+                    onFrustumUpdate={setCameraFrustum} // 🎯 frustum 데이터 수신
                     onToggleMapView={() => {
                         if (show3D) {
                             // 팝업에서 전환: 팝업 닫고 메인을 3D로
                             setShow3D(false);
                             setMapViewMode('3D');
-                            setShowMiniMap(true);
+                            miniMapPopup.show();
                         } else {
                             // 메인에서 전환: 메인을 2D로 하고 팝업 열기
                             setMapViewMode('2D');
                             setShow3D(true);
-                            setShowMiniMap(false);
+                            miniMapPopup.hide();
                         }
                     }}
                 />
@@ -342,101 +368,84 @@ export default function Home() {
 
             {/* 요약 카드 - 최상위에서 직접 위치 */}
             <SummaryCard
-            selectedApt={selectedApt}
-            point={point}
-            onMore={() => {
-                if (selectedApt) {
-                    console.log("🔍 자세히보기 클릭:", selectedApt);
-                    alert(`${selectedApt.apt_nm}의 상세 정보를 표시할 예정입니다.`);
-                }
-            }}
-            onExpandChange={setIsCardExpanded}
-            onPOIHover={setHoveredPOI}
-            onFavoriteToggle={handleFavoriteToggle}
-            isFavorited={selectedApt ? favorites.has(selectedApt.id) : false}
-            onOpenChatbot={() => {
-                if (selectedApt) {
-                    // 새로운 첨부 방식: ChatbotSidebar에 아파트 정보 직접 전달
-                    setNewApartmentAttachment({
-                        id: selectedApt.id,
-                        name: selectedApt.apt_nm,
-                        address: selectedApt.jibun_address,
-                        lat: selectedApt.lat,
-                        lon: selectedApt.lon
-                    });
-                    
-                    console.log('🤖 임장봇 버튼 - 새로운 첨부블록 생성:', {
-                        id: selectedApt.id,
-                        name: selectedApt.apt_nm,
-                        address: selectedApt.jibun_address,
-                        lat: selectedApt.lat,
-                        lon: selectedApt.lon
-                    });
-                    
-                    // 첨부 완료 후 상태 초기화를 위한 타이머
-                    setTimeout(() => {
-                        setNewApartmentAttachment(null);
-                    }, 100);
-                }
-            }}
-            onWriteMemo={() => setShowMemoModal(true)}
-            onOpenMyImjang={() => setShowMyImjang(true)}
+                selectedApt={selectedApt}
+                point={point}
+                onMore={() => {
+                    if (selectedApt) {
+                        console.log("🔍 자세히보기 클릭:", selectedApt);
+                        alert(`${selectedApt.apt_nm}의 상세 정보를 표시할 예정입니다.`);
+                    }
+                }}
+                onExpandChange={setIsCardExpanded}
+                onPOIHover={setHoveredPOI}
+                onFavoriteToggle={handleFavoriteToggle}
+                isFavorited={selectedApt ? favorites.has(selectedApt.id) : false}
+                onOpenChatbot={() => {
+                    if (selectedApt) {
+                        // 새로운 첨부 방식: ChatbotSidebar에 아파트 정보 직접 전달
+                        setNewApartmentAttachment({
+                            id: selectedApt.id,
+                            name: selectedApt.apt_nm,
+                            address: selectedApt.jibun_address,
+                            lat: selectedApt.lat,
+                            lon: selectedApt.lon
+                        });
+
+                        console.log('🤖 임장봇 버튼 - 새로운 첨부블록 생성:', {
+                            id: selectedApt.id,
+                            name: selectedApt.apt_nm,
+                            address: selectedApt.jibun_address,
+                            lat: selectedApt.lat,
+                            lon: selectedApt.lon
+                        });
+
+                        // 첨부 완료 후 상태 초기화를 위한 타이머
+                        setTimeout(() => {
+                            setNewApartmentAttachment(null);
+                        }, 100);
+                    }
+                }}
+                onWriteMemo={() => setShowMemoModal(true)}
+                onOpenMyImjang={() => setShowMyImjang(true)}
+                onFloorplanView={(preset) => {
+                    console.log('📐 평면도 보기 요청:', preset);
+
+                    if (preset.floorplan_image_url) {
+                        setSelectedFloorplan({
+                            imageUrl: preset.floorplan_image_url,
+                            aptName: preset.apt_nm,
+                            dong: preset.dong,
+                            ho: preset.ho,
+                            area: preset.exclu_use_ar ? `${preset.exclu_use_ar}㎡` : ''
+                        });
+                        setShowFloorplanModal(true);
+                    } else {
+                        alert('이 프리셋에는 평면도가 등록되지 않았습니다.');
+                    }
+                }}
             />
 
 
-            {/* 3D 메인 모드일 때 우상단에 2D 미니맵 표시 (3D 팝업과 완전히 동일한 UI) */}
-            {mapViewMode === '3D' && showMiniMap && (
-                <div className="fixed top-20 right-12 z-[200] bg-white border shadow-lg rounded-lg w-80 h-60">
-                    {/* 3D 팝업과 동일한 버튼 구조 */}
-                    <div className="absolute top-2 right-2 flex gap-2 z-10">
-                        {/* 아파트 단지명 표시 (3D 팝업과 동일) */}
-                        {selectedApt && (
-                            <div className="bg-blue-500/90 text-white rounded shadow-sm px-2 py-1 text-xs max-w-48">
-                                🏠 <span className="font-medium">{selectedApt.apt_nm}</span>
-                            </div>
-                        )}
-
-                        {/* X 닫기 버튼 (3D 팝업과 동일한 스타일) */}
-                        <button
-                            onClick={() => setShowMiniMap(false)}
-                            className="bg-gray-500/90 hover:bg-gray-600 text-white rounded shadow-sm transition-all w-6 h-6 flex items-center justify-center text-xs"
-                            title="닫기"
-                        >
-                            ✕
-                        </button>
-
-                        {/* 전환 버튼 (3D 팝업과 동일한 스타일) */}
-                        <button
-                            onClick={() => {
-                                setMapViewMode('2D');
-                                setShowMiniMap(false);
-                                setShow3D(true);
-                            }}
-                            className="bg-white/90 hover:bg-white border border-gray-300 text-gray-700 rounded shadow-sm transition-all px-3 py-1 text-xs"
-                            title="2D 모드로 전환"
-                        >
-                            전환
-                        </button>
-                    </div>
-
-                    {/* 2D 지도 컨테이너 */}
-                    <MapContainer
-                        onMapClick={(lat, lon) => setPoint({ lat, lng: lon })} // 미니맵에서도 클릭 가능
-                        onAptSelected={(apt) => {
-                            setSelectedApt(apt);
-                            setPoint({ lat: apt.lat, lng: apt.lon });
-                        }}
-                        selectedApt={
-                            selectedApt ? { lat: selectedApt.lat, lon: selectedApt.lon } : null
-                        }
-                        isCardExpanded={false}
-                        cardWidth={0}
-                        tempMarker={hoveredPOI}
-                        showFavoritePins={showFavoritePins}
-                        isMiniMap={true}
-                    />
-                </div>
-            )}
+            {/* 미니맵 팝업 렌더링 */}
+            {miniMapPopup.renderPopup({
+                mapViewMode,
+                selectedApt,
+                showFavoritePins,
+                hoveredPOI,
+                cameraFrustum,
+                showCameraFrustum,
+                onMapClick: (lat, lng) => setPoint({ lat, lng }),
+                onAptSelected: (apt) => {
+                    setSelectedApt(apt);
+                    setPoint({ lat: apt.lat, lng: apt.lon });
+                },
+                onToggleMapView: () => {
+                    setMapViewMode('2D');
+                    miniMapPopup.hide();
+                    setShow3D(true);
+                },
+                onToggleCameraFrustum: () => setShowCameraFrustum(!showCameraFrustum)
+            })}
 
 
             {/* 메모 작성/수정 모달 */}
@@ -500,21 +509,28 @@ export default function Home() {
 
             {/* 온보딩 모달 */}
             <UserOnboardingModal
-                isOpen={user !== null && needsOnboarding}
-                onComplete={markOnboardingComplete}
-                onSkip={markOnboardingComplete}
+                isOpen={(user !== null && needsOnboarding) || showOnboardingFromProfile}
+                onComplete={() => {
+                    markOnboardingComplete();
+                    setShowOnboardingFromProfile(false);
+                }}
+                onSkip={() => {
+                    markOnboardingComplete();
+                    setShowOnboardingFromProfile(false);
+                }}
             />
 
             {/* 프로필 수정 모달 */}
             <UserProfileModal
                 isOpen={showProfile}
                 onClose={() => setShowProfile(false)}
+                onOpenOnboarding={() => setShowOnboardingFromProfile(true)}
             />
 
 
             {/* 새로운 임장봇 사이드바 - 3D 모드에서도 표시되도록 z-index 증가 */}
             <div className={mapViewMode === '3D' ? 'relative z-[300]' : 'relative'}>
-                <ChatbotSidebar 
+                <ChatbotSidebar
                     contextData={undefined}
                     onMapNavigate={handleMapNavigate}
                     onAptSelected={(apt) => {
@@ -533,6 +549,59 @@ export default function Home() {
                     onInitialMessageUsed={() => setChatbotInitialMessage('')} // 사용된 초기 메시지 초기화
                     onAddAttachment={newApartmentAttachment} // 새로운 아파트 첨부 요청 전달
                 />
+
+                {/* 평면도 모달 */}
+                {showFloorplanModal && selectedFloorplan && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-auto shadow-xl">
+                            {/* 모달 헤더 */}
+                            <div className="flex items-center justify-between p-4 border-b">
+                                <h2 className="text-xl font-bold text-gray-800">
+                                    {selectedFloorplan.aptName} {selectedFloorplan.dong} {selectedFloorplan.ho}
+                                    {selectedFloorplan.area && (
+                                        <span className="text-sm font-normal text-gray-600 ml-2">
+                                            ({selectedFloorplan.area})
+                                        </span>
+                                    )}
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowFloorplanModal(false);
+                                        setSelectedFloorplan(null);
+                                    }}
+                                    className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center"
+                                >
+                                    ×
+                                </button>
+                            </div>
+
+                            {/* 평면도 이미지 */}
+                            <div className="p-4">
+                                <img
+                                    src={`http://localhost:8787${selectedFloorplan.imageUrl}`}
+                                    alt={`${selectedFloorplan.aptName} 평면도`}
+                                    className="w-full h-auto rounded-lg shadow-md"
+                                    style={{ maxHeight: '70vh' }}
+                                    onError={(e) => {
+                                        console.error('평면도 이미지 로딩 실패:', selectedFloorplan.imageUrl);
+                                        // 한 번만 에러 처리하고 더 이상 변경하지 않음
+                                        if (!e.currentTarget.dataset.errorHandled) {
+                                            e.currentTarget.dataset.errorHandled = 'true';
+                                            e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzY2NzM4NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPu2YgOuptOuPhCDsnbTrr7jsp4Drpbwg66Gc65Oc7ZWg7IiYIOyXhuyKteuLiOuLpC48L3RleHQ+PC9zdmc+'; // SVG placeholder
+                                        }
+                                    }}
+                                />
+                            </div>
+
+                            {/* 모달 푸터 */}
+                            <div className="p-4 border-t bg-gray-50 rounded-b-lg">
+                                <p className="text-sm text-gray-600">
+                                    💡 이미지를 클릭하면 확대됩니다. 평면도는 실제와 다를 수 있습니다.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

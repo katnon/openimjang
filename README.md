@@ -1,2363 +1,1191 @@
-# OpenImjang (오픈임장) 🏠
+# 오픈임장 (OpenImjang) 🏠
 
-**인턴 역량 평가 프로젝트: AI 기반 부동산 챗봇 플랫폼**
+**온라인 임장 플랫폼** - AI 기반 실시간 부동산 분석 및 공간정보 시각화 서비스
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.1-61dafb)](https://reactjs.org/)
-[![Bun](https://img.shields.io/badge/Bun-1.0-black)](https://bun.sh/)
+[![Hono](https://img.shields.io/badge/Hono-4.4-orange)](https://hono.dev/)
+[![Bun](https://img.shields.io/badge/Bun-1.2-black)](https://bun.sh/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-green)](https://openai.com/)
 [![PostGIS](https://img.shields.io/badge/PostGIS-15-blue)](https://postgis.net/)
+[![Firebase](https://img.shields.io/badge/Firebase-12.2-yellow)](https://firebase.google.com/)
 
 ## 🎯 프로젝트 개요
 
-**부동산 AI 챗봇 시스템 개발 프로젝트입니다. 기존 Function Calling 기반 복잡한 시스템에서 Simple LLM 기반 시스템으로 전환하여 한글 인코딩 문제 해결과 성능 최적화를 진행했습니다.**
+오픈임장은 부동산 투자자와 실수요자를 위한 AI 기반 온라인 임장 플랫폼입니다. 실시간 부동산 데이터 분석, 2D/3D 공간 시각화, 그리고 지능형 챗봇을 통해 효율적인 부동산 의사결정을 지원합니다.
 
-### 📊 현재까지 구현 완료된 사항
-- **4개 핵심 모듈** 구현 (SimpleLLMProcessor, SafeBinaryJsonParser, WebSearchService, simpleAI.ts)
-- **한글 인코딩 문제** 해결 (6가지 인코딩 전략 구현)
-- **웹 검색 연동** 구현 (내부 데이터 부족 시 자동 연동)
-- **Few-shot 프롬프팅** 구현 (부동산 도메인 지식 학습)
-- **REST API 엔드포인트** 구현 (`/api/ai/simple-chat`)
+### ✨ 핵심 기능
 
-## 🛠️ 핵심 기술적 구현 능력
+- 🗺️ **2D/3D 지도 시각화** - Kakao Maps 2D + MapPrime3D/Cesium 3D 뷰어
+- 🤖 **AI 챗봇 상담** - GPT-4o-mini 기반 멀티모달 부동산 상담
+- 📊 **실시간 데이터 분석** - 170만+ 실거래가 데이터 기반 시장 분석
+- 📝 **임장 메모 시스템** - 현장 방문 기록 및 사진 관리
+- 🎯 **개인화 추천** - 사용자 프로필 기반 맞춤형 아파트 추천
+- 🔍 **공간 검색** - PostGIS 기반 지리적 범위 검색 및 필터링
 
-### 🧠 **Few-shot 학습 기반 부동산 전문 AI**
-```typescript
-// 도메인 지식을 코드로 구현
-"잠실 래미안 84형 매매가" → {
-  region: "잠실",
-  buildingName: "래미안", 
-  size: "84㎡",
-  transactionType: "매매"
-}
-```
+## 🏗️ 아키텍처
 
-### 🔧 **실제 문제 해결 사례들**
-
-#### 1. 한글 인코딩 문제 해결
-```
-문제: Windows curl에서 "잠실 래미안" → "������ ����Ʈ..." 깨짐
-해결: 6가지 인코딩 전략(UTF-8, EUC-KR, CP949, ISO-8859-1...) 구현
-결과: 99.9% 정확도 달성
-```
-
-#### 2. 하이브리드 데이터 소싱
-```typescript
-// 지능적 웹검색 연동
-if (내부데이터.length === 0 || 의도분석 === 'general') {
-  웹검색실행() // 자동 fallback
-}
-```
-
-#### 3. LLM 비용 최적화
-```
-기존: GPT-4 (토큰당 높은 비용)
-개선: GPT-4o-mini + Few-shot 프롬프팅
-결과: 90% 비용 절감, 성능 유지
-```
-
-## 🏗️ 시스템 아키텍처
-
-### 🌐 전체 시스템 개요
-
-```mermaid
-graph TB
-    subgraph "🎨 Frontend Layer (React SPA)"
-        A["React 19 SPA<br/>Vite + TypeScript"] --> B["Kakao Maps 2D<br/>지도 시각화"]
-        A --> C["Cesium 3D Viewer<br/>3차원 공간 분석"]
-        A --> D["Firebase Auth<br/>사용자 인증"]
-        A --> E["AI 챗봇 UI<br/>임장 도우미"]
-    end
-    
-    subgraph "🔒 Middleware Layer"
-        F["Rate Limiter<br/>요청 제한"] --> F1["🔥 UTF-8 Encoder<br/>바이너리 레벨 인코딩 처리"]
-        F1 --> G["Cache System<br/>응답 캐싱"]
-        G --> H["Logger<br/>구조화 로깅"] --> I["Metrics<br/>성능 수집"]
-    end
-    
-    subgraph "Backend Layer (Hono BFF)"
-        J["🧠 LLM Lifecycle Router<br/>권한 강화 + 자동 해석"] --> F
-        K["REST API Router<br/>부동산 검색/분석"] --> F  
-        L["Swagger Router<br/>API 문서화"] --> F
-        M["Monitoring Router<br/>시스템 모니터링"] --> F
-        
-        J --> N["OpenAI GPT-4o-mini<br/>Function Calling"]
-        K --> O["Kysely ORM<br/>타입 안전 SQL"]
-        J --> P["Repository Pattern<br/>데이터 추상화"]
-        J --> J1["🔥 Session Slots<br/>메모리 관리 + @mention"]
-    end
-    
-    subgraph "🗄️ Data Layer"
-        Q["PostgreSQL + PostGIS<br/>공간 데이터베이스"] --> R["부동산 실거래<br/>매매/전월세 데이터"]
-        Q --> S["건물 정보<br/>건축물대장 데이터"]
-        Q --> T["지적 정보<br/>연속지적도/용도지역"]
-        Q --> Q1["🚀 pgvector Extension<br/>벡터 임베딩 저장"]
-        Q1 --> Q2["ai.embeddings 테이블<br/>스키마 문서 벡터화"]
-        Q2 --> Q3["코사인 유사도 검색<br/>RAG 시스템"]
-        
-        U["Firebase Firestore<br/>NoSQL 문서 DB"] --> V["사용자 프로필<br/>온보딩 데이터"]
-        U --> W["임장 메모<br/>현장 방문 기록"]
-        U --> X["즐겨찾기<br/>관심 아파트"]
-    end
-    
-    subgraph "🌍 External APIs"
-        Y["국토부 RTMS API<br/>실거래가 수집"] --> P
-        Z["VWorld API<br/>지리정보 서비스"] --> P
-        AA["카카오 Maps API<br/>지도/장소 검색"] --> A
-        AA1["🔥 카카오 Local API<br/>POI 검색 (지하철/마트/병원)"] --> J
-        BB["건축물대장 API<br/>건물 상세정보"] --> P
-        CC["공공데이터포털<br/>법정동 코드"] --> P
-    end
-    
-    subgraph "📋 Documentation & Monitoring"
-        DD["Swagger UI<br/>인터랙티브 문서"] --> L
-        EE["OpenAPI 3.0 Spec<br/>자동 생성 스키마"] --> DD
-        FF["Metrics Dashboard<br/>성능 모니터링"] --> M
-        GG["Health Check<br/>시스템 상태"] --> M
-    end
-    
-    A <--> J
-    A <--> K
-    O <--> Q
-    P <--> U
-    
-    style A fill:#61dafb,color:#000
-    style J fill:#10a37f,color:#fff
-    style Q fill:#336791,color:#fff
-    style U fill:#ff6f00,color:#fff
-    style F fill:#e74c3c,color:#fff
-    style DD fill:#85c1e5,color:#000
-```
-
-### 🔥 스마트 아파트 검색 및 다중위치 처리 (v2.3)
-
-**Real-time Web Search + Multi-location Resolution System**
-
-공통 아파트명(현대, 삼성, 한양 등)에 대한 지능형 다단계 처리 시스템이 추가되었습니다:
-
-#### 🌟 핵심 혁신 기능
-- **🔍 실시간 구글 웹검색**: 하드코딩 없는 동적 아파트 위치 정보 수집
-- **🎯 다중위치 자동 감지**: "현대아파트" 입력 시 강남구, 송파구, 마포구 등 다중 위치 식별
-- **💬 대화형 명확화**: "어느 지역의 현대아파트를 말씀하시는 걸까요?" 자동 질문 생성
-- **📍 지번주소 추출**: 웹검색 결과에서 DB 연동 가능한 정확한 주소 정보 획득
-- **🔄 Zero Fallback**: 모든 검색이 실제 DB 데이터와 100% 연동
-
-#### 🚀 Multi-stage Resolution Workflow
-```
-사용자: "현대아파트 실거래가 보여줘"
-     ↓
-🔍 Google Search: "현대아파트 서울 위치"
-     ↓
-🎯 Multiple Locations Detected: [강남구, 송파구, 마포구, ...]
-     ↓
-💬 Clarification: "어느 지역의 현대아파트를 말씀하시는 걸까요?"
-     ↓
-사용자: "강남구"
-     ↓
-🔍 Refined Search: "강남구 현대아파트 지번주소"
-     ↓
-📍 Extract jibun_address: "서울특별시 강남구 역삼동 123-45"
-     ↓
-🏠 DB Integration: apt_deal_all 테이블 연동으로 실거래가 제공
-```
-
-### 🤖 AI 3.0 대화 인텔리전스 시스템 (v3.0) **2024-09-14 대형 업그레이드**
-
-<details>
-<summary><strong>📋 목차 (6개 핀심 매니저 + 통합 시스템)</strong></summary>
-
-1. [ConversationContextTracker](#conversationcontexttracker)
-2. [DialogueStrategyEngine](#dialoguestrategyengine) 
-3. [NaturalFlowManager](#naturalflowmanager)
-4. [UserJourneyOptimizer](#userjourneyoptimizer)
-5. [MultiTurnConversationManager](#multiturnconversationmanager)
-6. [EmotionalContextAnalyzer](#emotionalcontextanalyzer)
-7. [AI 3.0 이론적 배경](#ai-30-이론적-배경)
-8. [레거시 시스템 마이그레이션](#레거시-시스템-마이그레이션)
-
-</details>
-
-OpenImjang AI가 **AI 3.0 대화 인텔리전스 시스템**으로 혁신적 업그레이드되었습니다. 기존 기계적 명확화 시스템에서 **자연스러운 대화, 공감적 인터랙션, 개인화 전략**을 제공하는 지능형 대화 시스템으로 진화했습니다:
-
-#### 🔍 **핵심 혁신: LLM 권한 강화**
-- **명확화 전 자동 해석**: "은마아파트" 입력 시 LLM이 자동으로 다중 검색 전략 시도
-- **지능적 검색 전략**: Direct DB → Vector Search → Web Search 순서로 최적 결과 선택
-- **아파트명 정규화**: "은마" ↔ "은마아파트" 자동 변형 처리
-- **실시간 메타데이터**: LLM 의사결정 과정과 검색 전략을 추적 가능
-
-#### 🏗️ **시스템 구조**
-```mermaid
-graph TB
-    subgraph "🧠 LLM Lifecycle System"
-        A["사용자 입력"] --> B["ConversationSession<br/>세션 상태 관리"]
-        B --> C["LLMMaster<br/>🔥 권한 강화된 오케스트레이터"]
-        C --> D["의도 분석<br/>+ 자동 해석 시도"]
-        D --> E["SmartApartmentResolver<br/>다중 소스 검색"]
-        E --> F["지능적 응답 생성<br/>+ 품질 검증"]
-    end
-    
-    subgraph "🔍 Enhanced Resolution Pipeline"
-        G["LLM 정규화<br/>아파트명 분석"] --> H["검색 전략 결정<br/>direct/fuzzy/comprehensive"]
-        H --> I["다중 소스 실행<br/>DB→Vector→Web"]
-        I --> J["LLM 결과 평가<br/>최적 매칭 선택"]
-    end
-```
-
-#### 📊 **성능 지표**
-```typescript
-// API 응답에 포함되는 LLM 권한 강화 메타데이터
-llmLifecycle: {
-  llmGuidance: true,                    // LLM 주도 의사결정 실행됨
-  multiSourceSearch: true,              // 다중 소스 검색 수행됨
-  searchStrategy: "comprehensive",      // 사용된 검색 전략
-  apartmentResolution: {
-    normalizedName: "은마아파트",
-    llmConfidence: 0.92,
-    alternativesConsidered: 5
-  },
-  processingSteps: [...]                // 단계별 실행 이력
-}
-```
-
-## 🚀 구현한 핵심 모듈들
-
-### 1. **SimpleLLMProcessor** (600줄)
-**LLM 라이프사이클 전체를 관리하는 핵심 AI 엔진**
-
-```typescript
-// 핵심 구현 기능
-class SimpleLLMProcessor {
-  // Few-shot 도메인 지식 기반 의도 분석
-  private async analyzeUserIntent(message: string): Promise<IntentAnalysis>
-  
-  // PostgreSQL 실거래가 데이터 조회
-  private async collectDatabaseData(intent: IntentAnalysis): Promise<DatabaseResult>
-  
-  // 웹 검색 자동 연동
-  private shouldUseWebSearch(intent: IntentAnalysis, data: any): boolean
-  
-  // 유연한 응답 생성
-  private async generateFlexibleResponse(context: any): Promise<string>
-}
-```
-
-**해결한 핵심 문제**: 
-- "정보가 없습니다" → "혹시 가장 큰 타입을 찾으시는 건가요?" 유연한 대안 제시
-- 84형 = 84㎡ 현대적 부동산 용어 자동 인식
-
-### 2. **SafeBinaryJsonParser** (220줄)
-**한글 인코딩 문제를 근본적으로 해결하는 바이너리 파서**
-
-```typescript
-// 6가지 인코딩 전략 구현
-const encodingStrategies = [
-  { name: 'UTF-8', decoder: () => new TextDecoder('utf-8', { fatal: true }) },
-  { name: 'EUC-KR', decoder: () => new TextDecoder('euc-kr') },
-  { name: 'CP949', decoder: () => new TextDecoder('cp949') },
-  { name: 'ISO-8859-1', decoder: () => new TextDecoder('iso-8859-1') },
-  // Lenient 모드 + fallback 전략
-];
-
-// 실제 해결 결과
-"������ ����Ʈ..." (깨진 텍스트) → "잠실 래미안" (완벽 복구)
-```
-
-**기술적 도전**: Windows curl 환경에서 발생하는 한글 깨짐을 완전 해결
-
-### 3. **WebSearchService** (160줄)
-**내부 데이터 부족 시 자동으로 웹 검색하는 하이브리드 시스템**
-
-```typescript
-// 지능적 웹 검색 실행 로직
-private shouldUseWebSearch(intentAnalysis: any, data: any, userMessage: string): boolean {
-  // 1. general 케이스 (지역 추천 등)
-  if (intentAnalysis.category === 'general') return true;
-  
-  // 2. 내부 데이터 부족
-  if (data.deals?.length === 0) return true;
-  
-  // 3. 사용자 명시적 요청
-  if (userMessage.includes('웹검색') || userMessage.includes('검색')) return true;
-  
-  return false;
-}
-```
-
-**실제 활용 사례**: "목동에서 어떤 아파트가 좋을까?" → 자동 웹 검색으로 추천 정보 제공
-
-### 4. **simpleAI.ts** (180줄)
-**REST API 엔드포인트와 세션 관리**
-
-```typescript
-// 핵심 API 구조
-POST /api/ai/simple-chat {
-  message: "잠실 래미안 84형 매매가",
-  sessionId?: "optional"
-}
-
-// 응답 구조
-{
-  success: true,
-  reply: "잠실 래미안 84㎡ 타입의 최근 매매가는...",
-  sessionId: "simple_1726392850123_abc123def",
-  dataUsed: ["실거래가 정보", "웹 검색 정보"],
-  processingTime: 1250
-}
-```
-
-### 📊 **구현 현황 및 특징**
-- **API 응답**: 정상 작동 (`POST /api/ai/simple-chat`)
-- **인코딩 처리**: 6가지 인코딩 전략으로 한글 텍스트 처리
-- **세션 관리**: Map 기반 메모리 저장, 30분 TTL 적용
-- **웹 검색**: 내부 데이터 부족 시 자동 웹 검색 연동
-- **DB 연동**: PostgreSQL 170만건 실거래가 데이터 쿼리
-
-## 💾 데이터베이스 최적화 및 쿼리 설계
-
-### **PostgreSQL + PostGIS 대용량 데이터 처리**
-```sql
--- 170만건 실거래가 데이터 최적화 쿼리 설계
-SELECT apt_nm, exclu_use_ar, deal_amount, deal_year, deal_month
-FROM oi.apt_deal_all 
-WHERE jibun_address ILIKE '%잠실%'
-  AND exclu_use_ar BETWEEN 83 AND 85  -- 84㎡ 허용 오차 ±1㎡
-  AND deal_year >= 2023
-  AND deal_amount IS NOT NULL
-ORDER BY deal_year DESC, deal_month DESC
-LIMIT 50;
-```
-
-### **기술적 구현 능력**
-
-#### 1. **복잡한 조건부 쿼리 생성**
-```typescript
-// 동적 SQL 생성 (SQL Injection 방지)
-const buildDynamicQuery = (filters: SearchFilters) => {
-  let query = sql`SELECT * FROM oi.apt_deal_all WHERE 1=1`;
-  
-  if (filters.region) {
-    query = sql`${query} AND jibun_address ILIKE ${`%${filters.region}%`}`;
-  }
-  
-  if (filters.size) {
-    const tolerance = 1; // ±1㎡ 허용
-    query = sql`${query} AND exclu_use_ar BETWEEN ${filters.size - tolerance} AND ${filters.size + tolerance}`;
-  }
-  
-  return query;
-};
-```
-
-#### 2. **스키마 설계 및 인덱스 최적화**
-```sql
--- 성능 최적화를 위한 인덱스 설계
-CREATE INDEX idx_apt_deal_region_size ON oi.apt_deal_all 
-USING btree (jibun_address, exclu_use_ar, deal_year);
-
-CREATE INDEX idx_apt_deal_amount ON oi.apt_deal_all 
-USING btree (deal_amount) WHERE deal_amount IS NOT NULL;
-```
-
-#### 3. **타입 안전 ORM 활용**
-```typescript
-// Kysely ORM으로 타입 안전 쿼리
-interface AptDealAll {
-  id: number;
-  apt_nm: string;
-  jibun_address: string;
-  exclu_use_ar: number;
-  deal_amount: number | null;
-  deal_year: number;
-}
-
-const query = db
-  .selectFrom('oi.apt_deal_all')
-  .select(['apt_nm', 'exclu_use_ar', 'deal_amount'])
-  .where('jibun_address', 'ilike', '%잠실%')
-  .where('deal_year', '>=', 2023)
-  .orderBy('deal_year', 'desc');
-```
-
-## 🛠️ 기술 스택 및 아키텍처 설계
-
-### **Backend Architecture**
-```typescript
-// 모노레포 + BFF 패턴 구현
-apps/
-├── web/          // React 19 + Vite + TypeScript SPA
-├── bff/          // Hono + Bun 백엔드 API 서버
-└── shared/       // 공유 TypeScript 타입 정의
-
-// 핵심 기술 스택
-- Runtime: Bun (Node.js 대비 3-4배 성능)
-- Framework: Hono (Express 대비 경량화)
-- ORM: Kysely (타입 안전 SQL 빌더)
-- AI: OpenAI GPT-4o-mini
-- Database: PostgreSQL 15 + PostGIS
-```
-
-### **설계 패턴 적용**
-1. **Repository Pattern**: 데이터 추상화
-2. **Factory Pattern**: LLM 프로세서 생성
-3. **Strategy Pattern**: 인코딩 전략 선택
-4. **Observer Pattern**: 세션 상태 관리
-
-## 🚀 빠른 시작
-
-### 개발 환경 요구사항
-```bash
-Node.js 22.17.1+
-Bun 1.2.20+
-PostgreSQL 15+ (PostGIS 확장)
-```
-
-### 실행 방법
-```bash
-# 의존성 설치
-bun install
-
-# 백엔드 서버 실행 (포트 8787)
-cd apps/bff
-bun run dev
-
-# 프론트엔드 서버 실행 (포트 5173)
-cd apps/web
-npm run dev
-```
-
-### 환경 변수 설정
-```bash
-# apps/bff/.env
-DATABASE_URL=postgres://postgres:1212@localhost:5432/openimjang
-OPENAI_API_KEY=your_openai_api_key
-```
-
-### API 테스트
-```bash
-curl -X POST http://localhost:8787/api/ai/simple-chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "잠실 래미안 84형 매매가 알려줘"}'
-```
-
-## 📁 주요 파일 구조
+### 시스템 구조
 
 ```
-apps/bff/src/
-├── services/
-│   ├── simpleLLMProcessor.ts      # 메인 AI 엔진 (600줄)
-│   └── conversationSession.ts     # 세션 관리
-├── utils/
-│   ├── safeBinaryJsonParser.ts    # 인코딩 처리 (220줄)
-│   └── webSearchService.ts        # 웹 검색 연동 (160줄)
-├── routes/
-│   └── simpleAI.ts               # REST API (180줄)
-└── index.ts                      # 서버 진입점
+┌─────────────────────────────────────────────────────────────┐
+│                    🌐 Frontend Layer                        │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+│  │   React 19 SPA  │ │  Kakao Maps 2D  │ │ MapPrime3D/     │ │
+│  │   + Vite        │ │  시각화         │ │ Cesium 3D       │ │
+│  │   + TypeScript  │ │                 │ │ 뷰어            │ │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   🔒 Middleware Layer                       │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+│  │  Rate Limiter   │ │   CORS Policy   │ │    Logging      │ │
+│  │   요청 제한     │ │   보안 정책     │ │   구조화 로깅   │ │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│              🚀 Backend Layer (Hono BFF)                   │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+│  │  AI Chat        │ │  Search API     │ │  Auth/Profile   │ │
+│  │  Router         │ │  Router         │ │  Router         │ │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+│                                                              │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+│  │ Simple LLM      │ │ Apartment       │ │ Memo            │ │
+│  │ Processor       │ │ Resolver        │ │ Service         │ │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    🗄️ Data Layer                            │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+│  │ PostgreSQL +    │ │  Firebase       │ │   OpenAI        │ │
+│  │ PostGIS         │ │  Firestore      │ │   API           │ │
+│  │ 공간 데이터베이스│ │  인증/메모      │ │   GPT-4o-mini   │ │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## 🔍 구현 중인 기능
+### 기술 스택
 
-- [ ] 프론트엔드 UI 연동
-- [ ] 실시간 스트리밍 응답
-- [ ] 사용자 인증 시스템
-- [ ] 대화 히스토리 영속화
-- [ ] 성능 모니터링 대시보드
+**Frontend**
+- **Framework**: React 19 with Concurrent Features
+- **Build Tool**: Vite 7.1
+- **Language**: TypeScript 5.8
+- **Styling**: TailwindCSS 3.4
+- **Maps**: Kakao Maps JS SDK, MapPrime3D/Cesium
+- **Routing**: React Router 7.8
 
-### 🎯 구조화된 AI 시스템 아키텍처 (v2.2)
+**Backend**
+- **Runtime**: Bun 1.2 (3-4x faster than Node.js)
+- **Framework**: Hono 4.4 (ultrafast web framework)
+- **Language**: TypeScript 5.8
+- **ORM**: Kysely (type-safe SQL query builder)
+- **Documentation**: Swagger/OpenAPI
 
-<details>
-<summary><strong>📁 레거시 시스템 - 벡터DB 통합 아키텍처 (접기/펼치기)</strong></summary>
+**Database & Storage**
+- **Primary DB**: PostgreSQL 15 + PostGIS (SRID 4326)
+- **NoSQL**: Firebase Firestore (사용자 데이터, 메모)
+- **Auth**: Firebase Authentication
+- **Vector Store**: pgvector extension (AI embeddings)
 
-OpenImjang AI 시스템은 벡터DB 통합으로 "척하면 척" 대화가 가능한 구조화된 5단계 아키텍처로 진화했습니다:
-
-```mermaid
-graph TB
-    subgraph "🚀 Phase 0: VectorDB RAG System"
-        V1[사용자 질문] --> V2["VectorService<br/>text-embedding-3-small"]
-        V2 --> V3["pgvector Search<br/>코사인 유사도 검색"]
-        V3 --> V4["Schema Context<br/>관련 DB 스키마 정보 수집"]
-        V4 --> V5["RAG Context<br/>LLM 프롬프트 통합"]
-    end
-
-    subgraph "🧠 Phase 1: Memory System (Slots)"
-        A1[사용자 입력] --> A2["Intent 분석<br/>category + subcategory"]
-        A2 --> A3["Slot 추출<br/>apartmentName, dealType, area, period"]
-        A3 --> A4["ConversationSlots<br/>세션 메모리 관리"]
-        A4 --> A5["UserProfile<br/>온보딩 기반 개인화"]
-    end
-
-    subgraph "📋 Phase 2: Planning System (Planner)"
-        B1["PlanContext 생성<br/>slots + intent + profile"] --> B2["ActionPlanner<br/>실행 전략 수립"]
-        B2 --> B3["Dependency Graph<br/>위상정렬 최적화"]
-        B3 --> B4["ExecutionPlan<br/>순서화된 액션 리스트"]
-        B4 --> B5["ActionExecutor<br/>핸들러 기반 실행"]
-    end
-
-    subgraph "❓ Phase 3: Clarification System (Clarify Policy)"
-        C1[누락/애매 정보 감지] --> C2["ClarifyPolicy<br/>질문 전략 엔진"]
-        C2 --> C3["Template System<br/>상황별 질문 생성"]
-        C3 --> C4["ApartmentMatcher<br/>부분일치 후보 검색"]
-        C4 --> C5["ResponseHandler<br/>사용자 응답 처리"]
-    end
-
-    subgraph "🔍 Phase 4: Quality Assurance (Critic Checklist)"
-        D1[ActionResult 검증] --> D2["CriticRules<br/>5가지 품질 규칙"]
-        D2 --> D3["결과없음/데이터부족<br/>이상치/모순/컨텍스트"]
-        D3 --> D4["RetryStrategy<br/>기간확장/조건완화"]
-        D4 --> D5["QualityAssurance<br/>신뢰도 기반 결론"]
-    end
-
-    subgraph "🤖 Phase 5: LLM Response Generation"
-        L1["Enhanced Prompt<br/>벡터DB 컨텍스트 + 실행결과"] --> L2["OpenAI GPT-4o-mini<br/>할루시네이션 방지 프롬프트"]
-        L2 --> L3["Validated Response<br/>검증된 답변"]
-    end
-
-    V1 --> A1
-    V5 --> L1
-    A4 --> B1
-    B5 --> C1
-    C5 --> B1
-    B5 --> D1
-    D4 --> B1
-    D5 --> L1
-
-    style V1 fill:#e1f5fe,color:#000
-    style V2 fill:#e1f5fe,color:#000
-    style V3 fill:#e1f5fe,color:#000
-    style V4 fill:#e1f5fe,color:#000
-    style V5 fill:#e1f5fe,color:#000
-    style A1 fill:#e3f2fd,color:#000
-    style B1 fill:#f3e5f5,color:#000  
-    style C1 fill:#fff3e0,color:#000
-    style D1 fill:#e8f5e8,color:#000
-    style L1 fill:#fce4ec,color:#000
-    style L2 fill:#fce4ec,color:#000
-    style L3 fill:#fce4ec,color:#000
-```
-
-### 🚀 벡터DB 통합 플로우 상세
-
-```mermaid
-sequenceDiagram
-    participant U as 사용자
-    participant C as chatBot.ts
-    participant V as vectorService
-    participant P as Planner
-    participant E as Executor
-    participant CR as Critic
-    participant L as LLM
-
-    U->>C: "아파트 거래 데이터 구조가 어떻게 되어있어?"
-    
-    Note over C,V: Phase 0: VectorDB RAG
-    C->>V: 벡터 검색 요청
-    V->>V: text-embedding-3-small 임베딩
-    V->>V: pgvector 코사인 유사도 검색
-    V-->>C: 관련 스키마 정보 (topK=5)
-    
-    Note over C,P: Phase 1-2: Memory & Planning
-    C->>P: 슬롯 추출 + 액션 계획
-    P->>E: 실행 계획 전달
-    
-    Note over E,CR: Phase 3-4: Execution & Quality
-    E->>E: 실제 함수 실행
-    E->>CR: 실행 결과 검증
-    CR-->>E: 품질 검증 결과
-    
-    Note over C,L: Phase 5: Enhanced Response
-    C->>L: 벡터DB 컨텍스트 + 실행결과
-    L-->>C: 검증된 답변
-    C-->>U: 정확한 DB 구조 정보 제공
-```
-
-**기존 문제점:**
-- ❌ 매번 사용자가 모든 정보를 다시 입력해야 함
-- ❌ AI가 이전 대화 맥락을 기억하지 못함  
-- ❌ 부정확한 검색 결과에 대한 검증 부족
-- ❌ 애매한 질문에 대한 체계적 대응 부족
-- ❌ UTF-8 인코딩 문제로 한글 @mention 인식 실패
-
-**v2.0 개선사항:**
-- ✅ **세션 기반 메모리**: 한 번 입력한 정보는 계속 기억
-- ✅ **지능적 질문 생성**: 부족한 정보만 선별적으로 질문
-- ✅ **품질 검증 시스템**: 결과의 신뢰성을 자동 검증
-- ✅ **재시도 메커니즘**: 실패 시 조건을 완화하여 자동 재검색
-
-**v2.1 최신 개선사항 (2024-12):**
-- 🔥 **UTF-8 인코딩 문제 근본 해결**: 바이너리 레벨 다중 인코딩 감지로 한글 깨짐 현상 완전 해결
-- 🔥 **@mention POI 검색 완전 구현**: "@마곡엠밸리 주변정보" → 실제 카카오 API 데이터 조회 및 응답
-- 🔥 **데이터베이스 자동 좌표 조회**: 아파트명만으로도 PostgreSQL에서 자동 좌표 획득
-- 🔥 **실시간 데이터 기반 응답**: Generic 응답에서 "지하철역 5곳, 대형마트 7곳" 등 구체적 데이터 응답으로 전환
-
-**v2.2 벡터DB 통합 (2024-12):**
-- 🚀 **RAG 기반 컨텍스트 강화**: 사용자 질문에 대한 실시간 벡터 검색으로 관련 DB 스키마 정보 자동 수집
-- 🚀 **할루시네이션 완전 방지**: 벡터DB 검증된 정보만 사용하여 추측성 답변 완전 차단
-- 🚀 **전문성 강화**: 부동산 도메인 지식과 DB 구조 정보를 활용한 정확한 답변 제공
-- 🚀 **Critic 시스템 통합**: 기존 품질 검증 시스템과 벡터DB 검색 결과를 결합한 다층 검증
-
-## 📁 AI 시스템 파일 구조 (v2.3 업데이트)
-
-```
-apps/bff/src/ai/
-├── 🧠 slots/                         # Phase 1: 메모리 시스템
-│   ├── types.ts                     # ConversationSlots, UserProfile 타입 정의
-│   ├── slotExtractor.ts             # 사용자 입력에서 슬롯 추출
-│   ├── slotValidator.ts             # 슬롯 유효성 검증
-│   └── sessionManager.ts            # 세션 기반 메모리 관리
-│
-├── 📋 planner/                      # Phase 2: 계획 시스템  
-│   ├── types.ts                     # PlanAction, PlanContext, ExecutionPlan 정의
-│   ├── actionPlanner.ts             # 액션 계획 수립 엔진
-│   ├── executor.ts                  # 🆕 액션 실행기 + 데이터베이스 좌표 자동 조회
-│   ├── bridge.ts                    # 🆕 기존 함수와 플래너 연결 브리지 (POI 검색 등)
-│   └── dependencyResolver.ts        # 의존성 그래프 해결
-│
-├── ❓ clarify/                      # Phase 3: 명확화 시스템
-│   ├── types.ts                     # ClarifyReason, ClarifyContext, ClarifyQuestion
-│   ├── policy.ts                    # 질문 생성 정책 엔진
-│   ├── templates.ts                 # 슬롯별 질문 템플릿
-│   ├── matcher.ts                   # 아파트명 부분일치 검색 (Levenshtein)
-│   └── responseHandler.ts           # 사용자 응답 처리 및 세션 관리
-│
-├── 🔍 critic/                       # Phase 4: 품질 검증 시스템
-│   ├── types.ts                     # CriticResult, CriticRule, CriticContext
-│   ├── checklist.ts                 # 메인 체크리스트 엔진
-│   └── rules.ts                     # 5가지 검증 규칙 (결과없음/부족/이상치/모순/컨텍스트)
-│
-├── 🔤 extractors/                   # 🆕 데이터 추출 시스템 
-│   └── infoExtractor.ts             # @mention 추출 및 아파트명 파싱 (UTF-8 대응)
-│
-├── 🔗 resolvers/                    # 🆕 참조 해결 시스템
-│   └── referenceResolver.ts         # 대화 히스토리 기반 참조 해결
-│
-├── 🔧 types/                        # 🆕 슬롯 시스템 타입
-│   └── slots.ts                     # SessionStorage, ConversationSlots, 세션 관리 타입
-│
-└── 🏠 handlers/                     # 기존 Function Calling 핸들러
-    ├── searchRealEstateDeals.ts     # 부동산 검색 (새 시스템과 브릿지)
-    ├── searchNearbyPOI.ts           # 🔥 POI 검색 (카카오 API 완전 통합)
-    ├── database/
-    │   ├── normalizeApartmentName.ts # 아파트명 정규화 (Clarify와 연동)
-    │   ├── executeQuery.ts          # 🆕 SQL 쿼리 실행 (Kysely 통합)
-    │   └── generateSelectQuery.ts   # 🆕 RAG 기반 SQL 생성 (벡터DB 활용)
-    └── ...기타 20개 함수들
-```
-
-### 🆕 v2.2 추가 컴포넌트
-
-```
-apps/bff/src/services/
-├── vectorService.ts                 # 🚀 pgvector 기반 벡터 검색 서비스
-└── embeddingService.ts              # 🚀 임베딩 파이프라인 관리
-
-apps/bff/src/routes/
-├── embedding.ts                     # 🚀 임베딩 관리 API 엔드포인트
-└── chatBot.ts                       # 🚀 벡터DB 통합 AI 챗봇 엔드포인트
-
-apps/bff/src/middleware/
-└── sessionSlots.ts                   # 🔥 UTF-8 인코딩 해결 + 세션 슬롯 관리 미들웨어
-
-apps/bff/src/services/
-├── 🔥 smartApartmentResolver.ts      # 🆕 v2.3 스마트 아파트 해석 엔진
-│   ├── extractApartmentNames()       # 사용자 입력에서 아파트명 추출
-│   ├── performGoogleSearch()         # 실시간 구글 웹검색
-│   ├── parseApartmentInfoFromGoogle() # HTML 파싱 및 주소 추출
-│   ├── detectMultipleLocations()     # 다중위치 감지 로직 (구현 예정)
-│   └── generateClarificationQuestion() # 명확화 질문 생성 (구현 예정)
-├── apartmentContextManager.ts        # 아파트 컨텍스트 메모리 관리
-└── vectorService.ts                  # 벡터 임베딩 검색
-
-apps/bff/src/lib/
-└── db.ts                            # PostgreSQL 연결 (좌표 자동 조회용)
-```
-
-### 🔗 시스템 통합 포인트
-
-1. **Session Bridge**: `apps/bff/src/routes/aiChat.ts`
-   - 기존 `/api/ai/planner-chat` 엔드포인트 확장
-   - Clarify 모드 세션 관리
-   - 4단계 플로우 오케스트레이션
-
-2. **Database Bridge**: `normalizeApartmentName.ts` ↔ `clarify/matcher.ts`  
-   - 기존 아파트명 검색 로직을 Clarify 시스템이 활용
-   - Fuzzy matching 결과를 정책 엔진으로 전달
-
-3. **Function Bridge**: `executor.ts` 핸들러들
-   - 기존 20개 함수들을 새로운 액션 시스템으로 래핑
-   - Critic 검증 결과에 따른 재시도 로직
-
-4. **🆕 Encoding Bridge**: `sessionSlots.ts` 미들웨어
-   - 바이너리 레벨 UTF-8/EUC-KR/CP949 다중 인코딩 감지
-   - ArrayBuffer → 인코딩 탐지 → JSON 파싱 → 슬롯 추출
-   - "@마곡엠밸리 주변정보" 같은 한글 @mention 완전 지원
-
-5. **🚀 VectorDB Bridge**: `chatBot.ts` ↔ `vectorService.ts`
-   - 사용자 질문에 대한 실시간 벡터 검색
-   - 관련 DB 스키마 정보를 LLM 프롬프트에 자동 통합
-   - RAG 기반 컨텍스트 강화로 할루시네이션 방지
-
-6. **🚀 RAG Integration**: `generateSelectQuery.ts` ↔ `vectorService.ts`
-   - 자연어 질문을 SQL로 변환할 때 벡터 검색 활용
-   - 관련 테이블/컬럼 정보를 자동으로 제공
-   - 정확한 스키마 기반 SQL 생성
-
-### 🚀 벡터DB 통합 상세
-
-**pgvector 아키텍처:**
-```sql
--- PostgreSQL 확장 활성화
-CREATE EXTENSION IF NOT EXISTS vector;
-
--- 벡터 임베딩 저장 테이블
-CREATE TABLE ai.embeddings (
-    id SERIAL PRIMARY KEY,
-    source_path TEXT NOT NULL,
-    schema_name TEXT,
-    table_name TEXT,
-    chunk_id INTEGER NOT NULL,
-    content_text TEXT NOT NULL,
-    token_count INTEGER,
-    embedding VECTOR(1536),  -- OpenAI text-embedding-3-small 차원
-    meta JSONB,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(source_path, chunk_id)
-);
-
--- 벡터 유사도 검색 인덱스
-CREATE INDEX ON ai.embeddings USING ivfflat (embedding vector_cosine_ops);
-```
-
-**벡터DB 검색 플로우:**
-```typescript
-// 1. 사용자 질문 벡터화
-const vectorResults = await vectorService.search(message, { topK: 5 });
-
-// 2. pgvector 코사인 유사도 검색
-const rows = await sql`
-    SELECT id, schema_name, table_name, chunk_id,
-           content_text,
-           1 - (embedding <=> ${vec}::vector) AS score
-    FROM ai.embeddings
-    ORDER BY embedding <=> ${vec}::vector
-    LIMIT ${topK};
-`;
-
-// 3. 관련 스키마 정보 수집
-const ragContext = vectorResults.map(result => 
-  `${result.metadata.schema_name}.${result.metadata.table_name} (유사도: ${result.metadata.score})`
-).join('\n');
-
-// 4. LLM 프롬프트에 통합
-const llmPrompt = `관련 데이터베이스 정보:\n${ragContext}\n\n사용자 질문: ${message}`;
-```
-
-**RAG 검색 결과 예시:**
-```
-질의: "아파트 거래 데이터 구조가 어떻게 되어있어?"
-
-벡터 검색 결과:
-1. oi.apt_deal_trade_raw (유사도: 0.6002)
-   - 아파트 매매 거래 원본 데이터를 저장하는 테이블입니다...
-2. oi.apt_deal_rent_raw (유사도: 0.5697)  
-   - 아파트 전월세 거래 원본 데이터를 저장하는 테이블입니다...
-```
-
-**할루시네이션 방지 메커니즘:**
-- ✅ 벡터 검색으로 검증된 정보만 사용
-- ✅ 실제 DB 스키마 정보 기반 답변
-- ✅ 추측성 답변 완전 차단
-- ✅ Critic 시스템과 다층 검증
-
-### 🔥 UTF-8 인코딩 문제 해결 상세
-
-**기존 문제:**
-```typescript
-// ❌ 기존 방식: 이미 깨진 상태로 파싱됨
-body = await c.req.json(); 
-// 결과: "@마곡엠밸리" → "@�Ｚ �ֺ�����"
-```
-
-**해결 방법:**
-```typescript
-// ✅ 새로운 방식: 바이너리부터 올바르게 처리
-const rawBuffer = await c.req.arrayBuffer();
-const uint8Array = new Uint8Array(rawBuffer);
-
-// 다중 인코딩 시도 (UTF-8, EUC-KR, CP949)
-for (const encoding of ['utf-8', 'euc-kr', 'cp949']) {
-  const decodedText = encoding === 'utf-8' 
-    ? new TextDecoder('utf-8').decode(uint8Array)
-    : iconv.decode(Buffer.from(rawBuffer), encoding);
-    
-  // 검증: � 문자 없음 + 한글 포함
-  if (!decodedText.includes('�') && /[가-힣]/.test(decodedText)) {
-    body = JSON.parse(decodedText);
-    break;
-  }
-}
-```
-
-**결과:**
-- 입력: `"@마곡엠밸리 주변정보"`
-- 서버 수신: `"@마곡엠밸리 주변정보"` (완벽!)
-- 슬롯 추출: `apartmentName: "마곡엠밸리"` ✅
-- POI 검색: `지하철역 5곳, 대형마트 7곳, 병원 15곳, 학교 8곳` ✅
-
-### 🧪 테스트 시스템
-
-새로운 AI 시스템은 체계적인 테스트 스크립트로 검증되었습니다:
-
-```bash
-# Clarify 정책 시스템 테스트 (6개 시나리오)
-cd apps/bff && bun scripts/test-clarify-policy.ts
-
-# Critic 체크리스트 시스템 테스트 (6개 시나리오)  
-cd apps/bff && bun scripts/test-critic-checklist.ts
-```
-
-**테스트 커버리지:**
-- ✅ 아파트명 누락/부분일치/애매함 처리
-- ✅ 거래유형/면적/기간 누락 시 질문 생성
-- ✅ 사용자 프로필 기반 개인화 질문
-- ✅ 결과 없음 감지 및 기간 확장
-- ✅ 데이터 부족 감지 및 조건 완화
-- ✅ 이상치 감지 및 신뢰도 분석
-- ✅ 모순 검증 및 일관성 체크
-- ✅ 재시도 권장사항 및 품질 보증
-
-### 📱 데이터 흐름 아키텍처
-
-```mermaid
-graph LR
-    subgraph "사용자 계층"
-        A[웹 브라우저] --> B["React SPA<br/>포트 5173"]
-    end
-    
-    subgraph "API Gateway 계층"
-        B --> C[Hono BFF Server<br/>포트 8787]
-        C --> D[CORS 미들웨어<br/>도메인 검증]
-        D --> E[Rate Limiter<br/>요청 제한]
-        E --> F[Cache Middleware<br/>응답 캐싱]
-        F --> G[Logger<br/>요청 추적]
-    end
-    
-    subgraph "라우터 계층"
-        G --> H["API AI Tools<br/>함수 호출"]
-        G --> I["API Search<br/>부동산 검색"]
-        G --> J["API Docs<br/>API 문서"]
-        G --> K["API Metrics<br/>모니터링"]
-    end
-    
-    subgraph "비즈니스 로직 계층"
-        H --> L[AI Handler<br/>Function 실행]
-        I --> M[Search Controller<br/>검색 로직]
-        J --> N[OpenAPI Generator<br/>문서 생성]
-        K --> O[Metrics Collector<br/>성능 수집]
-    end
-    
-    subgraph "💾 데이터 접근 계층"
-        L --> P[Repository Pattern<br/>데이터 추상화]
-        M --> Q[Kysely ORM<br/>SQL 빌더]
-        P --> R[외부 API 연동<br/>V-World/카카오]
-        Q --> S[PostGIS Database<br/>공간 데이터]
-    end
-    
-    subgraph "☁️ 외부 서비스"
-        R --> T[정부 API<br/>V-World/공공데이터]
-        R --> U[상용 API<br/>카카오맵/OpenAI]
-        L --> V[Firebase<br/>Auth/Firestore]
-    end
-    
-    style C fill:#000000,color:#fff
-    style H fill:#10a37f,color:#fff
-    style S fill:#336791,color:#fff
-    style V fill:#ff6f00,color:#fff
-```
+**AI & External APIs**
+- **LLM**: OpenAI GPT-4o-mini
+- **Spatial Data**: VWorld WMS API
+- **Search**: Google Custom Search
 
 ## 📂 프로젝트 구조
 
-### 🏗️ 전체 디렉토리 구조
-
 ```
-OpenImjang/ (Root)
-├── 📱 apps/                                    # 애플리케이션 컨테이너
-│   ├── 🚀 bff/                                # Backend for Frontend (Hono + Bun)
-│   │   ├── 📄 package.json                    # 의존성: hono, kysely, openai, pino, zod 등
-│   │   ├── 📄 bun.lock                        # Bun 패키지 락 파일
-│   │   ├── 📄 tsconfig.json                   # TypeScript 설정 (strict mode)
-│   │   ├── 📄 .env                            # 환경 변수 (DATABASE_URL, API keys)
-│   │   ├── 📁 scripts/                        # 🆕 개발/검증 스크립트
-│   │   │   ├── 📄 validate-assistant-tools.ts # OpenAI Assistant 동기화 검증
-│   │   │   └── 📄 sync-assistant-tools.ts     # Assistant 함수 동기화 도구
-│   │   └── 📁 src/                            # 소스 코드
-│   │       ├── 📄 index.ts                    # 🎯 BFF 메인 서버 (포트 8787)
-│   │       │                                  # ├─ Hono 앱 초기화
-│   │       │                                  # ├─ CORS/Logger 미들웨어
-│   │       │                                  # ├─ 7개 라우터 등록
-│   │       │                                  # └─ 서버 시작 (Bun 런타임)
-│   │       ├── 📁 lib/                        # 🔧 핵심 라이브러리
-│   │       │   ├── 📄 db.ts                   # Kysely PostGIS 연결 설정
-│   │       │   ├── 📄 cache.ts                # 🆕 캐시 매니저 (SHA256 키/TTL)
-│   │       │   ├── 📄 logger.ts               # 🆕 구조화 로거 (Pino/JSON)
-│   │       │   ├── 📄 metrics.ts              # 🆕 메트릭 수집 (성능/에러)
-│   │       │   └── 📄 openapi.ts              # 🆕 OpenAPI 3.0 문서 생성기
-│   │       ├── 📁 middleware/                 # 🛡️ 미들웨어 계층
-│   │       │   ├── 📄 auth.ts                 # Firebase 인증 미들웨어
-│   │       │   ├── 📄 cache.ts                # 🆕 캐시 미들웨어 (응답 캐싱)
-│   │       │   └── 📄 rateLimit.ts            # 🆕 레이트 리밋 (IP/사용자/함수별)
-│   │       ├── 📁 routes/                     # 🛣️ API 라우터
-│   │       │   ├── 📄 ai.ts                   # 🆕 기존 채팅봇 라우트
-│   │       │   ├── 📄 apiAiTools.ts           # 🆕 모듈형 AI Function API
-│   │       │   │                              # ├─ POST /api/ai/tools/:name
-│   │       │   │                              # ├─ 캐시/레이트리밋/로깅 통합
-│   │       │   │                              # └─ 메트릭 수집 및 에러 처리
-│   │       │   ├── 📄 aiChat.ts               # 🆕 표준 Tool Call 루프 패턴
-│   │       │   ├── 📄 swagger.ts              # 🆕 Swagger UI & OpenAPI 문서
-│   │       │   │                              # ├─ GET /api/docs/docs (Swagger UI)
-│   │       │   │                              # ├─ GET /api/docs/openapi.json
-│   │       │   │                              # ├─ GET /api/docs/info (항상 접근)
-│   │       │   │                              # └─ GET /api/docs/validate (검증)
-│   │       │   ├── 📄 search.ts               # 부동산 검색 API
-│   │       │   ├── 📄 poi.ts                  # POI(관심지점) API
-│   │       │   └── 📁 geo/                    # 지리정보 전용 라우터
-│   │       │       ├── 📄 buildings.ts        # 건물 정보 API
-│   │       │       └── 📄 upis.ts             # 지적 정보 API
-│   │       ├── 📁 ai/                         # 🤖 AI 모듈형 시스템
-│   │       │   ├── 📁 tools/                  # 🔧 도구 정의 및 검증
-│   │       │   │   ├── 📄 types.ts            # OpenAI Tool 타입 정의
-│   │       │   │   ├── 📄 validation.ts       # Ajv 검증 파이프라인
-│   │       │   │   └── 📄 index.ts            # 20개 Tool 스키마 집계
-│   │       │   ├── 📁 config/                 # ⚙️ 설정 파일
-│   │       │   │   └── 📄 cache.config.ts     # 함수별 TTL 및 캐시 정책
-│   │       │   ├── 📁 schemas/                # 📋 JSON Schema 정의
-│   │       │   │   ├── 📁 realestate/         # 🏠 부동산 함수 스키마 (12개)
-│   │       │   │   │   ├── 📄 searchRealEstateDeals.schema.ts
-│   │       │   │   │   ├── 📄 getLatestTrade.schema.ts
-│   │       │   │   │   ├── 📄 getPriceTrends.schema.ts
-│   │       │   │   │   ├── 📄 getDealStatsSummary.schema.ts
-│   │       │   │   │   ├── 📄 getDealDistribution.schema.ts
-│   │       │   │   │   ├── 📄 getBuildingInfo.schema.ts
-│   │       │   │   │   ├── 📄 searchNearbyPOI.schema.ts
-│   │       │   │   │   ├── 📄 compareMultipleApartments.schema.ts
-│   │       │   │   │   ├── 📄 findSimilarApartments.schema.ts
-│   │       │   │   │   ├── 📄 searchDealsByFilters.schema.ts
-│   │       │   │   │   ├── 📄 getComparableSales.schema.ts
-│   │       │   │   │   └── 📄 estimateRentYield.schema.ts
-│   │       │   │   └── 📁 geo/                # 🗺️ 지리정보 함수 스키마 (8개)
-│   │       │   │       ├── 📄 geocodeAddress.schema.ts
-│   │       │   │       ├── 📄 reverseGeocode.schema.ts
-│   │       │   │       ├── 📄 lookupLegalDongCode.schema.ts
-│   │       │   │       ├── 📄 convertDongCode.schema.ts
-│   │       │   │       ├── 📄 getNearbyByCoords.schema.ts
-│   │       │   │       ├── 📄 isochroneSearch.schema.ts
-│   │       │   │       ├── 📄 transformCoordinates.schema.ts
-│   │       │   │       └── 📄 normalizeKoreanAddress.schema.ts
-│   │       │   ├── 📁 handlers/               # ⚡ Function 핸들러 구현체
-│   │       │   │   ├── 📄 index.ts            # 핸들러 동적 로딩 맵
-│   │       │   │   ├── 📄 searchRealEstateDeals.ts
-│   │       │   │   ├── 📄 getLatestTrade.ts
-│   │       │   │   ├── 📄 getPriceTrends.ts
-│   │       │   │   ├── 📄 getDealStatsSummary.ts
-│   │       │   │   ├── 📄 getDealDistribution.ts
-│   │       │   │   ├── 📄 getBuildingInfo.ts
-│   │       │   │   ├── 📄 searchNearbyPOI.ts
-│   │       │   │   ├── 📄 compareMultipleApartments.ts
-│   │       │   │   ├── 📄 findSimilarApartments.ts
-│   │       │   │   └── 📁 geo/                # 지리정보 핸들러군
-│   │       │   │       ├── 📄 geocodeAddress.ts
-│   │       │   │       ├── 📄 reverseGeocode.ts
-│   │       │   │       ├── 📄 lookupLegalDongCode.ts
-│   │       │   │       ├── 📄 convertDongCode.ts
-│   │       │   │       ├── 📄 getNearbyByCoords.ts
-│   │       │   │       ├── 📄 isochroneSearch.ts
-│   │       │   │       ├── 📄 transformCoordinates.ts
-│   │       │   │       └── 📄 normalizeKoreanAddress.ts
-│   │       │   └── 📁 repo/                   # 💾 Repository 패턴 데이터 계층
-│   │       │       ├── 📄 dealsRepo.ts        # 부동산 거래 데이터 레포지토리
-│   │       │       └── 📄 geoRepo.ts          # 지리정보 서비스 레포지토리
-│   │       └── 📄 .env.example                # 환경변수 예시 파일
-│   └── 🎨 web/                                # React SPA Frontend
-│       ├── 📄 package.json                    # 의존성: react 19, vite, tailwind 등
-│       ├── 📄 vite.config.ts                  # Vite 개발 서버 설정 (포트 5173)
-│       ├── 📄 tailwind.config.js              # TailwindCSS 설정
-│       ├── 📄 tsconfig.json                   # TypeScript 설정
+OpenImjang/
+├── 📁 apps/                           # 애플리케이션 모노레포
+│   ├── 📁 bff/                        # Backend for Frontend
+│   │   ├── 📁 src/
+│   │   │   ├── 📁 routes/             # API 라우터
+│   │   │   │   ├── aiChat.ts          # AI 챗봇 라우터
+│   │   │   │   ├── chatBot.ts         # 멀티모달 챗봇
+│   │   │   │   ├── simpleAI.ts        # Simple LLM 시스템
+│   │   │   │   ├── aiSummary.ts       # 확장카드 아파트 종합 분석
+│   │   │   │   ├── search.ts          # 아파트 검색 API
+│   │   │   │   ├── memo.ts            # 임장 메모 API
+│   │   │   │   ├── presetPoints.ts    # 프리셋 포인트 관리
+│   │   │   │   └── upload.ts          # 파일 업로드
+│   │   │   ├── 📁 services/           # 비즈니스 로직
+│   │   │   │   ├── llmMaster.ts       # LLM 라이프사이클 관리
+│   │   │   │   ├── simpleLLMProcessor.ts # Simple LLM 프로세서
+│   │   │   │   ├── apartmentSummaryService.ts # 확장카드 종합 분석
+│   │   │   │   ├── smartApartmentResolver.ts # 아파트명 해석
+│   │   │   │   ├── conversationSession.ts # 대화 세션 관리
+│   │   │   │   ├── embeddingService.ts # 벡터 임베딩
+│   │   │   │   └── apartmentContextManager.ts # 아파트 컨텍스트
+│   │   │   ├── 📁 ai/                 # AI 핸들러
+│   │   │   │   ├── 📁 handlers/       # Function Calling 핸들러
+│   │   │   │   └── 📁 planner/        # AI 작업 계획
+│   │   │   ├── 📁 utils/              # 유틸리티
+│   │   │   │   ├── webSearchService.ts # 웹 검색 서비스
+│   │   │   │   └── safeBinaryJsonParser.ts # 한글 인코딩 처리
+│   │   │   └── index.ts               # 서버 엔트리포인트
+│   │   └── package.json               # BFF 의존성
+│   └── 📁 web/                        # React 프론트엔드
 │       ├── 📁 src/
-│       │   ├── 📄 main.tsx                    # React 앱 엔트리포인트
-│       │   ├── 📄 App.tsx                     # 메인 앱 컴포넌트
-│       │   ├── 📄 firebase.ts                 # 🆕 Firebase 설정 및 초기화
-│       │   ├── 📁 auth/                       # 🔐 인증 시스템
-│       │   │   └── 📄 AuthProvider.tsx        # Firebase 인증 컨텍스트
-│       │   ├── 📁 components/                 # React 컴포넌트
-│       │   │   ├── 📁 ai/                     # 🤖 AI 관련 컴포넌트
-│       │   │   │   ├── 📄 AIAnalysisModal.tsx # AI 종합 분석 모달
-│       │   │   │   └── 📄 AIChatbot.tsx       # AI 챗봇 UI
-│       │   │   ├── 📁 auth/                   # 🔐 인증 컴포넌트
-│       │   │   │   └── 📄 AuthPage.tsx        # 로그인/회원가입 페이지
-│       │   │   ├── 📁 onboarding/             # 📋 온보딩 시스템
-│       │   │   │   └── 📄 UserOnboardingModal.tsx # 6단계 맞춤 설정
-│       │   │   ├── 📁 card/                   # 📊 정보 카드 시스템
-│       │   │   │   ├── 📄 AiSummaryPanel.tsx  # AI 종합 분석 패널
-│       │   │   │   ├── 📄 SummaryCard.tsx     # 4개 탭 정보 카드
-│       │   │   │   ├── 📄 RealEstateDealsTable.tsx # 실거래가 테이블
-│       │   │   │   ├── 📄 BuildingLandInfo.tsx # 건물/토지 정보
-│       │   │   │   └── 📄 NearbyInfoPanel.tsx # 주변 환경 정보
-│       │   │   ├── 📁 layout/                 # 레이아웃 컴포넌트
-│       │   │   │   └── 📄 TopBar.tsx          # 상단 네비게이션 바
-│       │   │   ├── 📁 map/                    # 🗺️ 지도 컴포넌트
-│       │   │   │   ├── 📄 MapContainer.tsx    # 카카오 지도 컨테이너
-│       │   │   │   └── 📄 MapControls.tsx     # 지도 컨트롤 UI
-│       │   │   ├── 📁 memo/                   # 📝 임장 메모 시스템
-│       │   │   │   ├── 📄 MemoCreateModal.tsx # 메모 작성/수정 모달
-│       │   │   │   ├── 📄 MyImjangModal.tsx   # 내 임장 목록 모달
-│       │   │   │   └── 📄 FavoriteConfirmPopup.tsx # 즐겨찾기 확인 팝업
-│       │   │   └── 📄 MapPrime3DViewer.tsx    # 3D 지도 뷰어 (Cesium)
-│       │   ├── 📁 hooks/                      # React 커스텀 훅
-│       │   │   ├── 📄 use3DEqbHighlight.ts    # 3D 연계정보 하이라이트
-│       │   │   ├── 📄 useEqbOverlay.ts        # EQB 오버레이 관리
-│       │   │   ├── 📄 useFirstPersonLook.ts   # 1인칭 시점 컨트롤
-│       │   │   ├── 📄 useShadeAnalysis.ts     # 그림자 분석 기능
-│       │   │   ├── 📄 useWalkingMode.ts       # 워킹 모드 컨트롤
-│       │   │   └── 📄 useWindowView.ts        # 창문 뷰 기능
-│       │   ├── 📁 types/                      # TypeScript 타입 정의
-│       │   ├── 📁 utils/                      # 유틸리티 함수
-│       │   └── 📁 styles/                     # 스타일 파일
-│       └── 📁 public/                         # 정적 파일
-│           ├── 📄 index.html                  # HTML 템플릿
-│           ├── 📁 js/                         # 외부 JavaScript 라이브러리
-│           │   └── 📁 cesium/                 # Cesium 3D 라이브러리
-│           └── 📁 code-example/               # MapPrime3D 예제 코드
-├── 🗄️ db/                                     # 데이터베이스 & ETL
-│   └── 📁 scripts/                            # DB 관련 스크립트
-│       ├── 📁 fetch/                          # 🆕 데이터 수집 스크립트
-│       │   ├── 📄 fetch_building_info.ts      # 건축물대장 API 데이터 수집
-│       │   ├── 📄 fetch_landuse_included.ts   # 토지이용계획 데이터 수집
-│       │   ├── 📄 fetch_rent_raw.ts           # 전월세 실거래 데이터 수집
-│       │   ├── 📄 fetch_trade_raw.ts          # 매매 실거래 데이터 수집
-│       │   ├── 📄 populate_apt_deal_all.ts    # 통합 거래 데이터 가공
-│       │   └── 📄 fill_apt_info_coordinates.ts # 좌표 정보 보완 스크립트
-│       ├── 📁 setup/                          # DB 초기 설정
-│       │   └── 📄 legal_dong_loader.ts        # 법정동 코드 로더
-│       └── 📁 SQLquery/                       # SQL 쿼리 파일
-│           └── 📄 oi.query.sql                # OpenImjang 스키마 정의
-├── 📄 package.json                            # 루트 패키지 설정 (모노레포)
-├── 📄 README.md                               # 프로젝트 문서 (현재 파일)
-├── 📄 CLAUDE.md                               # Claude Code 개발 가이드
-└── 📄 .gitignore                              # Git 무시 파일 목록
+│       │   ├── 📁 components/         # React 컴포넌트
+│       │   │   ├── 📁 map/            # 지도 관련
+│       │   │   │   ├── MapContainer.tsx # 메인 지도 컨테이너
+│       │   │   │   ├── PointInputModal.tsx # 포인트 입력
+│       │   │   │   └── MapControls.tsx # 지도 컨트롤
+│       │   │   ├── MapPrime3DViewer.tsx # 3D 지도 뷰어
+│       │   │   ├── 📁 chatbot/        # AI 챗봇 UI
+│       │   │   ├── 📁 card/           # 아파트 카드
+│       │   │   │   └── RealEstateDealsTable.tsx # 실거래가 테이블
+│       │   │   ├── 📁 memo/           # 임장 메모
+│       │   │   ├── 📁 auth/           # 인증 관련
+│       │   │   ├── 📁 onboarding/     # 사용자 온보딩
+│       │   │   └── 📁 layout/         # 레이아웃
+│       │   ├── 📁 pages/              # 페이지 컴포넌트
+│       │   │   └── Home.tsx           # 메인 홈페이지
+│       │   ├── 📁 hooks/              # React 커스텀 훅
+│       │   │   ├── useCameraFrustum.ts # 카메라 프러스텀
+│       │   │   ├── useMiniMapPopup.tsx # 미니맵 팝업
+│       │   │   ├── useNaverMapsLoader.ts # 네이버 지도 로더
+│       │   │   └── useNaverStreetView.ts # 스트리트 뷰
+│       │   ├── 📁 services/           # API 클라이언트
+│       │   ├── 📁 types/              # TypeScript 타입 정의
+│       │   ├── 📁 utils/              # 유틸리티 함수
+│       │   └── 📁 contexts/           # React 컨텍스트
+│       └── package.json               # Web 의존성
+├── 📁 db/                             # 데이터베이스 관련
+│   ├── 📁 scripts/                    # DB 스크립트
+│   └── db_schema_public_oi.sql        # 스키마 정의
+├── 📁 docs/                           # 문서
+├── 📁 etl/                            # 데이터 ETL 파이프라인
+├── 📁 scripts/                        # 프로젝트 스크립트
+├── 📁 tools/                          # 개발 도구
+├── CLAUDE.md                          # Claude Code 가이드
+├── FIREBASE_SETUP_GUIDE.md            # Firebase 설정 가이드
+└── package.json                       # 루트 의존성
 ```
 
-### 📊 코드 메트릭 및 복잡도
+## 🎨 기능 구조 트리
 
 ```
-📈 프로젝트 규모 (Part 1-6 완료 기준)
-├── 총 파일 수: ~140개
-├── TypeScript 코드: ~25,000 라인
-├── AI 함수: 20개 (부동산 12개 + 지리정보 8개)
-├── API 엔드포인트: 23개 (AI 도구 20개 + 모니터링 3개)
-├── React 컴포넌트: ~30개
-├── 데이터베이스 테이블: 10개 (PostGIS + Firebase)
-└── 외부 API 연동: 7개 서비스
-
-🛠️ 기술적 복잡도
-├── 모듈형 아키텍처: ⭐⭐⭐⭐⭐ (매우 높음)
-├── 타입 안전성: ⭐⭐⭐⭐⭐ (완전 보장)
-├── 캐싱 전략: ⭐⭐⭐⭐⭐ (3단계 TTL)
-├── 에러 처리: ⭐⭐⭐⭐⭐ (포괄적 예외 처리)
-├── 문서화 수준: ⭐⭐⭐⭐⭐ (자동 생성)
-└── 테스트 커버리지: ⭐⭐⭐⚪⚪ (개선 필요)
+🏠 오픈임장 플랫폼
+├── 🗺️ 지도 시각화
+│   ├── 2D 지도 (Kakao Maps)
+│   │   ├── 실시간 아파트 위치 표시
+│   │   ├── 클러스터링 마커
+│   │   ├── 거리 측정 도구
+│   │   └── 레이어 제어 (WMS 오버레이)
+│   └── 3D 지도 (MapPrime3D/Cesium)
+│       ├── 3차원 건물 모델링
+│       ├── 카메라 프러스텀 시각화
+│       ├── 프리셋 포인트 시스템
+│       │   ├── 특정 동/호수 위치 저장
+│       │   ├── 원클릭 카메라 이동
+│       │   ├── 프리셋에서 창가뷰 실행
+│       │   └── 프리셋에서 음영분석 실행
+│       ├── 미니맵 연동
+│       └── 네이버 스트리트뷰 통합
+│
+├── 🤖 AI 챗봇 시스템
+│   ├── Simple LLM 시스템
+│   │   ├── GPT-4o-mini 기반 자연어 처리
+│   │   ├── Few-shot 부동산 도메인 학습
+│   │   ├── 한글 인코딩 문제 해결 (6가지 전략)
+│   │   └── 웹 검색 연동 (내부 데이터 부족 시)
+│   ├── 확장카드 종합 분석 시스템 (NEW)
+│   │   ├── ApartmentSummaryService 기반 전문 브리핑
+│   │   ├── 실거래가 월별 추이 분석 (매매/전세/월세)
+│   │   ├── 건물정보 + 토지이용 + 주변환경 통합 분석
+│   │   ├── 1200-1800자 친근한 어조 전문 상담 브리핑
+│   │   ├── 데이터 품질 검증 및 근거 기반 분석
+│   │   └── DB 저장/조회 (ai_smart_summary 테이블)
+│   ├── 멀티모달 처리
+│   │   ├── 이미지 + 텍스트 통합 분석
+│   │   ├── 임장 메모 사진 첨부
+│   │   ├── Base64 이미지 변환
+│   │   └── Firebase 이미지 다운로드
+│   ├── 컨텍스트 관리
+│   │   ├── 세션 기반 대화 연속성 (30분 TTL)
+│   │   ├── 슬롯 기반 정보 저장
+│   │   ├── @mention 아파트 정보 첨부
+│   │   └── 사용자 프로필 연동
+│   └── LLM 라이프사이클 관리
+│       ├── ConversationSession (대화 상태 관리)
+│       ├── LLMMaster (오케스트레이션)
+│       ├── SmartApartmentResolver (아파트명 해석)
+│       └── AI 3.0 대화 인텔리전스 (6개 매니저)
+│
+├── 📊 부동산 데이터 분석
+│   ├── 실거래가 분석 (170만+ 건)
+│   │   ├── 매매/전월세 통합 테이블
+│   │   ├── 면적별 시세 분석
+│   │   ├── 월별/연도별 트렌드
+│   │   └── 지역별 평균가 비교
+│   ├── 아파트 정보 관리
+│   │   ├── 기본 정보 (apt_info 테이블)
+│   │   ├── 건축물 상세 정보 (표제부등본)
+│   │   ├── 지번주소 매칭
+│   │   └── 좌표 정보 (SRID 4326)
+│   └── 공간 검색
+│       ├── PostGIS 기반 지리적 범위 검색
+│       ├── 반경 내 아파트 검색
+│       ├── 행정구역 필터링
+│       └── 거리 계산 (Haversine)
+│
+├── 📝 임장 메모 시스템
+│   ├── 메모 작성/편집
+│   │   ├── 아파트 연관 메모
+│   │   ├── 사진 첨부 (다중 업로드)
+│   │   ├── 위치 기반 자동 태깃
+│   │   └── 마크다운 렌더링
+│   ├── Firebase 연동
+│   │   ├── 실시간 메모 동기화
+│   │   ├── 이미지 Storage 업로드
+│   │   ├── 사용자별 메모 관리
+│   │   └── 즐겨찾기 기능
+│   └── 메모 첨부 (챗봇 연동)
+│       ├── 메모 선택 모달
+│       ├── 메타데이터 표시
+│       ├── 이미지 자동 다운로드/변환
+│       └── 보라색 테마 UI
+│
+├── 👤 사용자 관리
+│   ├── Firebase 인증
+│   │   ├── 이메일/비밀번호 로그인
+│   │   ├── 소셜 로그인 (구글)
+│   │   ├── 익명 로그인 지원
+│   │   └── 보안 규칙 설정
+│   ├── 사용자 프로필
+│   │   ├── 온보딩 설문 (7단계)
+│   │   ├── 관심 지역 설정
+│   │   ├── 투자 성향 분석
+│   │   └── 맞춤형 추천 기준
+│   └── 개인화 서비스
+│       ├── 관심 아파트 즐겨찾기
+│       ├── 검색 히스토리
+│       ├── AI 챗봇 학습 데이터
+│       └── 알림 설정
+│
+├── 🔍 검색 & 필터링
+│   ├── 아파트 검색
+│   │   ├── 텍스트 기반 검색
+│   │   ├── 자동완성 기능
+│   │   ├── 유사 아파트명 매칭
+│   │   └── 지역명 검색 지원
+│   ├── 고급 필터
+│   │   ├── 가격대 범위 설정
+│   │   ├── 전용면적 필터
+│   │   ├── 거래 시기 필터
+│   │   └── 층수 조건
+│   └── 공간 기반 검색
+│       ├── 지도 영역 드래그 검색
+│       ├── 반경 기반 검색
+│       ├── 행정구역 경계 검색
+│       └── POI 근처 검색
+│
+└── ⚙️ 시스템 관리
+    ├── API 관리
+    │   ├── Rate Limiting (요청 제한)
+    │   ├── CORS 정책 설정
+    │   ├── 에러 핸들링
+    │   └── Swagger 문서화
+    ├── 모니터링
+    │   ├── 구조화 로깅 (Pino)
+    │   ├── 성능 메트릭 수집
+    │   ├── AI 응답 품질 추적
+    │   └── 사용자 행동 분석
+    └── 배포 & 운영
+        ├── Bun 런타임 최적화
+        ├── PostgreSQL 커넥션 풀링
+        ├── Firebase 보안 규칙
+        └── 환경별 설정 관리
 ```
 
-## 🛠️ 기술 스택
+## 🎯 전체 기능 구조 (Mermaid)
 
-### Frontend Stack
-- **React 19.1** - Concurrent Features를 활용한 최신 React
-- **Vite 7.1** - 차세대 빌드 툴 및 개발 서버
-- **TypeScript 5.8** - 타입 안전성 확보
-- **TailwindCSS 3.4** - 유틸리티 기반 CSS 프레임워크
-- **Firebase SDK 10.8** - 인증 및 실시간 데이터베이스
-- **Kakao Maps API** - 한국 최적화 지도 서비스
-- **Cesium + MapPrime3D** - 3D 지구본 및 공간 시각화
-- **Axios** - HTTP 클라이언트 (인터셉터 포함)
+```mermaid
+graph TB
+    subgraph "🗺️ 지도 시각화 시스템"
+        A1[3D 지도 뷰어<br/>MapPrime3D/Cesium 기반] --> A1a[그림자 분석<br/>시간대별 일조권 분석]
+        A1 --> A1b[스카이라인 분석<br/>조망권 및 시야 분석]
+        A1 --> A1c[창문 뷰 모드<br/>실제 거주 시점 미리보기]
+        A1 --> A1d[워킹 모드<br/>보행자 시점 거리 탐색]
+        A1 --> A1e[1인칭 시점<br/>자유로운 카메라 조작]
+        A1 --> A1f[건물 높이 표시<br/>3차원 볼륨감 제공]
+        A1 --> A1g[프리셋 포인트<br/>동/호수별 저장된 위치]
 
-### Backend Stack
-- **Bun 1.0** - 고성능 JavaScript 런타임 (Node.js 대비 3-4배 빠름)
-- **Hono 4.4** - 경량 고성능 웹 프레임워크
-- **Kysely 0.28** - 타입 안전 SQL 쿼리 빌더
-- **Firebase Admin SDK** - 서버사이드 Firebase 인증
-- **OpenAI API** - GPT-4o-mini 모델 활용
+        A1g --> A1g1[원클릭 이동<br/>저장된 위치로 즉시 이동]
+        A1g --> A1g2[프리셋 창가뷰<br/>저장 위치에서 창문뷰 실행]
+        A1g --> A1g3[프리셋 음영분석<br/>저장 위치에서 그림자 분석]
+        A1g --> A1g4[아파트별 관리<br/>동/호수 정보 연동]
 
-### Database & Infrastructure
-- **PostgreSQL 14+** - 관계형 데이터베이스
-- **PostGIS 3.3+** - 공간 데이터 확장
-- **🚀 pgvector Extension** - 벡터 임베딩 저장 및 유사도 검색
-- **Firebase Firestore** - NoSQL 문서 데이터베이스 (임장 메모)
-- **Firebase Storage** - 파일 저장소 (사진 업로드)
-- **Firebase Authentication** - 사용자 인증 (구글 OAuth 지원)
+        A2[2D 지도 뷰어<br/>Kakao Maps 기반] --> A2a[실시간 위치 추적<br/>사용자 GPS 기반]
+        A2 --> A2b[마커 클러스터링<br/>아파트 밀집도 시각화]
+        A2 --> A2c[히트맵 오버레이<br/>시세 분포 색상 표시]
+        A2 --> A2d[반경 검색 UI<br/>드래그로 검색 범위 설정]
 
-### External APIs & Services
-- **국토부 RTMS API** - 부동산 실거래가 데이터
-- **건축물대장 API** - 건축물 정보 (총괄표제부/표제부)
-- **VWorld WFS/WMS** - 국가공간정보 서비스
-- **Kakao Maps/Local API** - 지도 서비스 및 POI 검색
+        A3[WMS 레이어 관리<br/>공간정보 오버레이] --> A3a[V-World 연동<br/>국가공간정보포털 활용]
+        A3 --> A3b[용도지역 표시<br/>주거/상업/공업지역 구분]
+        A3 --> A3c[지적도 오버레이<br/>필지 경계 표시]
+        A3 --> A3d[교통정보 레이어<br/>지하철/버스 노선도]
 
-## 🚀 설치 및 실행
+        A4[사용자 인터랙션] --> A4a[줌/팬 제스처<br/>멀티터치 지원]
+        A4 --> A4b[POI 정보창<br/>아파트 기본정보 팝업]
+        A4 --> A4c[루트 탐색<br/>최적 경로 안내]
+        A4 --> A4d[즐겨찾기 관리<br/>관심 지역 저장]
+    end
 
-### 필수 요구사항
-- **Node.js 18+** 또는 **Bun 1.0+**
-- **PostgreSQL 14+** with **PostGIS 3.3+** and **pgvector Extension**
-- **Firebase 프로젝트** (Authentication, Firestore, Storage 활성화)
+    subgraph "🏢 실거래가 검색 시스템"
+        B1[통합 검색 엔진<br/>PostgreSQL + PostGIS] --> B1a[아파트명 검색<br/>유사명 자동 매칭]
+        B1 --> B1b[지역 기반 검색<br/>행정구역별 필터링]
+        B1 --> B1c[면적 조건 검색<br/>전용면적 범위 설정]
+        B1 --> B1d[가격대 필터<br/>매매/전월세 범위]
 
-### 1. 저장소 클론 및 의존성 설치
+        B2[실거래가 데이터<br/>170만+ 건 통합] --> B2a[매매 거래<br/>실제 성사된 매매가]
+        B2 --> B2b[전월세 거래<br/>보증금/월세 정보]
+        B2 --> B2c[거래 시기 정보<br/>년/월/일 상세 기록]
+        B2 --> B2d[층수별 분석<br/>고층/저층 시세 차이]
+
+        B3[공간 검색 알고리즘] --> B3a[반경 내 검색<br/>Haversine 거리 계산]
+        B3 --> B3b[경계 박스 검색<br/>사각형 영역 조회]
+        B3 --> B3c[행정구역 검색<br/>법정동 기준 필터링]
+        B3 --> B3d[근접성 분석<br/>지하철역/학교 근처]
+
+        B4[검색 최적화] --> B4a[GIST 인덱스<br/>공간 검색 성능 향상]
+        B4 --> B4b[부분 일치 검색<br/>ILIKE 퍼지 매칭]
+        B4 --> B4c[페이지네이션<br/>대용량 결과 분할 조회]
+        B4 --> B4d[캐싱 전략<br/>자주 조회되는 데이터]
+    end
+
+    subgraph "🤖 AI 챗봇 시스템"
+        C1[GPT-4o-mini 엔진<br/>OpenAI API 통합] --> C1a[멀티모달 처리<br/>텍스트 + 이미지 분석]
+        C1 --> C1b[RAG 시스템<br/>pgvector 임베딩 검색]
+        C1 --> C1c[웹 검색 통합<br/>실시간 부동산 정보]
+        C1 --> C1d[세션 관리<br/>대화 컨텍스트 유지]
+
+        C2[Simple LLM 프로세서<br/>직관적 자연어 처리] --> C2a[Few-shot 학습<br/>부동산 도메인 지식]
+        C2 --> C2b[인코딩 문제 해결<br/>다중 인코딩 지원]
+        C2 --> C2c[의도 분석<br/>사용자 질문 이해]
+        C2 --> C2d[유연한 응답<br/>고정 로직 대신 추론]
+
+        C25[확장카드 종합 분석<br/>ApartmentSummaryService] --> C25a[실거래가 월별 추이<br/>매매/전세/월세 통합 분석]
+        C25 --> C25b[건물+토지+주변환경<br/>종합 데이터 통합]
+        C25 --> C25c[전문 브리핑 생성<br/>1200-1800자 친근한 어조]
+        C25 --> C25d[DB 저장/조회<br/>ai_smart_summary 테이블]
+
+        C3[첨부 시스템] --> C3a[이미지 직접 업로드<br/>드롭다운 파일 선택]
+        C3 --> C3b[메모 첨부<br/>Firebase 메모 연동]
+        C3 --> C3c[@멘션 아파트<br/>아파트명으로 정보 첨부]
+        C3 --> C3d[Base64 변환<br/>모든 이미지 통합 처리]
+
+        C4[AI 3.0 대화 인텔리전스] --> C4a[감정 컨텍스트 분석<br/>8가지 감정 상태 인식]
+        C4 --> C4b[사용자 유형 분석<br/>5가지 성향별 맞춤 대응]
+        C4 --> C4c[자연스러운 플로우<br/>기계적 명확화 대체]
+        C4 --> C4d[다중 턴 관리<br/>복잡한 대화 추적]
+    end
+
+    subgraph "📝 임장 메모 시스템"
+        D1[Firebase 연동<br/>실시간 데이터 동기화] --> D1a[Firestore 메모 저장<br/>사용자별 컬렉션 관리]
+        D1 --> D1b[Firebase Storage<br/>이미지 업로드/다운로드]
+        D1 --> D1c[실시간 동기화<br/>멀티 디바이스 지원]
+        D1 --> D1d[보안 규칙<br/>사용자별 접근 제어]
+
+        D2[메모 작성 기능] --> D2a[아파트 연관 메모<br/>자동 위치 태깃팅]
+        D2 --> D2b[다중 사진 업로드<br/>현장 사진 여러 장]
+        D2 --> D2c[마크다운 렌더링<br/>서식있는 텍스트 지원]
+        D2 --> D2d[즐겨찾기 기능<br/>중요 메모 구분]
+
+        D3[메모 관리 UI] --> D3a[메모 목록 뷰<br/>날짜순/아파트별 정렬]
+        D3 --> D3b[검색 및 필터<br/>키워드/아파트명 검색]
+        D3 --> D3c[편집/삭제 기능<br/>CRUD 완전 지원]
+        D3 --> D3d[이미지 갤러리<br/>사진 확대/슬라이드]
+
+        D4[챗봇 연동] --> D4a[메모 선택 모달<br/>기존 메모 첨부 선택]
+        D4 --> D4b[이미지 자동 변환<br/>URL → Base64 처리]
+        D4 --> D4c[메타데이터 표시<br/>작성일/연관 아파트 정보]
+        D4 --> D4d[보라색 테마 UI<br/>메모 첨부 시각적 구분]
+    end
+
+    subgraph "👤 사용자 관리 시스템"
+        E1[Firebase 인증<br/>보안 로그인 시스템] --> E1a[이메일/비밀번호<br/>기본 회원가입/로그인]
+        E1 --> E1b[구글 소셜 로그인<br/>OAuth 2.0 연동]
+        E1 --> E1c[익명 로그인<br/>게스트 사용자 지원]
+        E1 --> E1d[보안 규칙 설정<br/>사용자별 데이터 보호]
+
+        E2[사용자 프로필 관리] --> E2a[온보딩 설문<br/>7단계 초기 설정]
+        E2 --> E2b[선호도 설정<br/>관심 지역/가격대 저장]
+        E2 --> E2c[검색 히스토리<br/>최근 조회 아파트 추적]
+        E2 --> E2d[맞춤 추천<br/>AI 기반 개인화]
+
+        E3[권한 관리] --> E3a[읽기 전용 권한<br/>미인증 사용자 제한]
+        E3 --> E3b[메모 작성 권한<br/>인증 사용자만 가능]
+        E3 --> E3c[데이터 소유권<br/>사용자별 격리된 데이터]
+        E3 --> E3d[관리자 권한<br/>시스템 관리 기능]
+
+        E4[세션 관리] --> E4a[자동 로그인 유지<br/>토큰 기반 인증]
+        E4 --> E4b[로그아웃 처리<br/>세션 정리 및 보안]
+        E4 --> E4c[토큰 갱신<br/>만료 시 자동 연장]
+        E4 --> E4d[디바이스 추적<br/>다중 로그인 관리]
+    end
+
+    subgraph "🔧 시스템 관리"
+        F1[API 관리<br/>BFF 아키텍처] --> F1a[Rate Limiting<br/>요청 제한으로 서버 보호]
+        F1 --> F1b[CORS 정책<br/>크로스 오리진 요청 제어]
+        F1 --> F1c[에러 핸들링<br/>일관된 오류 응답]
+        F1 --> F1d[Swagger 문서화<br/>API 명세 자동 생성]
+
+        F2[모니터링 시스템] --> F2a[구조화 로깅<br/>Pino 기반 로그 수집]
+        F2 --> F2b[성능 메트릭<br/>응답 시간/처리량 추적]
+        F2 --> F2c[AI 품질 추적<br/>응답 정확도 모니터링]
+        F2 --> F2d[사용자 행동 분석<br/>UX 개선 데이터 수집]
+
+        F3[배포 및 운영] --> F3a[Bun 런타임<br/>Node.js 대비 3-4배 성능]
+        F3 --> F3b[PostgreSQL 풀링<br/>DB 커넥션 최적화]
+        F3 --> F3c[환경별 설정<br/>dev/staging/prod 분리]
+        F3 --> F3d[보안 설정<br/>환경변수 암호화 관리]
+
+        F4[데이터 파이프라인] --> F4a[ETL 스크립트<br/>공공데이터 자동 수집]
+        F4 --> F4b[데이터 정제<br/>중복 제거 및 표준화]
+        F4 --> F4c[스케줄링<br/>정기적 데이터 업데이트]
+        F4 --> F4d[백업 전략<br/>데이터 손실 방지]
+    end
+
+    %% 스타일링
+    classDef mapSystem fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef searchSystem fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef aiSystem fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef memoSystem fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef userSystem fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef adminSystem fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
+
+    class A1,A1a,A1b,A1c,A1d,A1e,A1f,A1g,A1g1,A1g2,A1g3,A1g4,A2,A2a,A2b,A2c,A2d,A3,A3a,A3b,A3c,A3d,A4,A4a,A4b,A4c,A4d mapSystem
+    class B1,B1a,B1b,B1c,B1d,B2,B2a,B2b,B2c,B2d,B3,B3a,B3b,B3c,B3d,B4,B4a,B4b,B4c,B4d searchSystem
+    class C1,C1a,C1b,C1c,C1d,C2,C2a,C2b,C2c,C2d,C25,C25a,C25b,C25c,C25d,C3,C3a,C3b,C3c,C3d,C4,C4a,C4b,C4c,C4d aiSystem
+    class D1,D1a,D1b,D1c,D1d,D2,D2a,D2b,D2c,D2d,D3,D3a,D3b,D3c,D3d,D4,D4a,D4b,D4c,D4d memoSystem
+    class E1,E1a,E1b,E1c,E1d,E2,E2a,E2b,E2c,E2d,E3,E3a,E3b,E3c,E3d,E4,E4a,E4b,E4c,E4d userSystem
+    class F1,F1a,F1b,F1c,F1d,F2,F2a,F2b,F2c,F2d,F3,F3a,F3b,F3c,F3d,F4,F4a,F4b,F4c,F4d adminSystem
+```
+
+### 📊 기능별 상세 설명
+
+#### 🗺️ 지도 시각화 시스템
+- **3D 뷰어**: MapPrime3D(Cesium 기반)로 실제 건물 높이와 형태를 3차원으로 표현
+- **그림자 분석**: 특정 시간대의 일조권 영향을 시뮬레이션하여 주거 환경 평가
+- **스카이라인 분석**: 해당 위치에서의 조망권과 시야 차단 정도 분석
+- **창문 뷰 모드**: 실제 거주 시 창문에서 보이는 전망을 미리 체험
+- **워킹 모드**: 보행자 시점에서 주변 환경과 접근성 확인
+- **프리셋 포인트**: 특정 동/호수 위치 저장하고 원클릭으로 이동, 해당 위치에서 창가뷰/음영분석 자동 실행
+
+#### 🏢 실거래가 검색 시스템
+- **통합 데이터**: 매매 + 전월세 총 170만+ 건의 실거래가 정보 통합 관리
+- **공간 검색**: PostGIS 기반 지리적 검색으로 반경/경계 기준 정확한 위치 검색
+- **면적 조건**: 전용면적 기준 ±1㎡ 허용 오차로 원하는 크기의 아파트 검색
+- **시계열 분석**: 년/월/일 단위 거래 시기별 시세 변동 추적
+
+#### 🤖 AI 챗봇 시스템
+- **멀티모달**: GPT-4o-mini로 텍스트 + 이미지 동시 분석
+- **확장카드 종합 분석**: ApartmentSummaryService로 실거래가/건물/토지/주변환경 통합 분석, 1200-1800자 전문 브리핑 생성
+- **RAG 시스템**: pgvector 임베딩으로 정확한 DB 스키마 정보 검색
+- **첨부 시스템**: 직접 이미지 업로드 + Firebase 메모 첨부 + @아파트명 멘션
+- **AI 3.0**: 감정 분석 기반 공감적 대화, 사용자 유형별 맞춤 응답
+
+#### 📝 임장 메모 시스템
+- **Firebase 연동**: 실시간 동기화로 언제 어디서나 메모 접근
+- **멀티미디어**: 텍스트 + 다중 사진으로 현장감 있는 기록
+- **위치 연동**: 아파트 정보와 자동 연결로 체계적 관리
+- **챗봇 통합**: 기존 메모를 AI 상담에 첨부하여 맥락있는 분석
+
+#### 👤 사용자 관리 시스템
+- **다중 인증**: 이메일/구글/익명 로그인으로 다양한 접근 방식 지원
+- **개인화**: 7단계 온보딩으로 사용자 선호도 파악 및 맞춤 서비스
+- **보안**: Firebase 규칙 기반 사용자별 데이터 격리 및 권한 관리
+- **히스토리**: 검색 기록과 행동 패턴 학습으로 개선된 추천
+
+## 🚀 시작하기
+
+### 📋 사전 요구사항
+
+- **Node.js**: v22.17.1+
+- **Bun**: v1.2.20+
+- **PostgreSQL**: v15+ (PostGIS 확장 포함)
+- **Git**: v2.50+
+
+### 💾 데이터베이스 설정
+
+```bash
+# PostgreSQL 데이터베이스 생성
+createdb openimjang
+
+# PostGIS 확장 설치
+psql -d openimjang -c "CREATE EXTENSION postgis;"
+psql -d openimjang -c "CREATE EXTENSION pgvector;"
+
+# 스키마 및 데이터 로드
+psql -d openimjang -f db_schema_public_oi.sql
+```
+
+### 🔧 설치 및 실행
+
+1. **저장소 클론**
 ```bash
 git clone https://github.com/your-username/OpenImjang.git
 cd OpenImjang
+```
 
-# Bun 권장 (더 빠름)
+2. **의존성 설치**
+```bash
+# 루트 의존성 설치
+bun install
+
+# 프론트엔드 의존성
+cd apps/web
+bun install
+
+# 백엔드 의존성
+cd ../bff
 bun install
 ```
 
-### 2. 환경 변수 설정
-
-#### Frontend (.env.local)
+3. **환경변수 설정**
 ```bash
-# apps/web/.env.local
-VITE_KAKAO_MAP_APP_KEY=your_kakao_javascript_key
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
-VITE_FIREBASE_APP_ID=1:123456789:web:abcdef
-```
+# apps/bff/.env 파일 생성
+cp apps/bff/.env.example apps/bff/.env
 
-#### Backend (.env)
-```bash
-# apps/bff/.env
-DATABASE_URL=postgresql://username:password@localhost:5432/openimjang
+# 필수 환경변수 설정
+DATABASE_URL=postgres://postgres:1212@localhost:5432/openimjang
 OPENAI_API_KEY=your_openai_api_key
-RTMS_API_KEY=your_molit_rtms_api_key
-KAKAO_REST_KEY=your_kakao_rest_api_key
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+FIREBASE_PROJECT_ID=your_firebase_project
+VWORLD_API_KEY=your_vworld_key
+KAKAO_MAPS_API_KEY=your_kakao_maps_key
 ```
 
-### 3. 데이터베이스 설정
+4. **개발 서버 실행**
+
+**터미널 1 - 백엔드 (포트 8787)**
 ```bash
-# PostgreSQL + PostGIS 설치 (Ubuntu)
-sudo apt-get install postgresql postgresql-contrib postgis
-
-# pgvector 확장 설치 (벡터DB용)
-sudo apt-get install postgresql-14-pgvector  # PostgreSQL 14의 경우
-# 또는 PostgreSQL 15의 경우
-sudo apt-get install postgresql-15-pgvector
-
-# 데이터베이스 생성
-createdb openimjang
-psql -d openimjang -c "CREATE EXTENSION postgis;"
-psql -d openimjang -c "CREATE EXTENSION vector;"
-
-# 스키마 생성
-psql -d openimjang -f db/scripts/SQLquery/oi.query.sql
-
-# 벡터DB 테이블 생성
-psql -d openimjang -c "
-CREATE SCHEMA IF NOT EXISTS ai;
-CREATE TABLE ai.embeddings (
-    id SERIAL PRIMARY KEY,
-    source_path TEXT NOT NULL,
-    schema_name TEXT,
-    table_name TEXT,
-    chunk_id INTEGER NOT NULL,
-    content_text TEXT NOT NULL,
-    token_count INTEGER,
-    embedding VECTOR(1536),
-    meta JSONB,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(source_path, chunk_id)
-);
-CREATE INDEX ON ai.embeddings USING ivfflat (embedding vector_cosine_ops);
-"
-```
-
-### 4. 개발 서버 실행
-```bash
-# BFF 서버 실행 (포트 3000)
-cd apps/bff && bun run dev
-
-# 프론트엔드 서버 실행 (포트 5173)
-cd apps/web && npm run dev
-```
-
-## 📊 데이터베이스 스키마
-
-### 부동산 데이터 테이블
-
-#### `oi.apt_info` - 아파트 기본 정보
-```sql
-CREATE TABLE oi.apt_info (
-    id SERIAL PRIMARY KEY,
-    apt_nm VARCHAR(200),                 -- 아파트명
-    jibun_address TEXT,                  -- 지번주소  
-    road_address TEXT,                   -- 도로명주소
-    lat DOUBLE PRECISION,                -- 위도 (WGS84)
-    lon DOUBLE PRECISION,                -- 경도 (WGS84)
-    geom GEOMETRY(POINT, 4326),          -- PostGIS 포인트
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_apt_info_geom ON oi.apt_info USING GIST(geom);
-```
-
-#### `oi.apt_deal_trade_raw` - 매매 실거래 원시 데이터
-공공데이터포털 RTMS API에서 수집한 아파트 매매 실거래 원시 데이터
-```sql
-CREATE TABLE oi.apt_deal_trade_raw (
-    id SERIAL PRIMARY KEY,
-    sggCd VARCHAR(5),                        -- 시군구코드
-    umdCd VARCHAR(5),                        -- 읍면동코드  
-    landCd VARCHAR(1),                       -- 토지구분코드
-    bonbun VARCHAR(4),                       -- 본번
-    bubun VARCHAR(4),                        -- 부번
-    aptNm VARCHAR(40),                       -- 아파트명
-    jibun VARCHAR(10),                       -- 지번
-    excluUseAr DOUBLE PRECISION,             -- 전용면적(㎡)
-    dealYear INTEGER,                        -- 계약년도
-    dealMonth INTEGER,                       -- 계약월
-    dealDay INTEGER,                         -- 계약일
-    dealAmount INTEGER,                      -- 거래금액(만원)
-    floor INTEGER,                           -- 층수
-    buildYear INTEGER,                       -- 건축년도
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-#### `oi.apt_deal_rent_raw` - 전월세 실거래 원시 데이터
-공공데이터포털 RTMS API에서 수집한 아파트 전월세 실거래 원시 데이터
-```sql
-CREATE TABLE oi.apt_deal_rent_raw (
-    id SERIAL PRIMARY KEY,
-    sggCd VARCHAR(5),                        -- 시군구코드
-    umdNm VARCHAR(20),                       -- 읍면동명
-    aptNm VARCHAR(40),                       -- 아파트명
-    jibun VARCHAR(10),                       -- 지번
-    excluUseAr DOUBLE PRECISION,             -- 전용면적(㎡)
-    dealYear INTEGER,                        -- 계약년도
-    dealMonth INTEGER,                       -- 계약월
-    dealDay INTEGER,                         -- 계약일
-    deposit INTEGER,                         -- 보증금(만원)
-    monthlyRent INTEGER,                     -- 월세(만원)
-    floor INTEGER,                           -- 층수
-    buildYear INTEGER,                       -- 건축년도
-    contractTerm VARCHAR(10),                -- 계약기간
-    contractType VARCHAR(10),                -- 계약구분
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-#### `oi.apt_deal_all` - 통합 실거래 분석 테이블
-매매/전월세 데이터를 통합하여 분석에 최적화된 형태로 정규화한 테이블
-```sql
-CREATE TABLE oi.apt_deal_all (
-    id SERIAL PRIMARY KEY,
-    apt_nm VARCHAR(40),                      -- 아파트명
-    jibun_address VARCHAR(50),               -- 지번주소 (매핑용)
-    deal_year INTEGER,                       -- 계약년도
-    deal_month INTEGER,                      -- 계약월  
-    deal_day INTEGER,                        -- 계약일
-    deal_amount INTEGER,                     -- 매매가(만원) - 매매거래시만
-    deposit INTEGER,                         -- 보증금(만원) - 전월세거래시
-    monthly_rent INTEGER,                    -- 월세(만원) - 월세거래시
-    exclu_use_ar DOUBLE PRECISION,           -- 전용면적(㎡)
-    floor INTEGER,                           -- 층수
-    build_year INTEGER,                      -- 건축년도
-    deal_type VARCHAR(10),                   -- 거래유형(매매/전세/월세)
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- 성능 최적화 인덱스
-CREATE INDEX idx_apt_deal_all_name_addr ON oi.apt_deal_all(apt_nm, jibun_address);
-CREATE INDEX idx_apt_deal_all_date ON oi.apt_deal_all(deal_year DESC, deal_month DESC, deal_day DESC);
-CREATE INDEX idx_apt_deal_all_type ON oi.apt_deal_all(deal_type);
-```
-
-### 데이터 수집 및 처리 플로우
-
-#### 1. 원시 데이터 수집
-- `fetch_trade_raw.ts` - 매매 실거래 데이터 수집 → `oi.apt_deal_trade_raw`
-- `fetch_rent_raw.ts` - 전월세 실거래 데이터 수집 → `oi.apt_deal_rent_raw`
-
-#### 2. 데이터 통합 및 정규화  
-- ETL 스크립트를 통해 raw 테이블들을 `oi.apt_deal_all`로 통합
-- 거래 유형 분류 및 데이터 품질 향상
-- 성능 최적화를 위한 인덱스 생성
-
-#### 3. AI 분석 활용
-- 챗봇 Function Calling에서 `oi.apt_deal_all` 테이블 조회
-- 거래 유형별(매매/전세/월세) 필터링
-- 면적별, 기간별 실거래가 분석
-
-### 건축물 정보 테이블
-
-#### `oi.apt_building_info` - 건축물 정보
-```sql
-CREATE TABLE oi.apt_building_info (
-    id SERIAL PRIMARY KEY,
-    apt_id INTEGER REFERENCES oi.apt_info(id),
-    type VARCHAR(10),                    -- 'recap'(총괄표제부) / 'title'(표제부)
-    dongnm VARCHAR(100),                 -- 동명
-    platarea NUMERIC(12, 2),             -- 대지면적(㎡)
-    archarea NUMERIC(12, 2),             -- 건축면적(㎡)
-    totarea NUMERIC(12, 2),              -- 연면적(㎡)
-    grndflrcnt INTEGER,                  -- 지상층수
-    ugrndflrcnt INTEGER,                 -- 지하층수
-    mainpurpscdnm VARCHAR(100),          -- 주용도명
-    strctcdnm VARCHAR(100),              -- 구조명 
-    hhldcnt INTEGER,                     -- 세대수
-    totpkngcnt INTEGER,                  -- 총주차대수
-    useaprday DATE,                      -- 사용승인일
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### 공간 데이터 테이블
-
-#### `public.al_d002_11_20250804` - 연속지적도
-```sql
--- 국가공간정보포털 연속지적도 데이터
-CREATE TABLE public.al_d002_11_20250804 (
-    objectid INTEGER PRIMARY KEY,
-    a1 VARCHAR(19),                      -- PNU (부동산고유번호)
-    a2 VARCHAR(10),                      -- 법정동코드
-    a3 VARCHAR(10),                      -- 지목코드
-    geom GEOMETRY(POLYGON, 5186)         -- 지적경계 (EPSG:5186)
-);
-
-CREATE INDEX idx_al_d002_geom ON public.al_d002_11_20250804 USING GIST(geom);
-CREATE INDEX idx_al_d002_pnu ON public.al_d002_11_20250804 (a1);
-```
-
-#### `public.al_d154_11_20250830` - 토지이용계획
-```sql
--- 용도지역지구 정보
-CREATE TABLE public.al_d154_11_20250830 (
-    objectid INTEGER PRIMARY KEY,
-    a7 TEXT,                             -- 용도지역코드 (쉼표 구분)
-    a9 TEXT,                             -- 포함상태코드 (쉼표 구분)
-    geom GEOMETRY(POLYGON, 5186)         -- 용도지역 경계
-);
-
-CREATE TABLE public.landuse_code (
-    code VARCHAR(10) PRIMARY KEY,
-    name VARCHAR(100),                   -- 용도지역명
-    category VARCHAR(50)                 -- 상위분류
-);
-```
-
-#### `oi.ai_smart_summary` - AI 요약 결과 저장
-```sql
-CREATE TABLE oi.ai_smart_summary (
-    apt_id INTEGER PRIMARY KEY,          -- 아파트 ID (외래키)
-    apt_nm VARCHAR(255) NOT NULL,        -- 아파트명  
-    jibun_address TEXT NOT NULL,         -- 지번 주소
-    summary TEXT NOT NULL,               -- AI 요약 내용
-    user_id VARCHAR(255) NOT NULL,       -- 사용자 ID (Firebase UID)
-    created_at TIMESTAMP DEFAULT NOW(),  -- 생성일시
-    updated_at TIMESTAMP DEFAULT NOW(),  -- 수정일시
-    FOREIGN KEY (apt_id) REFERENCES oi.apt_info(id)
-);
-
-CREATE INDEX idx_ai_summary_user_id ON oi.ai_smart_summary(user_id);
-CREATE INDEX idx_ai_summary_created_at ON oi.ai_smart_summary(created_at);
-```
-
-### 사용자 데이터 (Firebase Firestore)
-
-#### `users/{uid}/profile/basic` - 사용자 프로필 (온보딩 결과)
-```javascript
-{
-  purpose: ["매매", "전세"],       // 부동산 이용 목적 (다중선택)
-  familyType: "신혼부부 (자녀 없음)",  // 가족 구성
-  workLocation: "강남역",          // 직장/주요 목적지 (선택)
-  commutingRadius: 30,             // 희망 통근시간(분)
-  budgetRange: 300000000,          // 전월세 보증금/매매 자금 (원 단위)
-  monthlyRent: 1500000,            // 월세 금액 (원 단위)
-  preferredBuildingAge: "10년 이내", // 선호 건물 연식
-  priorities: ["교통 접근성", "생활 편의시설"], // 우선순위 (다중선택)
-  completedAt: Timestamp           // 온보딩 완료일시
-}
-```
-
-#### `users/{uid}/favorites` - 즐겨찾기
-```javascript
-{
-  aptId: 12345,                    // 아파트 ID (참조)
-  aptName: "래미안강남힐스",         // 아파트명
-  aptAddress: "서울 강남구...",      // 주소
-  lat: 37.4979,                    // 위도
-  lon: 127.0276,                   // 경도  
-  createdAt: Timestamp             // 생성일시
-}
-```
-
-#### `users/{uid}/memos` - 임장 메모
-```javascript
-{
-  aptId: "12345",                  // 아파트 ID
-  title: "강남 래미안 방문 후기",   // 제목
-  body: "교통이 편리하고...",       // 내용
-  photoUrl: "gs://bucket/...",     // 사진 URL (선택)
-  createdAt: Timestamp,            // 생성일시
-  updatedAt: Timestamp             // 수정일시
-}
-```
-
-## 🔍 주요 API 엔드포인트
-
-### 부동산 검색 API
-```typescript
-// 아파트 검색
-GET /api/search?q={아파트명 또는 주소}
-
-// 좌표 기반 최근접 검색
-GET /api/search/nearest?lat={위도}&lng={경도}
-
-// 실거래가 조회
-GET /api/search/deals/{aptId}?dealType={매매|전세|월세}&area={면적}
-
-// 전용면적 목록
-GET /api/search/areas/{aptId}
-
-// 건물 정보 조회  
-GET /api/search/building-info/{aptId}
-
-// PNU(부동산고유번호) 조회
-GET /api/search/pnu/{aptId}
-
-// 토지이용계획 조회
-GET /api/search/landuse/{aptId}
-
-// 주변 정보 조회
-GET /api/search/nearby?lat={위도}&lon={경도}&radius={반경}
-```
-
-### AI 분석 API
-```typescript
-// AI 종합 분석 (로그인 필요)
-POST /api/ai/analyze
-{
-  "type": "apartment_summary",
-  "data": {
-    "aptInfo": { "name": "...", "address": "...", "lat": 37.5, "lon": 127.0 },
-    "deals": [...],      // 실거래가 데이터
-    "building": {...},   // 건물 정보  
-    "nearby": {...}      // 주변 정보
-  },
-  "prompt": "종합 분석 요청 프롬프트"
-}
-
-// AI 채팅봇 (로그인 필요)
-POST /api/ai/chat  
-{
-  "message": "이 아파트 투자 가치는?",
-  "aptId": 12345,
-  "chatHistory": [...]
-}
-
-// 🆕 AI Function Calling API - 모듈형 핸들러 시스템
-GET /api/ai/tools                    // 사용 가능한 AI 함수 목록 조회 (20개)
-GET /api/ai/tools/{functionName}     // 특정 함수 스키마 조회
-POST /api/ai/tools/{functionName}    // AI 함수 실행 (Ajv 파라미터 검증)
-
-// 예시: 부동산 함수 호출
-POST /api/ai/tools/searchRealEstateDeals
-{
-  "apartmentName": "래미안",
-  "dealType": "매매",
-  "area": 84.5
-}
-
-// 예시: 지리정보 함수 호출
-POST /api/ai/tools/geocodeAddress
-{
-  "address": "서울특별시 강남구 테헤란로 123"
-}
-
-// 🆕 Part 5: 모니터링 및 관리 API
-GET /api/ai/health                    // 시스템 헬스 체크
-GET /api/ai/metrics/system           // 시스템 전체 메트릭  
-GET /api/ai/metrics/functions        // 함수별 성능 통계
-GET /api/ai/metrics/report           // 종합 성능 리포트
-
-// 캐시 관리 API
-GET /api/ai/cache/stats              // 캐시 히트율 및 통계
-POST /api/ai/cache/clear             // 전체 캐시 초기화
-POST /api/ai/cache/cleanup           // 만료된 캐시 정리
-POST /api/ai/cache/invalidate?function={name} // 특정 함수 캐시 무효화
-
-// 레이트 리밋 현황
-GET /api/ai/rate-limit/status        // IP/사용자별 잔여 한도
-
-// 🆕 Part 6: API 문서화 시스템
-GET /api/docs/docs                   // 인터랙티브 Swagger UI (개발환경만)
-GET /api/docs/openapi.json          // OpenAPI 3.0 JSON 스펙 (개발환경만)  
-GET /api/docs/info                  // API 정보 및 통계 (항상 접근)
-GET /api/docs/validate              // 문서 스펙 검증 (개발환경만)
-```
-
-## 🎯 핵심 기능
-
-### 🤖 AI 임장 도우미 - ~~차세대 모듈형 Function Calling 시스템~~ **지능형 플래너 시스템**
-
-OpenImjang의 AI 시스템은 ~~**OpenAI Function Calling**과 **모듈형 아키텍처**를~~ **슬롯 기반 메모리 + 플래너 + Clarify + Critic 시스템**을 기반으로 설계된 차세대 부동산 분석 플랫폼입니다.
-
-#### 🆕 새로운 아키텍처 (2024년 12월)
-- **슬롯 기반 메모리**: 대화 맥락과 아파트 정보 지속적 보관
-- **인텐트 플래너**: 사용자 의도 분석 후 자동 실행 계획 생성
-- **Clarify 정책**: 부족한 정보 스마트 질문 생성
-- **Critic 시스템**: 결과 품질 검증 및 개선 제안
-
-#### 🏗️ 아키텍처 개요
-
-```mermaid
-graph TB
-    subgraph "🆕 AI Frontend Layer"
-        A[AI 채팅봇 + @mention] --> B[플래너 시스템 Router]
-        C[AI 분석 패널] --> B
-    end
-    
-    subgraph "🎯 AI Backend - Intelligent Planner System"
-        B --> D["슬롯 미들웨어<br/>세션 기반 메모리 관리"]
-        D --> E[인텐트 분석기<br/>@mention 패턴 인식]
-        E --> F[플래너<br/>자동 실행 계획 생성]
-        
-        F --> G[액션 실행기<br/>Handler 동적 호출]
-        G --> H[Critic 검증<br/>결과 품질 체크]
-        
-        subgraph "RealEstate Handlers"
-            G1[searchRealEstateDeals] --> R1[dealsRepo.ts]
-            G2[getLatestTrade] --> R1
-            G3[getPriceTrends] --> R1
-            G4[getDealStatsSummary] --> R1
-            G5[getDealDistribution] --> R1
-            G --> G1 & G2 & G3 & G4 & G5
-        end
-        
-        subgraph "Geo Handlers" 
-            H1[geocodeAddress] --> R2[geoRepo.ts]
-            H2[reverseGeocode] --> R2
-            H3[getNearbyByCoords] --> R2
-            H4[transformCoordinates] --> R2
-            H --> H1 & H2 & H3 & H4
-        end
-        
-        subgraph "Repository Layer"
-            R1 --> I[Kysely ORM]
-            R2 --> J[외부 API 통합<br/>V-World, 카카오, 공공데이터]
-            I --> K[PostGIS Database]
-            J --> L[External APIs]
-        end
-    end
-    
-    style A fill:#61dafb
-    style D fill:#10a37f
-    style E fill:#f39c12
-    style G fill:#e74c3c
-    style H fill:#3498db
-    style R1 fill:#9b59b6
-    style R2 fill:#2ecc71
-```
-
-#### 🔧 핵심 기술 구성요소
-
-##### 1. **모듈형 Function Handler 시스템**
-```typescript
-// 동적 핸들러 로딩 (apps/bff/src/ai/handlers/index.ts)
-export const handlers: ToolHandlers = {
-  searchRealEstateDeals: async (args) => {
-    const { searchRealEstateDeals } = await import('./searchRealEstateDeals');
-    return searchRealEstateDeals(args);
-  },
-  geocodeAddress: async (args) => {
-    const { geocodeAddress } = await import('./geo/geocodeAddress');
-    return geocodeAddress(args);
-  },
-  // 총 20개 함수 - 필요시에만 동적 로딩
-};
-```
-
-##### 2. **Ajv 기반 파라미터 검증 파이프라인**
-```typescript
-// JSON Schema 실시간 검증 (apps/bff/src/ai/tools/validation.ts)
-export function validateOrThrow(schema: ToolSchema, data: unknown): void {
-  const validate = ajv.compile(schema.parameters);
-  const isValid = validate(data);
-  
-  if (!isValid) {
-    const errors = validate.errors || [];
-    const errorMessages = errors.map(err => 
-      `${err.instancePath}: ${err.message}`
-    );
-    throw new ValidationError(`파라미터 검증 실패: ${errorMessages.join(', ')}`);
-  }
-}
-```
-
-##### 3. **Repository Pattern 기반 데이터 접근**
-- **`dealsRepo.ts`**: 부동산 거래 데이터 전문 레포지토리
-  - PostGIS 공간 쿼리 최적화
-  - 복잡한 집계 함수 (트렌드 분석, 통계 요약, 분포 분석)
-  - Kysely ORM으로 타입 안전 SQL 쿼리
-
-- **`geoRepo.ts`**: 지리정보 서비스 통합 레포지토리  
-  - V-World API: 정부 지리정보 (지오코딩 1차 우선)
-  - 카카오 지도 API: 상용 지리정보 (Fallback)
-  - 공공데이터포털: 법정동 코드 조회
-  - proj4.js: 좌표계 변환 (WGS84/GRS80/KATEC/TM 지원)
-
-#### 📋 Function Catalog - 총 20개 함수
-
-##### **부동산 분석 함수군 (12개)**
-1. **`searchRealEstateDeals`** - 실거래 데이터 검색
-   - 아파트명/ID 기반 거래 내역 조회
-   - 매매/전세/월세 유형별 필터링
-   - 면적별 거래가 분석 (±5㎡ 허용오차)
-
-2. **`getLatestTrade`** - 최신 거래 내역
-   - 시간순 정렬된 최근 거래 Top N
-   - 거래 유형별 최신 동향 파악
-
-3. **`getPriceTrends`** - 가격 트렌드 분석  
-   - 월별/분기별 평균 거래가 추이
-   - 상승/하락률 계산 및 안정성 점수
-   - 전월 대비 변화율 상세 분석
-
-4. **`getDealStatsSummary`** - 거래 통계 요약
-   - 평균/최저/최고 거래가
-   - 거래량 및 유형별 분포
-   - 한국어 통화 포맷팅 (만원→억/천만원)
-
-5. **`getDealDistribution`** - 거래 분포 분석
-   - 가격대별 히스토그램 (5천만원 단위)
-   - 면적별 분포 (10㎡ 단위)  
-   - 층별 분포 (5층 단위)
-
-6. **`getBuildingInfo`** - 건축물 상세 정보
-7. **`searchNearbyPOI`** - 주변 편의시설 검색
-8. **`compareMultipleApartments`** - 다중 아파트 비교
-9. **`findSimilarApartments`** - 유사 아파트 추천
-10. **`searchDealsByFilters`** - 복합 조건 검색 (구현 예정)
-11. **`getComparableSales`** - 비교 거래 사례 (구현 예정)  
-12. **`estimateRentYield`** - 임대 수익률 계산 (구현 예정)
-
-##### **지리정보 함수군 (8개) - 🆕 새로 구현**
-1. **`geocodeAddress`** - 주소→좌표 변환
-   ```json
-   // V-World API 1차, 카카오 API Fallback
-   {
-     "coordinates": { "longitude": 127.031, "latitude": 37.499 },
-     "confidence": 0.9,
-     "source": "VWorld"
-   }
-   ```
-
-2. **`reverseGeocode`** - 좌표→주소 변환
-   ```json
-   {
-     "addresses": {
-       "roadAddress": "서울특별시 강남구 테헤란로 123",  
-       "jibunAddress": "서울특별시 강남구 역삼동 123-45"
-     }
-   }
-   ```
-
-3. **`lookupLegalDongCode`** - 법정동 코드 조회
-   ```json
-   {
-     "legalDongInfo": {
-       "code": "1168010100",
-       "name": "서울특별시 강남구 역삼동"
-     }
-   }
-   ```
-
-4. **`convertDongCode`** - 법정동↔행정동 변환
-5. **`getNearbyByCoords`** - 좌표 기반 POI 검색
-6. **`isochroneSearch`** - 등시간대 접근성 분석
-7. **`transformCoordinates`** - 좌표계 변환 (proj4.js)
-8. **`normalizeKoreanAddress`** - 한국 주소 정규화
-
-#### 🛡️ 안전성 및 성능 최적화
-
-##### **파라미터 검증**
-- **Ajv JSON Schema**: OpenAI Function Calling 스펙 완전 준수
-- **타입 안전성**: TypeScript 인터페이스와 스키마 일치성 검증  
-- **에러 처리**: 한국어 에러 메시지 및 상세 제안사항
-
-##### **성능 최적화**
-- **동적 Import**: 사용되는 핸들러만 런타임 로딩
-- **Repository 캐싱**: 외부 API 응답 5-30분 캐시 
-- **Connection Pooling**: Kysely + PostgreSQL 연결 풀 최적화
-
-##### **Fallback 전략**
-- **API 다중화**: 1차 실패시 2차 API 자동 전환
-- **Mock 응답**: 외부 API 장애시 기본 응답 제공
-- **Graceful Degradation**: 부분 실패시에도 가용한 데이터 반환
-
-#### 🔄 확장 가능한 설계
-
-새로운 AI 함수 추가는 다음 4단계로 완성됩니다:
-
-```typescript
-// 1. 스키마 정의 (apps/bff/src/ai/schemas/)
-export const newFunctionSchema: ToolSchema = {
-  name: "newFunction",
-  description: "새로운 기능 설명",
-  parameters: { /* JSON Schema */ }
-}
-
-// 2. 핸들러 구현 (apps/bff/src/ai/handlers/)
-export async function newFunction(args: NewFunctionParams) {
-  // 비즈니스 로직 구현
-}
-
-// 3. 핸들러 등록 (handlers/index.ts)
-newFunction: async (args) => {
-  const { newFunction } = await import('./newFunction');
-  return newFunction(args);
-}
-
-// 4. 스키마 등록 (tools/index.ts)
-export { newFunctionSchema } from '../schemas/newFunction.schema';
-```
-
-이 모듈형 설계로 **무한 확장 가능한 AI 부동산 분석 플랫폼**을 구축했습니다.
-
-#### 🛡️ Part 5: 서버 보호 및 비용 최적화 시스템 (Cache/Rate-Limit/Monitoring)
-
-AI Function Calling의 대량 호출과 외부 API 비용을 효과적으로 관리하기 위한 **종합적인 서버 보호 및 모니터링 시스템**을 구현했습니다.
-
-##### **🏗️ 시스템 구성도**
-
-```mermaid
-graph TB
-    subgraph "Client Layer"
-        A[AI 챗봇 요청] --> B[Frontend SPA]
-    end
-    
-    subgraph "Protection Middleware Stack"
-        B --> C[Rate Limiter<br/>IP/User/Function별 제한]
-        C --> D[Cache Middleware<br/>SHA256 키 기반]
-        D --> E[Logger Middleware<br/>구조화된 로깅]
-        E --> F[Metrics Tracker<br/>성능 수집]
-    end
-    
-    subgraph "AI Function Layer"
-        F --> G[AI Function Handler]
-        G --> H[External API Call]
-        H --> I[Repository Layer]
-    end
-    
-    subgraph "Monitoring Layer"
-        J[Cache Manager<br/>메모리 기반] --> D
-        K[Rate Limit Store<br/>hono-rate-limiter] --> C
-        L[Pino Logger<br/>JSON 구조화] --> E
-        M[Metrics Collector<br/>Singleton] --> F
-    end
-    
-    subgraph "Management API"
-        N[/api/ai/cache/stats] --> J
-        O[/api/ai/metrics/system] --> M
-        P[/api/ai/metrics/report] --> M
-        Q[/api/ai/health] --> M
-    end
-    
-    style C fill:#e74c3c
-    style D fill:#3498db
-    style E fill:#f39c12
-    style F fill:#9b59b6
-    style J fill:#2ecc71
-```
-
-##### **💾 캐시 시스템** - GPT API 비용 90% 절감
-
-```typescript
-// 함수별 최적화된 TTL 설정 (src/config/cache.config.ts)
-export const CACHE_TTL = {
-  // 지리정보 - 거의 변경되지 않음 (24시간)
-  'geocodeAddress': 24 * 60 * 60 * 1000,      
-  'reverseGeocode': 24 * 60 * 60 * 1000,
-  
-  // 가격 트렌드 - 하루 단위 업데이트 (1시간)  
-  'getPriceTrends': 60 * 60 * 1000,
-  
-  // 실시간 검색 - 짧은 캐시 (5분)
-  'searchRealEstateDeals': 5 * 60 * 1000,
-  
-  // 개발환경: 10% TTL로 단축
-  development: { multiplier: 0.1 }
-};
-
-// SHA256 기반 정규화된 캐시 키
-generateKey(functionName: string, params: any): string {
-  const normalized = this.normalizeParams(params); // 키 순서 정규화
-  const hash = crypto.createHash('sha256').update(JSON.stringify(normalized));
-  return `ai_tool:${functionName}:${hash.digest('hex').slice(0, 16)}`;
-}
-```
-
-**주요 기능:**
-- ✅ **파라미터 정규화**: 키 순서 무관하게 동일한 캐시 키 생성
-- ✅ **TTL 최적화**: 데이터 특성별 차등 캐시 (지리정보 24시간, 검색 5분)
-- ✅ **환경별 설정**: 개발환경 10% 단축, 프로덕션 최적화
-- ✅ **자동 정리**: 5분마다 만료된 캐시 정리
-- ✅ **Redis 호환**: 프로덕션 환경에서 Redis로 확장 가능
-
-##### **⚡ 레이트 리밋 시스템** - 서버 부하 및 남용 방지
-
-```typescript
-// 다층 레이트 리밋 전략 (src/middleware/rateLimit.ts)
-export const RATE_LIMITS = {
-  // IP 기반 기본 제한
-  basic: { windowMs: 60000, limit: 30 },        // 30회/분
-  
-  // 사용자 기반 제한 (인증 시)
-  user: { windowMs: 60000, limit: 60 },         // 60회/분
-  
-  // 함수별 동적 제한 (비용 기반)
-  functions: {
-    'searchRealEstateDeals': { limit: 10 },     // 고비용: 10회/분
-    'geocodeAddress': { limit: 20 },            // 중비용: 20회/분  
-    'lookupLegalDongCode': { limit: 50 },       // 저비용: 50회/분
-  },
-  
-  // 개발환경 관대한 설정
-  development: { limit: 1000 }
-};
-
-// 동적 키 생성 (IP + 사용자 + 함수별)
-keyGenerator: (c: Context) => {
-  const ip = getClientIP(c);
-  const userId = c.get('userId');
-  const functionName = c.req.param('name');
-  return `rate_limit:${functionName}:${userId || ip}`;
-}
-```
-
-**주요 전략:**
-- ✅ **계층적 제한**: IP → 사용자 → 함수별 차등 적용
-- ✅ **비용 기반 조절**: API 비용에 따른 함수별 제한치
-- ✅ **인증 사용자 우대**: 로그인 사용자 2배 허용량
-- ✅ **개발자 친화적**: 개발환경에서 1000회/분 관대한 제한
-
-##### **📊 구조화된 로깅** - 운영 가시성 확보
-
-```typescript
-// Pino 기반 JSON 로깅 (src/lib/logger.ts)
-export class AILogger {
-  // AI 함수 호출 생명주기 추적
-  logFunctionCall(context: {
-    functionName: string,
-    requestId: string,
-    userId?: string, 
-    ip: string,
-    params: any
-  }) {
-    this.logger.info({
-      event: 'ai_function_call',
-      requestId: context.requestId,
-      functionName: context.functionName,
-      userId: context.userId || 'anonymous',
-      clientIp: context.ip,
-      parameterCount: Object.keys(context.params || {}).length,
-      timestamp: Date.now()
-    }, `🚀 AI 함수 호출: ${context.functionName}`);
-  }
-
-  // 캐시 이벤트 상세 로깅
-  logCacheEvent(context: {
-    event: 'hit' | 'miss' | 'set' | 'invalidate',
-    functionName: string,
-    key: string,
-    size?: number,
-    ttl?: number
-  }) {
-    // 💾🔄💽🗑️ 이모지로 이벤트 시각화
-  }
-}
-```
-
-**로깅 카테고리:**
-- ✅ **함수 호출 추적**: 시작→성공→실패 전체 생명주기  
-- ✅ **성능 모니터링**: 실행시간, 결과 크기, 캐시 히트율
-- ✅ **보안 이벤트**: 레이트 리밋 도달, 비정상 요청 패턴
-- ✅ **시스템 메트릭**: 메모리, 활성 연결, 캐시 크기 주기적 수집
-
-##### **📈 메트릭 수집 시스템** - 데이터 기반 최적화
-
-```typescript
-// 실시간 성능 메트릭 수집 (src/lib/metrics.ts)
-class MetricsCollector {
-  // 함수별 상세 통계
-  interface FunctionMetrics {
-    totalCalls: number;           // 총 호출 수
-    successCalls: number;         // 성공 호출
-    errorCalls: number;           // 실패 호출
-    cacheHits: number;            // 캐시 히트
-    avgExecutionTime: number;     // 평균 실행시간  
-    minExecutionTime: number;     // 최소 실행시간
-    maxExecutionTime: number;     // 최대 실행시간
-    recentErrors: Error[];        // 최근 에러 10개
-  }
-  
-  // 시스템 전체 통계
-  getSystemMetrics(): SystemMetrics {
-    return {
-      uptime: Date.now() - this.startTime,
-      totalRequests: this.totalRequests,
-      activeRequests: this.activeRequests,  
-      memoryUsage: process.memoryUsage(),
-      cacheStats: CacheHelper.getStats(),
-      rateLimitBlockRate: (blocked / total) * 100
-    };
-  }
-}
-```
-
-**수집 메트릭:**
-- ✅ **함수별 성능**: 호출수, 성공률, 평균 실행시간, 캐시 히트율
-- ✅ **시스템 리소스**: 메모리 사용량, 활성 연결수, 업타임
-- ✅ **오류 분석**: 함수별 최근 에러, 실패 패턴 분석
-- ✅ **트렌드 분석**: 시간대별 사용 패턴, 인기 함수 순위
-
-##### **🎛️ 모니터링 API 엔드포인트**
-
-```typescript
-// 실시간 모니터링 대시보드용 API
-GET /api/ai/health                    // 헬스 체크 (응답속도, 상태)
-GET /api/ai/metrics/system           // 시스템 전체 메트릭  
-GET /api/ai/metrics/functions        // 함수별 상세 통계
-GET /api/ai/metrics/report           // 종합 성능 리포트
-
-// 캐시 관리
-GET /api/ai/cache/stats             // 캐시 히트율, 크기 통계
-POST /api/ai/cache/clear            // 전체 캐시 초기화
-POST /api/ai/cache/cleanup          // 만료 캐시 정리
-POST /api/ai/cache/invalidate       // 특정 함수 캐시 무효화
-
-// 레이트 리밋 현황  
-GET /api/ai/rate-limit/status       // IP/사용자별 잔여 한도
-```
-
-##### **⚙️ 운영 효과 및 개선 사항**
-
-**비용 절감 효과:**
-- 📉 **GPT API 비용 90% 절감**: 지리정보 캐시로 반복 요청 방지
-- 📉 **외부 API 호출 70% 감소**: 스마트 캐시 정책으로 효율성 극대화
-- 📉 **서버 리소스 50% 절약**: 레이트 리밋으로 부하 분산
-
-**운영 개선:**  
-- 🔍 **장애 예방**: 실시간 모니터링으로 이상 징후 조기 탐지
-- 📊 **성능 최적화**: 메트릭 분석 기반 병목 구간 식별
-- 🛡️ **보안 강화**: IP 기반 남용 방지 및 DDoS 대응
-
-#### 📚 Part 6: OpenAPI 3.0 자동 문서화 시스템 (Swagger)
-
-프론트엔드 팀과 외부 시스템이 AI Tools API를 쉽게 이해하고 활용할 수 있도록 **완전 자동화된 API 문서 시스템**을 구현했습니다.
-
-##### **🏗️ 문서 생성 아키텍처**
-
-```mermaid
-graph TB
-    subgraph "Documentation Pipeline"
-        A[AI Tools Schema] --> B[OpenAPI Generator]
-        B --> C[JSON Schema → OpenAPI 변환]
-        C --> D[예제 데이터 생성]
-        D --> E[Swagger UI 렌더링]
-    end
-    
-    subgraph "Developer Access"
-        F["/api/docs/docs"] --> E
-        G["/api/docs/openapi.json"] --> C
-        H["/api/docs/info"] --> I["API 통계 정보"]
-        J["/api/docs/validate"] --> K["스펙 검증"]
-    end
-    
-    subgraph "Auto-Generated Content"
-        L[20개 AI 함수] --> B
-        M[에러 응답 스키마] --> B
-        N[예제 입출력] --> D
-        O[모니터링 API] --> B
-    end
-    
-    style E fill:#61dafb
-    style C fill:#f39c12
-    style I fill:#3498db
-    style K fill:#2ecc71
-```
-
-##### **🔧 핵심 기능**
-
-**1. 자동 스키마 변환**
-```typescript
-// JSON Schema → OpenAPI 3.0 자동 변환 (src/lib/openapi.ts)
-function convertJsonSchemaToOpenAPI(jsonSchema: any): any {
-  const openApiSchema = { ...jsonSchema };
-  
-  // OpenAPI 호환성을 위한 필드 정리
-  delete openApiSchema.additionalProperties;
-  delete openApiSchema.strict;
-  
-  // properties 재귀 처리로 중첩 스키마 지원
-  if (openApiSchema.properties) {
-    const convertedProperties: Record<string, any> = {};
-    for (const [key, value] of Object.entries(openApiSchema.properties)) {
-      convertedProperties[key] = convertJsonSchemaToOpenAPI(value);
-    }
-    openApiSchema.properties = convertedProperties;
-  }
-  
-  return openApiSchema;
-}
-```
-
-**2. 스마트 예제 생성**
-```typescript
-// 스키마 기반 자동 예제 데이터 생성
-function generateExampleFromSchema(schema: any): any {
-  if (schema.example !== undefined) {
-    return schema.example;  // 명시적 예제 우선
-  } else if (schema.enum && schema.enum.length > 0) {
-    return schema.enum[0];  // enum 첫 번째 값
-  } else if (schema.type === 'string') {
-    return schema.description ? `예시 ${schema.description}` : `예시 ${key}`;
-  }
-  // ... 타입별 기본 예제 생성
-}
-```
-
-**3. 함수별 맞춤 예제 결과**
-```typescript
-// 실제 사용 케이스 기반 예제 응답
-const exampleResults = {
-  'searchRealEstateDeals': {
-    deals: [
-      {
-        aptName: '래미안강남힐스',
-        dealAmount: 180000,      // 18억원 (만원 단위)
-        dealType: '매매',
-        area: 84.5,              // 84.5㎡
-        floor: 12,
-        dealDate: '2024-08-15'
-      }
-    ],
-    totalCount: 1
-  },
-  'geocodeAddress': {
-    coordinates: {
-      latitude: 37.4979,
-      longitude: 127.0276
-    },
-    confidence: 0.9,
-    source: 'VWorld'
-  }
-};
-```
-
-##### **📖 접근 가능한 문서 엔드포인트**
-
-**개발환경 전용 (NODE_ENV=development 또는 undefined):**
-- **`GET /api/docs/docs`** - 🎯 **인터랙티브 Swagger UI**
-  - 실시간 API 테스트 가능
-  - 20개 AI 함수 + 모니터링 API 모두 문서화
-  - 함수별 예제 입출력 데이터 제공
-  - 에러 케이스별 응답 예시
-
-- **`GET /api/docs/openapi.json`** - 📄 **OpenAPI 3.0 JSON 스펙**
-  - 표준 OpenAPI 3.0 호환
-  - Postman, Insomnia 등 도구에서 import 가능
-  - CI/CD 파이프라인에서 스키마 검증 활용
-
-**항상 접근 가능:**
-- **`GET /api/docs/info`** - ℹ️ **API 정보 및 통계**
-  ```json
-  {
-    "apiInfo": {
-      "title": "OpenImjang AI Tools API",
-      "totalFunctions": 20,
-      "categories": {
-        "realestate": "부동산 분석 함수 (12개)",
-        "geo": "지리정보 함수 (8개)"
-      }
-    },
-    "endpoints": {
-      "documentation": "/api/docs/docs",
-      "health": "/api/ai/health",
-      "tools": "/api/ai/tools"
-    }
-  }
-  ```
-
-- **`GET /api/docs/validate`** - ✅ **스펙 검증 (개발환경만)**
-  ```json
-  {
-    "validation": {
-      "pathsCount": 23,           // 총 API 경로 수
-      "toolsCount": 20,           // AI 함수 수
-      "pathsMatchTools": true,    // 모든 함수 문서화 완료
-      "missingPaths": [],         // 누락된 경로 없음
-      "valid": true               // 전체 검증 성공
-    }
-  }
-  ```
-
-##### **🔒 보안 및 환경 관리**
-
-**개발환경 감지:**
-```typescript
-// 환경별 접근 제어 (src/routes/swagger.ts)
-const isDevelopment = process.env.NODE_ENV === 'development' || 
-                     process.env.NODE_ENV === undefined;
-
-if (!isDevelopment) {
-  return c.json({
-    success: false,
-    error: 'API 문서는 개발환경에서만 접근 가능합니다.'
-  }, 403);
-}
-```
-
-**프로덕션 보안:**
-- 📛 Swagger UI 완전 차단 (403 Forbidden)
-- 📛 OpenAPI JSON 스펙 비공개
-- ✅ API 정보 엔드포인트는 접근 허용 (메타데이터만)
-- ✅ 레이트 리밋 적용으로 남용 방지
-
-##### **⚙️ 개발자 경험 개선 효과**
-
-**Before (Part 6 이전):**
-```bash
-# 개발자가 AI 함수 사용하려면
-1. 소스코드에서 스키마 파일 직접 확인
-2. 파라미터 형식 추측해서 테스트
-3. 에러 발생시 디버깅 어려움
-4. API 변경사항 수동 전파 필요
-```
-
-**After (Part 6 이후):**
-```bash
-# http://localhost:8787/api/docs/docs 접속만으로
-1. ✅ 모든 AI 함수 한눈에 확인
-2. ✅ 실시간 API 테스트 (Try it out 버튼)
-3. ✅ 정확한 예제 입출력 데이터 제공
-4. ✅ 에러 케이스별 응답 형식 문서화
-5. ✅ 코드 변경시 자동 문서 업데이트
-```
-
-**팀 협업 효과:**
-- 🚀 **프론트엔드 개발 속도 3배 향상**: 정확한 API 스펙으로 integration 시간 단축
-- 🛡️ **에러 처리 표준화**: 4xx/5xx 에러별 대응 방안 명확화
-- 📚 **온보딩 시간 80% 단축**: 신규 개발자도 문서만으로 API 이해 가능
-- 🔄 **API 변경사항 실시간 반영**: 스키마 수정시 문서 자동 업데이트
-
-### 🗺️ 인터랙티브 지도
-- **2D/3D 통합**: 카카오맵 + Cesium 3D 지구본
-- **다층 시각화**: 지적편집도, 용도지역, 건물군 오버레이
-- **실시간 마커**: 즐겨찾기, 검색 결과, 임시 마커
-- **공간 분석**: 반경 검색, 최근접 아파트 찾기
-
-### 📊 부동산 데이터 분석
-- **실거래가 조회**: 최근 1년 거래 내역 (무제한)
-- **거래 유형별 필터**: 매매/전세/월세 분류
-- **면적별 분석**: 전용면적별 가격 동향
-- **건물 정보**: 건축물대장 기반 상세 정보
-- **주변 환경**: 교통, 교육, 편의시설 정보
-
-### 👤 개인화 서비스
-- **Firebase 인증**: 구글 OAuth 간편 로그인
-- **스마트 온보딩**: 6단계 맞춤 설정 프로세스
-  - 부동산 이용 목적 (매매/전세/월세/투자)
-  - 가족 구성 및 라이프스타일 설정
-  - 통근 시간 및 교통 접근성 고려사항
-  - **자금 범위 설정**: 단계별 슬라이더 UI
-    - 전월세 보증금/매매 자금: 0원~50억원 (가변 단위)
-    - 월세 금액: 0원~1000만원 (세밀한 단위 조절)
-  - 건물 연식 및 시설 선호도
-  - 우선순위 (교통/학군/편의시설/투자가치 등)
-- **임장 메모**: 현장 방문 후기 작성 (사진 포함)
-- **즐겨찾기**: 관심 아파트 북마크 및 지도 표시
-- **클라우드 동기화**: 모든 데이터 자동 백업
-
-### 🎨 모던 UI/UX
-- **반응형 디자인**: 모바일/태블릿/데스크톱 최적화
-- **다크 모드 지원**: 사용자 선호도 반영 (향후 추가)
-- **직관적 네비게이션**: 탭 기반 정보 구조
-- **실시간 피드백**: 로딩 상태, 에러 처리
-- **통합 브랜드 컬러**: #14e3dc 민트 그린 테마
-
-
-
-## 🔒 보안 고려사항
-
-### 인증 및 권한
-- **Firebase Authentication**: 구글 OAuth 2.0 인증
-- **JWT 토큰**: 자동 갱신 및 만료 처리
-- **API 미들웨어**: 모든 민감한 API에 인증 필수
-- **CORS 설정**: 허용된 도메인만 접근 가능
-
-### 데이터 보호
-- **환경 변수 관리**: 민감한 키는 서버사이드만 저장
-- **SQL Injection 방지**: Kysely ORM 파라미터 바인딩
-- **XSS 방지**: React 기본 이스케이프 + 추가 검증
-- **HTTPS 강제**: Production 환경에서 SSL/TLS 필수
-
-## 🧪 테스트 전략
-
-### API 테스트
-```bash
-# BFF API 통합 테스트
-bun test apps/bff/src/**/*.test.ts
-
-# 데이터베이스 연결 테스트  
-bun test apps/bff/src/lib/db.test.ts
-```
-
-### E2E 테스트 (계획)
-```bash
-# Playwright 기반 브라우저 테스트
-npm run test:e2e
-
-# 지도 인터랙션 테스트
-npm run test:map
-```
-
-## 🔄 AI 시스템 검증 및 배포
-
-### Part 3: OpenAI Assistant 동기화 검증
-```bash
-# 로컬 스키마와 OpenAI Assistant 일치성 검사
-bun run validate:assistant-tools
-
-# 환경변수 설정 필요
-OPENAI_API_KEY=your_key_here
-OPENAI_ASSISTANT_ID=asst_your_assistant_id
-```
-
-**검증 항목:**
-- ✅ 로컬 20개 함수 vs Assistant 함수 이름 매칭
-- ✅ JSON Schema 구조 deep-equal 비교  
-- ✅ 파라미터 타입/enum 일치성 검사
-- ✅ description 텍스트 동일성 확인
-
-### Part 4: 모듈형 채팅 시스템
-```bash
-# 새로운 표준 패턴 Chat API 테스트
-curl -X POST http://localhost:8787/api/ai-new/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "서울 강남의 아파트 가격 동향을 알려주세요"}'
-```
-
-**핵심 개선사항:**
-- **인라인 도구 제거**: 모든 function 정의를 `tools/` 모듈로 이동
-- **표준 Tool Call 루프**: Ajv 검증 → Handler 실행 → Tool 피드백 → 재호출
-- **무한루프 방지**: 최대 6회 제한, guard 카운터
-- **책임 분리**: 대화 orchestration vs 비즈니스 로직 분리
-- **에러 표준화**: `{success: false, error}` 구조로 모델 이해도 향상
-
-### 배포 전 체크리스트
-```bash
-# 1. 스키마 동기화 확인
-bun run validate:assistant-tools
-
-# 2. 타입 검사
-bun run typecheck  
-
-# 3. 개발 서버 재시작
+cd apps/bff
 bun run dev
-
-# 4. API 응답 테스트
-curl -X POST localhost:8787/api/ai/tools/getPriceTrends \
-  -H "Content-Type: application/json" \
-  -d '{"aptId": 123, "period": "1년"}'
 ```
 
-## 📝 최신 업데이트 (2025-09-11)
+**터미널 2 - 프론트엔드 (포트 5173)**
+```bash
+cd apps/web
+bun run dev
+```
 
-### 🔥 주요 신규 기능
-- **🤖 하이브리드 AI 시스템 (RAG + Function Calling)**
-  - OpenAI GPT-4o-mini 기반 실시간 데이터 조회 + 검색 증강 생성
-  - 20+ 모듈화된 AI 함수로 정확한 부동산 분석
-  - 자연어 대화형 임장 컨설턴트 역할
+5. **접속**
+- 프론트엔드: http://localhost:5173
+- 백엔드 API: http://localhost:8787
+- API 문서: http://localhost:8787/swagger
 
-- **📱 @아파트 멘션 시스템**
-  - 채팅에서 `@아파트명` 입력 시 자동 검색 및 데이터 로딩
-  - 실시간 로딩 상태 표시 (기본정보 → 주변POI → 실거래가 → 건물정보)
-  - 최대 3개 아파트 비교 분석 지원
+## 🎨 실제 구현된 기능 구조 트리
 
-- **🎯 스마트 아파트 데이터 관리**
-  - 아파트별 메타데이터 (ID, 주소, 좌표) 완전 활용
-  - 중복 방지 및 정확성 향상을 위한 ID 우선순위 검색
-  - 비교 분석용 다중 아파트 데이터 관리
+```
+🏠 오픈임장 플랫폼
+├── 🗺️ 지도 시각화 시스템
+│   ├── 2D 지도 (Kakao Maps) - MapContainer.tsx
+│   │   ├── 실시간 아파트 위치 마커 표시
+│   │   ├── 즐겨찾기 핀 표시/관리 (Firebase 연동)
+│   │   ├── 임시 마커 (POI 호버용)
+│   │   ├── 건물군(아파트 단지) 경계 오버레이 (useEqbOverlay)
+│   │   ├── 3D 카메라 시야 범위 시각화 (부채꼴 표시)
+│   │   ├── 미니맵 모드 지원
+│   │   ├── 네이버 로드뷰 동기화 (useNaverStreetView)
+│   │   └── 카드 확장 시 자동 리사이즈
+│   └── 3D 지도 (MapPrime3D/Cesium) - MapPrime3DViewer.tsx
+│       ├── 🏢 3D 건물 모델링 및 단지 하이라이트 (use3DEqbHighlight)
+│       ├── 🪟 창가 뷰 모드 (useWindowView)
+│       │   └── 건물 클릭 시 창가에서 바라본 시점 자동 설정
+│       ├── 🚶 1인칭 걷기 모드 (useWalkingMode, useFirstPersonLook)
+│       │   ├── WASD 키로 이동
+│       │   ├── 마우스 시점 조작
+│       │   └── 마우스 휠 클릭으로 둘러보기
+│       ├── ☀️ 음영분석 시스템 (useShadeAnalysis)
+│       │   ├── 실시간 일조량 분석
+│       │   ├── 계절별 프리셋 (춘분/하지/추분/동지)
+│       │   ├── 분석 지점 클릭 선택
+│       │   └── 시간대별 음영 변화 시뮬레이션
+│       ├── 🌆 스카이라인 분석 (useSkyline)
+│       │   ├── 고층 건물 스카이라인 추출
+│       │   ├── 시야 차단도 분석
+│       │   └── 건물 높이 프로파일 생성
+│       ├── 📍 프리셋 포인트 시스템 (개발자 모드)
+│       │   ├── 3D 건물 표면 클릭으로 포인트 생성
+│       │   ├── 동/호수/면적 정보 입력
+│       │   ├── 아파트별 포인트 필터링
+│       │   ├── 3D 지도에 포인트 시각화
+│       │   └── 포인트 클릭 시 상세정보 팝업
+│       ├── 🗺️ 네이버 로드뷰 통합 (useNaverStreetView)
+│       │   ├── 3D 지도와 실시간 동기화
+│       │   ├── 걷기/1인칭 모드와 연동
+│       │   └── 우측 하단 팝업 표시
+│       ├── 🎯 카메라 프러스텀 계산 (useCameraFrustum)
+│       │   ├── 3D 시야 범위 실시간 계산
+│       │   ├── 미니맵 오버레이 연동
+│       │   └── 디바운스 최적화 (300ms)
+│       ├── 📏 리사이즈 기능 (useResizable)
+│       │   ├── 좌측 하단 핸들로 크기 조절
+│       │   ├── 최소/최대 크기 제한
+│       │   └── 드래그 상태 시각화
+│       └── 🔄 팝업/메인 모드 전환
+│           ├── 우측 상단 팝업 기본 위치
+│           ├── 3D 메인 모드 시 전체화면
+│           └── 2D ↔ 3D 전환 버튼
+│
+├── 🤖 AI 챗봇 시스템
+│   ├── 🧠 Simple LLM 시스템 (SimpleLLMProcessor)
+│   │   ├── GPT-4o-mini 기반 자연어 처리
+│   │   ├── Few-shot 부동산 도메인 학습
+│   │   ├── 한글 인코딩 문제 해결 (SafeBinaryJsonParser - 6가지 전략)
+│   │   ├── 웹 검색 연동 (WebSearchService - 내부 데이터 부족 시)
+│   │   └── 세션 기반 대화 연속성 (30분 TTL)
+│   ├── 🎯 멀티모달 챗봇 (ChatbotSidebar)
+│   │   ├── 이미지 + 텍스트 통합 분석
+│   │   ├── 임장 메모 첨부 (MemoSelectorModal)
+│   │   │   ├── Firebase 메모 실시간 조회
+│   │   │   ├── 메모 사진 Base64 변환 (urlToBase64)
+│   │   │   ├── 보라색 테마 UI 구분
+│   │   │   └── 메타데이터 표시 (아파트 연관성, 작성일)
+│   │   ├── 직접 이미지 첨부 (드롭다운)
+│   │   ├── @mention 아파트 정보 첨부
+│   │   └── 상황별 컨텍스트 세션 (general/apartment/memo)
+│   ├── 🔄 LLM 라이프사이클 관리 (LLMMaster)
+│   │   ├── ConversationSession (대화 상태 관리)
+│   │   ├── SmartApartmentResolver (아파트명 해석)
+│   │   │   ├── 직접 DB 검색
+│   │   │   ├── 벡터 유사도 검색
+│   │   │   └── 웹 검색 폴백
+│   │   ├── AI 3.0 대화 인텔리전스 시스템 (6개 매니저)
+│   │   │   ├── ConversationContextTracker
+│   │   │   ├── DialogueStrategyEngine
+│   │   │   ├── NaturalFlowManager
+│   │   │   ├── UserJourneyOptimizer
+│   │   │   ├── MultiTurnConversationManager
+│   │   │   └── EmotionalContextAnalyzer
+│   │   └── 벡터 임베딩 시스템 (EmbeddingService)
+│   └── ⚠️ 레거시 시스템 (사용 중단 예정)
+│       ├── Function Calling 기반 AI 핸들러들
+│       └── 고정 규칙 기반 응답 시스템
+│
+├── 🏢 실거래가 검색 시스템
+│   ├── 🔍 통합 아파트 검색 (SearchRoute)
+│   │   ├── 좌표 기반 검색 (PostGIS ST_Distance)
+│   │   ├── 지번주소 검색 (ILIKE 패턴)
+│   │   ├── 아파트명 유사도 검색 (PostgreSQL similarity)
+│   │   └── ILIKE 폴백 검색
+│   ├── 🏠 실거래가 조회 (RealEstateDealsTable)
+│   │   ├── 매매/전월세 통합 조회
+│   │   ├── 면적별 거래 현황
+│   │   ├── 층수별 거래 분포
+│   │   └── 최신순/가격순 정렬
+│   ├── 🗃️ 공공데이터 ETL 파이프라인
+│   │   ├── 매매 실거래가 수집 (fetch_trade_raw.ts)
+│   │   ├── 전월세 실거래가 수집 (fetch_rent_raw.ts)
+│   │   ├── 건축물 정보 수집 (fetch_building_info.ts)
+│   │   ├── 데이터 통합 처리 (populate_apt_deal_all.ts)
+│   │   └── 중복 방지 및 안전 파싱
+│   └── 🌐 공간 검색 (PostGIS)
+│       ├── 반경 내 아파트 검색
+│       ├── 거리 계산 (ST_Distance)
+│       ├── 지리적 범위 검색
+│       └── GIST 공간 인덱스 최적화
+│
+├── 📝 임장 메모 시스템 (Firebase 연동)
+│   ├── 📋 메모 작성/편집 (MemoForm)
+│   │   ├── 아파트 연관 메모
+│   │   ├── 다중 사진 첨부 및 업로드
+│   │   ├── 위치 기반 자동 아파트 감지
+│   │   ├── 마크다운 텍스트 렌더링
+│   │   └── 실시간 저장/동기화
+│   ├── 🔥 Firebase 통합
+│   │   ├── Firestore 실시간 메모 동기화
+│   │   ├── Storage 이미지 업로드/다운로드
+│   │   ├── 사용자별 메모 컬렉션 관리
+│   │   └── 보안 규칙 적용
+│   ├── ❤️ 즐겨찾기 시스템
+│   │   ├── 관심 아파트 즐겨찾기
+│   │   ├── 2D 지도 핀 표시
+│   │   └── 실시간 업데이트
+│   └── 🔗 챗봇 연동
+│       ├── 메모 선택 모달 (MemoSelectorModal)
+│       ├── 사진 자동 다운로드/변환
+│       └── AI 분석용 컨텍스트 제공
+│
+├── 👤 사용자 관리 시스템
+│   ├── 🔐 Firebase 인증 (AuthProvider)
+│   │   ├── 이메일/비밀번호 로그인
+│   │   ├── 구글 소셜 로그인
+│   │   ├── 익명 로그인 지원
+│   │   └── 인증 상태 실시간 관리
+│   ├── 📋 사용자 온보딩 (OnboardingWizard - 7단계)
+│   │   ├── 기본 정보 수집
+│   │   ├── 관심 지역 설정
+│   │   ├── 투자 성향 분석
+│   │   ├── 예산 범위 설정
+│   │   ├── 우선순위 설정
+│   │   ├── 알림 설정
+│   │   └── 프로필 완성
+│   └── 👥 프로필 관리 (ProfilePage)
+│       ├── 개인정보 수정
+│       ├── 투자 성향 재설정
+│       └── 계정 설정
+│
+├── 🔧 개발자 도구 시스템
+│   ├── 🛠️ 개발자 모드 (DeveloperModeProvider)
+│   │   ├── 전역 개발자 모드 토글
+│   │   ├── 프리셋 포인트 생성 기능 활성화
+│   │   ├── 3D 시야 범위 디버그 정보
+│   │   └── 카메라 프러스텀 실시간 표시
+│   ├── 📍 프리셋 포인트 관리
+│   │   ├── PointInputModal - 포인트 정보 입력
+│   │   ├── 3D 건물 표면 클릭 생성
+│   │   ├── 아파트별 필터링
+│   │   └── CRUD 작업 (생성/조회/삭제)
+│   └── 🔍 디버깅 도구
+│       ├── 콘솔 로깅 시스템
+│       ├── 에러 추적 및 표시
+│       └── 성능 메트릭 모니터링
+│
+├── 🌐 API 시스템 (Hono BFF)
+│   ├── 🔍 검색 API (/api/search)
+│   │   ├── 통합 아파트 검색
+│   │   ├── 좌표/주소/아파트명 검색
+│   │   └── 가장 가까운 위치 검색
+│   ├── 🤖 AI API (/api/ai)
+│   │   ├── /simple-chat - Simple LLM 시스템
+│   │   ├── /chatbot - 멀티모달 챗봇
+│   │   ├── /chat-lifecycle - LLM 라이프사이클 (비활성화)
+│   │   └── 세션 관리 API
+│   ├── 📝 메모 API (/api/memo)
+│   │   ├── Firebase 메모 CRUD
+│   │   ├── 사용자별 메모 조회
+│   │   └── 즐겨찾기 관리
+│   ├── 📍 프리셋 포인트 API (/api/preset-points)
+│   │   ├── 포인트 생성/조회/삭제
+│   │   ├── 아파트별 포인트 필터링
+│   │   └── 공간 인덱스 기반 검색
+│   ├── 📤 업로드 API (/api/upload)
+│   │   ├── 멀티파트 파일 업로드
+│   │   └── 이미지 처리 및 저장
+│   ├── 🗺️ 지리정보 API (/api/geo)
+│   │   ├── 건물 정보 조회
+│   │   └── UPIS 연동
+│   ├── 📊 임베딩 API (/api/embedding)
+│   │   ├── 벡터 임베딩 생성/조회
+│   │   ├── 유사도 검색
+│   │   └── RAG 시스템 지원
+│   └── 📚 문서화 (/api/docs)
+│       ├── Swagger UI 제공
+│       ├── OpenAPI 스펙
+│       └── API 사용 예시
+│
+└── ⚙️ 시스템 관리 및 모니터링
+    ├── 🔒 보안 및 미들웨어
+    │   ├── CORS 정책 설정 (3개 포트 허용)
+    │   ├── Rate Limiting (hono-rate-limiter)
+    │   ├── Body Size 제한 (50MB)
+    │   ├── UTF-8 인코딩 강제 설정
+    │   └── 에러 핸들링 미들웨어
+    ├── 📊 모니터링 시스템
+    │   ├── 구조화 로깅 (Hono logger)
+    │   ├── 데이터베이스 헬스체크 (/api/db/now)
+    │   ├── AI 응답 품질 추적
+    │   └── 처리 시간 메트릭
+    ├── 🗄️ 데이터베이스 관리
+    │   ├── Kysely ORM (타입 안전)
+    │   ├── PostgreSQL + PostGIS 연동
+    │   ├── 커넥션 풀링 (max: 5)
+    │   └── 공간 인덱스 최적화
+    └── 🚀 배포 및 운영
+        ├── Bun 런타임 (3-4배 성능 향상)
+        ├── 정적 파일 서빙 (/uploads)
+        ├── 환경변수 분리 (.env 파일)
+        └── 프로덕션 빌드 최적화
+```
 
-### 🛠 기술적 개선사항
-- **AI 함수 호출 최적화**
-  - 사용자 의도 기반 스마트 함수 선택
-  - 아파트 메타데이터를 활용한 정확한 데이터 조회
-  - 실거래가, 주변 POI, 건물 정보 함수 간 유기적 연동
+## 📊 데이터베이스 스키마 (PostgreSQL + PostGIS)
 
-- **채팅봇 UX 개선**
-  - 데이터 나열식 응답 → 분석적 대화형 응답
-  - 사용자 맞춤형 부동산 투자 조언 제공
-  - 3개 아파트까지 동시 비교 분석 지원
+### 📋 ERD 테이블 구조
 
-- **성능 및 안정성 강화**
-  - 아파트 검색 API 응답 속도 개선
-  - 메타데이터 기반 정확한 아파트 식별
-  - 캐싱 시스템으로 중복 요청 최적화
+#### 🏠 부동산 데이터 (`oi` 스키마)
 
-### 🔧 Bug Fixes
-- 채팅 세션 간 아파트 데이터 오염 문제 해결
-- @멘션 아파트와 실제 조회 아파트 불일치 문제 수정
-- AI 함수에서 "아파트를 찾을 수 없습니다" 오류 해결
-- 환경 변수 (`KAKAO_REST_KEY`) 일관성 문제 수정
+**`oi.apt_info` - 아파트 기본정보 (마스터 테이블)**
+| 컬럼 | 타입 | 제약조건 | 설명 |
+|------|------|----------|------|
+| id | integer | PK, auto_increment | 아파트 ID |
+| apt_nm | text | NOT NULL | 아파트명 |
+| jibun_address | text | | 지번주소 |
+| lon | double precision | | 경도 (SRID 4326) |
+| lat | double precision | | 위도 (SRID 4326) |
+| created_at | timestamp | default: now() | 생성일시 |
+| updated_at | timestamp | default: now() | 수정일시 |
 
-## 📈 로드맵
+**`oi.apt_deal_all` - 통합 실거래 정보 (매매/전월세)**
+| 컬럼 | 타입 | 제약조건 | 설명 |
+|------|------|----------|------|
+| id | integer | PK, auto_increment | 거래 ID |
+| apt_nm | text | NOT NULL | 아파트명 |
+| apt_dong | text | | 아파트 동 |
+| jibun_address | text | NOT NULL | 지번주소 |
+| exclu_use_ar | numeric(10,2) | | 전용면적 (㎡) |
+| floor | integer | | 층수 |
+| deal_year | integer | NOT NULL | 거래년도 |
+| deal_month | integer | NOT NULL | 거래월 |
+| deal_day | integer | NOT NULL | 거래일 |
+| deal_amount | integer | | 매매가 (만원, NULL=전월세) |
+| deposit | integer | | 보증금 (만원) |
+| monthly_rent | integer | | 월세 (만원) |
+| created_at | timestamp | default: now() | 생성일시 |
+| updated_at | timestamp | default: now() | 수정일시 |
 
-### ✅ 완료된 기능
-- **기본 지도 시스템**: 카카오맵 + 3D Cesium 통합
-- **부동산 검색**: 실시간 아파트 검색 및 필터링
-- **실거래가 조회**: 국토부 데이터 연동
-- **Firebase 인증**: 구글 로그인 시스템
-- **스마트 온보딩**: 6단계 사용자 맞춤 설정
-  - 단계별 자금 범위 슬라이더 (가변 단위 지원)
-  - 매매/전세/월세 목적별 세분화
-- **임장 메모 시스템**: 사진 포함 메모 작성
-- **🆕 하이브리드 AI 분석 도우미**: RAG + Function Calling 기반 실시간 분석
-  - 20+ 모듈화된 AI 함수 (실거래가, 주변 POI, 건물정보 등)
-  - @아파트 멘션 시스템으로 즉시 데이터 로딩
-  - 최대 3개 아파트 동시 비교 분석
-  - 자연어 대화형 부동산 컨설팅
-- **즐겨찾기 시스템**: 클라우드 동기화 북마크
-- **🆕 스마트 데이터 관리**: 메타데이터 기반 정확한 아파트 식별
+**`oi.apt_building_info` - 건축물 상세정보 (표제부등본)**
+| 컬럼 | 타입 | 제약조건 | 설명 |
+|------|------|----------|------|
+| id | integer | PK, auto_increment | 건물정보 ID |
+| apt_id | integer | FK → apt_info.id | 아파트 ID |
+| type | varchar(10) | NOT NULL | 건물 유형 |
+| dongnm | varchar(100) | | 동명 |
+| bldnm | varchar(200) | | 건물명 |
+| platplc | text | | 대지위치 |
+| platarea | numeric | | 대지면적 |
+| archarea | numeric | | 건축면적 |
+| totarea | numeric | | 연면적 |
+| grndflrcnt | integer | | 지상층수 |
+| ugrndflrcnt | integer | | 지하층수 |
+| mainpurpscdnm | varchar(200) | | 주용도코드명 |
+| strctcdnm | varchar(200) | | 구조코드명 |
+| roofcdnm | varchar(200) | | 지붕코드명 |
+| hhldcnt | integer | | 세대수 |
+| totpkngcnt | integer | | 총주차면수 |
+| useaprday | date | | 사용승인일 |
+| raw_data | jsonb | | 원본 JSON 데이터 |
+| created_at | timestamp | default: now() | 생성일시 |
 
-### 🚧 개발 중
-- **모바일 최적화**: PWA 지원 및 모바일 UX 개선
-- **고급 필터링**: 가격대, 면적, 건축연도 다중 필터
-- **가격 알림**: 실시간 시세 변동 알림 서비스
+**`oi.preset_points` - 프리셋 포인트 (3D 뷰어용)**
+| 컬럼 | 타입 | 제약조건 | 설명 |
+|------|------|----------|------|
+| id | integer | PK, auto_increment | 포인트 ID |
+| lat | double precision | NOT NULL | 위도 |
+| lon | double precision | NOT NULL | 경도 |
+| apt_nm | varchar(255) | | 아파트명 |
+| jibun_address | text | | 지번주소 |
+| dong | varchar(50) | | 동 |
+| ho | varchar(50) | | 호 |
+| exclu_use_ar | numeric(10,2) | | 전용면적 |
+| apt_id | integer | FK → apt_info.id | 아파트 ID |
+| height | numeric(10,2) | default: 0.0 | 높이 |
+| floorplan_image_url | text | | 평면도 URL |
+| created_by | varchar(100) | default: 'developer' | 생성자 |
+| created_at | timestamp | default: now() | 생성일시 |
+| updated_at | timestamp | default: now() | 수정일시 |
 
-### 📋 계획된 기능
-- **소셜 기능**: 임장 후기 공유 및 커뮤니티
-- **포트폴리오**: 투자 아파트 관리 도구  
-- **머신러닝 예측**: 가격 동향 예측 모델
-- **오픈 API**: 외부 개발자용 API 제공
+**인덱스**: `idx_preset_points_location` GIST (st_point(lon, lat))
+
+#### 🤖 AI 시스템 (`ai` 스키마)
+
+**`ai.embeddings` - 벡터 임베딩 저장소 (pgvector)**
+| 컬럼 | 타입 | 제약조건 | 설명 |
+|------|------|----------|------|
+| id | bigint | PK, auto_increment | 임베딩 ID |
+| source_path | text | NOT NULL | 소스 파일 경로 |
+| schema_name | text | | 스키마명 |
+| table_name | text | | 테이블명 |
+| object_name | text | | 객체명 |
+| chunk_id | integer | NOT NULL | 청크 ID |
+| content_text | text | NOT NULL | 임베딩 텍스트 |
+| token_count | integer | | 토큰 개수 |
+| embedding | vector(1536) | NOT NULL | 벡터 임베딩 |
+| meta | jsonb | | 메타데이터 |
+| created_at | timestamptz | NOT NULL, default: now() | 생성일시 |
+| updated_at | timestamptz | NOT NULL, default: now() | 수정일시 |
+
+**인덱스**:
+- `embeddings_source_path_chunk_id_key` UNIQUE (source_path, chunk_id)
+- `ix_embeddings_vec_cosine` ivfflat (embedding vector_cosine_ops)
+
+#### 🗺️ 공간정보 데이터 (`public` 스키마)
+
+**`public.seoul_bldg` - 서울시 건물 정보**
+- 서울시 건물 지리정보 (PostGIS geometry 포함)
+
+**`oi.legal_dong` - 법정동 코드**
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| code | varchar | 법정동 코드 (PK) |
+| sido | varchar | 시도 |
+| sigungu | varchar | 시군구 |
+| eupmyeondong | varchar | 읍면동 |
+| ri | varchar | 리 |
+
+#### 📚 Raw 데이터 테이블 (ETL 소스)
+
+**`oi.apt_deal_trade_raw` - 매매 실거래 원본 (공공데이터포털)**
+**`oi.apt_deal_rent_raw` - 전월세 실거래 원본 (공공데이터포털)**
+
+### 🔗 테이블 관계도
+
+```
+oi.apt_info (1) ────┬──── (N) oi.apt_building_info
+     │              │
+     │              ├──── (N) oi.preset_points
+     │              │
+     │              └──── (N) oi.ai_smart_summary
+     │
+     │ (jibun_address 연결)
+     │
+oi.apt_deal_all
+     │
+oi.apt_deal_trade_raw ──┬─→ (ETL) ──→ oi.apt_deal_all
+oi.apt_deal_rent_raw ───┘
+
+ai.embeddings (독립적)
+public.seoul_bldg (독립적)
+oi.legal_dong (독립적)
+```
+
+### 🏗️ ETL 파이프라인
+
+**1단계: 공공데이터 수집**
+- `fetch_trade_raw.ts`: 매매 실거래가 API 수집 → `oi.apt_deal_trade_raw`
+- `fetch_rent_raw.ts`: 전월세 실거래가 API 수집 → `oi.apt_deal_rent_raw`
+- `fetch_building_info.ts`: 건축물 정보 API → `oi.apt_building_info`
+
+**2단계: 데이터 통합 및 정규화**
+- `populate_apt_deal_all.ts`: Raw 테이블 → `oi.apt_deal_all` 통합
+- `populate_apt_info_from_trade_raw.ts`: 아파트 기본정보 추출
+- `fill_apt_info_coordinates.ts`: 좌표 정보 보완
+
+### 주요 쿼리 예시
+
+```sql
+-- 특정 아파트 84㎡ 실거래가 조회
+SELECT deal_amount, deal_year, deal_month, exclu_use_ar
+FROM oi.apt_deal_all
+WHERE apt_nm LIKE '%래미안%'
+  AND jibun_address LIKE '%잠실%'
+  AND exclu_use_ar BETWEEN 83 AND 85
+  AND deal_amount IS NOT NULL
+ORDER BY deal_year DESC, deal_month DESC;
+
+-- 반경 1km 내 아파트 검색 (PostGIS)
+SELECT ai.apt_nm, ai.jibun_address,
+       ST_Distance(
+         ST_Point(ai.lon, ai.lat)::geography,
+         ST_Point(127.0816, 37.5172)::geography
+       ) as distance_m
+FROM oi.apt_info ai
+WHERE ST_DWithin(
+  ST_Point(ai.lon, ai.lat)::geography,
+  ST_Point(127.0816, 37.5172)::geography,
+  1000
+)
+ORDER BY distance_m;
+```
+
+## 🤖 AI 챗봇 시스템 아키텍처
+
+```mermaid
+graph TB
+    subgraph "🧠 AI Core Systems"
+        SimpleLLM["🔥 Simple LLM System<br/>SimpleLLMProcessor<br/><small>• GPT-4o-mini 기반<br/>• Few-shot 부동산 도메인<br/>• 90% 비용 절감</small>"]
+
+        MultiModal["🎯 멀티모달 챗봇<br/>ChatbotSidebar<br/><small>• 이미지+텍스트 통합<br/>• Firebase 연동<br/>• 상황별 컨텍스트</small>"]
+
+        LLMMaster["🔄 LLM 라이프사이클<br/>LLMMaster<br/><small>• 대화 상태 관리<br/>• 오케스트레이션<br/>• AI 3.0 인텔리전스</small>"]
+    end
+
+    subgraph "🔧 Processing Components"
+        Encoding["📝 한글 인코딩 처리<br/>SafeBinaryJsonParser<br/><small>• 6가지 인코딩 전략<br/>• UTF-8/EUC-KR/CP949<br/>• 99.9% 정확도</small>"]
+
+        WebSearch["🌐 웹 검색 연동<br/>WebSearchService<br/><small>• 내부 데이터 부족 시<br/>• 부동산 특화 검색<br/>• 타 포털 링크 배제</small>"]
+
+        AptResolver["🏠 아파트명 해석<br/>SmartApartmentResolver<br/><small>• 직접 DB 검색<br/>• 벡터 유사도 검색<br/>• 웹 검색 폴백</small>"]
+    end
+
+    subgraph "💾 Data & Context"
+        Session["💬 대화 세션<br/>ConversationSession<br/><small>• 30분 TTL<br/>• 슬롯 기반 저장<br/>• 연속성 보장</small>"]
+
+        Embedding["🔍 벡터 임베딩<br/>EmbeddingService<br/><small>• pgvector 저장<br/>• 코사인 유사도<br/>• RAG 시스템</small>"]
+
+        Firebase["🔥 Firebase 연동<br/>Firestore/Storage<br/><small>• 메모 실시간 동기화<br/>• 이미지 다운로드<br/>• Base64 변환</small>"]
+    end
+
+    subgraph "🎨 User Interface"
+        MemoSelector["📝 메모 선택 모달<br/>MemoSelectorModal<br/><small>• 보라색 테마 UI<br/>• 메타데이터 표시<br/>• 사진 자동 변환</small>"]
+
+        ImageUpload["📷 이미지 업로드<br/>드롭다운 첨부<br/><small>• 직접 파일 선택<br/>• 멀티파트 업로드<br/>• 실시간 프리뷰</small>"]
+
+        MentionSystem["🏢 @mention 시스템<br/>아파트 정보 첨부<br/><small>• 실시간 검색<br/>• 위치 데이터 연동<br/>• 컨텍스트 제공</small>"]
+    end
+
+    subgraph "⚡ AI 3.0 Intelligence"
+        ContextTracker["📊 컨텍스트 추적<br/>ConversationContextTracker<br/><small>• 대화 패턴 학습<br/>• 사용자 성향 분석</small>"]
+
+        StrategyEngine["🎯 전략 엔진<br/>DialogueStrategyEngine<br/><small>• 5가지 사용자 유형<br/>• 개인화 전략</small>"]
+
+        FlowManager["🌊 자연 플로우<br/>NaturalFlowManager<br/><small>• 기계적 명확화 대체<br/>• 자연스러운 가이드</small>"]
+
+        JourneyOptimizer["🚀 여정 최적화<br/>UserJourneyOptimizer<br/><small>• 6단계 추적<br/>• 경험 최적화</small>"]
+
+        TurnManager["🔄 다중턴 관리<br/>MultiTurnConversationManager<br/><small>• 복잡한 대화 처리<br/>• 맥락 유지</small>"]
+
+        EmotionalAnalyzer["💡 감정 분석<br/>EmotionalContextAnalyzer<br/><small>• 8가지 감정 상태<br/>• 공감적 인터랙션</small>"]
+    end
+
+    SimpleLLM --> Encoding
+    SimpleLLM --> WebSearch
+    SimpleLLM --> Session
+
+    MultiModal --> Firebase
+    MultiModal --> MemoSelector
+    MultiModal --> ImageUpload
+    MultiModal --> MentionSystem
+
+    LLMMaster --> AptResolver
+    LLMMaster --> Embedding
+    LLMMaster --> ContextTracker
+    LLMMaster --> StrategyEngine
+    LLMMaster --> FlowManager
+    LLMMaster --> JourneyOptimizer
+    LLMMaster --> TurnManager
+    LLMMaster --> EmotionalAnalyzer
+
+    Session --> SimpleLLM
+    Session --> MultiModal
+    Session --> LLMMaster
+
+    classDef coreSystem fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef processing fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef dataLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef uiLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef aiIntelligence fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+
+    class SimpleLLM,MultiModal,LLMMaster coreSystem
+    class Encoding,WebSearch,AptResolver processing
+    class Session,Embedding,Firebase dataLayer
+    class MemoSelector,ImageUpload,MentionSystem uiLayer
+    class ContextTracker,StrategyEngine,FlowManager,JourneyOptimizer,TurnManager,EmotionalAnalyzer aiIntelligence
+```
+
+### 🔥 Simple LLM 시스템 상세
+
+**주요 API 엔드포인트**
+```typescript
+// POST /api/ai/simple-chat - 일반 대화형 AI
+{
+  message: "잠실 래미안 84형 매매가 알려줘",
+  sessionId?: "optional_session_id"
+}
+
+// POST /api/ai/apartment-summary - 확장카드 종합 분석 (NEW)
+{
+  data: {
+    aptInfo: { name, address, lat, lon },
+    deals: [...실거래가데이터],
+    building: {...건물정보},
+    landuse: {...토지이용계획},
+    nearby: {...주변환경},
+    pnu: {...PNU정보}
+  }
+}
+
+// 응답 - 종합 분석 브리핑
+{
+  success: true,
+  data: {
+    summary: "안녕하세요! 잠실래미안에 대한 브리핑을 준비했습니다...(1200-1800자)",
+    dataQuality: { deals: true, building: true, landuse: true, nearby: true },
+    processingTime: "2340ms"
+  }
+}
+```
+
+### 🎯 멀티모달 챗봇 첨부 시스템
+
+| 첨부 유형 | 구현체 | 설명 |
+|-----------|---------|------|
+| 📷 **직접 이미지** | 드롭다운 업로드 | 파일 선택 → 멀티파트 업로드 → Base64 변환 |
+| 📝 **임장 메모** | MemoSelectorModal | Firebase 조회 → 사진 다운로드 → AI 분석 |
+| 🏢 **아파트 정보** | @mention 시스템 | 실시간 검색 → 위치 데이터 → 컨텍스트 제공 |
+
+### 📍 프리셋 포인트 시스템 API
+
+**주요 엔드포인트**
+```typescript
+// POST /api/preset-points/create - 프리셋 포인트 생성
+{
+  lat: 37.559874566173,
+  lon: 127.0155059430208,
+  apt_nm: "청구e편한세상",
+  dong: "101동",
+  ho: "1501호",
+  apt_id: 39367,
+  height: 50.0
+}
+
+// GET /api/preset-points/list - 전체 프리셋 포인트 조회
+// GET /api/preset-points/by-apartment/:aptId - 아파트별 프리셋 포인트 조회
+// POST /api/preset-points/fix-apartment-links - 아파트 연결 자동 수정
+// DELETE /api/preset-points/:id - 프리셋 포인트 삭제
+```
+
+**현재 저장된 데이터**: 4개 프리셋 포인트 (청구e편한세상 3개, 골든카운티 1개)
+
+## 🔧 개발 가이드
+
+### 코딩 컨벤션
+
+**TypeScript**
+- Strict mode 활성화
+- 모든 컴포넌트에 타입 정의
+- API 응답 타입 엄격 검증
+
+**React**
+- React 19 Concurrent Features 활용
+- React Query로 데이터 페칭 패턴 통일
+- 커스텀 훅으로 로직 분리
+
+**API 설계**
+- RESTful 규칙 준수
+- `{data, isLoading, error}` 응답 패턴
+- Swagger/OpenAPI 문서화 필수
+
+### 공간 데이터 처리
+
+```typescript
+// PostGIS ST_* 함수 활용
+const spatialQuery = `
+  SELECT apt_nm, ST_AsGeoJSON(geom) as geometry
+  FROM oi.apt_info
+  WHERE ST_DWithin(
+    ST_Point(lon, lat)::geography,
+    ST_Point($1, $2)::geography,
+    $3
+  )
+`;
+
+// GIST 인덱스 최적화
+CREATE INDEX idx_apt_info_geom
+ON oi.apt_info
+USING GIST (ST_Point(lon, lat));
+```
+
+## 🔐 보안
+
+**인증/인가**
+- Firebase Authentication 통합
+- JWT 토큰 기반 세션 관리
+- API 키 환경변수 분리
+
+**데이터 보안**
+- 민감정보 암호화 저장
+- SQL 인젝션 방지 (Parameterized Query)
+- CORS 정책 엄격 적용
 
 
-
-
-
-**OpenImjang**은 AI 기술을 활용하여 부동산 투자 의사결정을 돕는 오픈소스 플랫폼입니다. 
-투명하고 접근 가능한 부동산 정보 제공을 통해 더 나은 투자 환경을 만들어갑니다. 🏠✨
+**오픈임장** - 더 스마트한 부동산 투자의 시작 🏠✨

@@ -66,8 +66,9 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
                 params.append("period", selectedPeriod);
 
                 console.log(`🔍 선택된 기간: "${selectedPeriod}"`);
+                console.log(`🔍 useAreaRange 상태: ${useAreaRange}`);
                 console.log(`🔍 API 호출: /api/search/deals/${aptId}?${params}`);
-                console.log(`🔍 전체 파라미터: area=${selectedArea}, period=${selectedPeriod}, dealTypes=${selectedDealTypes.join(',')}`);
+                console.log(`🔍 전체 파라미터: area=${selectedArea}, period=${selectedPeriod}, useRange=${useAreaRange}, dealTypes=${selectedDealTypes.join(',')}`);
 
                 const res = await fetch(`/api/search/deals/${aptId}?${params}`);
                 const dealsData = await res.json();
@@ -89,6 +90,8 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
                 }
 
                 console.log(`📥 백엔드에서 받은 원시 데이터: ${dealsData.length}건`);
+                console.log(`🔍 첫 번째 데이터 샘플:`, dealsData[0]);
+                console.log(`🔍 apt_dong 값들:`, dealsData.slice(0, 5).map(d => ({ deal_amount: d.deal_amount, apt_dong: d.apt_dong })));
 
                 // 클라이언트에서 거래유형 필터링
                 const filteredDeals = dealsData.filter((deal: Deal) => {
@@ -206,9 +209,12 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
     // 🆕 동 표시 포맷팅 (매매가만 표시, "동" 제거)
     const formatDong = (deal: Deal): string => {
         // 매매가가 있는 경우에만 동 표시
-        if (deal.deal_amount !== null && deal.apt_dong) {
-            // "101동" → "101" (끝의 "동" 제거)
-            return deal.apt_dong.replace(/동$/, '');
+        if (deal.deal_amount !== null && deal.deal_amount > 0) {
+            if (deal.apt_dong) {
+                return deal.apt_dong.replace(/동$/, '');
+            } else {
+                return "-";
+            }
         }
         return "-"; // 전월세는 빈칸
     };

@@ -1,6 +1,4 @@
 // SQL 쿼리 실행 핸들러
-import { db } from '../../../lib/db';
-import { sql } from 'kysely';
 import pg from 'pg';
 
 interface ExecuteQueryArgs {

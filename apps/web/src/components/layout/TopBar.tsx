@@ -260,8 +260,10 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onOpen2D, mapViewMode = '2D',
                                 <div className="user-menu-dropdown absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                                     <button
                                         onClick={() => {
+                                            console.log('🔄 프로필 버튼 클릭됨');
                                             setShowUserMenu(false);
                                             onOpenProfile?.();
+                                            console.log('✅ onOpenProfile 호출 완료');
                                         }}
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
                                     >

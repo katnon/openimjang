@@ -8,6 +8,7 @@ interface ShadeAnalysisOptions {
   interval?: number; // 분 단위
   seasonPreset?: SeasonPreset;
   useStoredPosition?: boolean; // 저장된 포인트 사용 여부
+  position?: any; // 직접 전달할 위치 (Cesium Cartesian3)
 }
 
 interface ShadeAnalysisHook {
@@ -75,7 +76,7 @@ export function useShadeAnalysis(
       cesiumWidget: !!viewer?.cesiumWidget,
       screenSpaceEventHandler: !!viewer?.cesiumWidget?.screenSpaceEventHandler
     });
-    
+
     if (!viewer || !viewer._drawAction || !viewer._startAnalysisShade) {
       console.error('⚠️ MapPrime3D 음영분석 API가 준비되지 않음');
       setError('음영분석 API가 준비되지 않았습니다.');
@@ -92,9 +93,13 @@ export function useShadeAnalysis(
       setError(null);
 
       let selectedPoint;
+      let drawResult; // drawResult 변수를 상위 스코프에 선언
 
-      // 1. 저장된 포인트 사용 여부 확인
-      if (options?.useStoredPosition && storedPosition) {
+      // 1. 직접 전달된 위치 사용 여부 확인
+      if (options?.position) {
+        console.log('📍 직접 전달된 위치 사용:', options.position);
+        selectedPoint = options.position;
+      } else if (options?.useStoredPosition && storedPosition) {
         console.log('📍 저장된 지점 사용:', storedPosition);
         selectedPoint = storedPosition;
       } else {
@@ -102,9 +107,9 @@ export function useShadeAnalysis(
 
         // 🔧 shade.html처럼 간단하게 _drawAction 호출
         console.log('🎯 _drawAction 호출 시작...');
-        
+
         try {
-          const drawResult = await viewer._drawAction({
+          drawResult = await viewer._drawAction({
             shapeType: 0, // 점 선택
           });
 
@@ -132,8 +137,10 @@ export function useShadeAnalysis(
         selectedPoint = drawResult.data.positions[0];
         console.log('📍 새로 선택된 지점:', selectedPoint);
 
-        // 새로 선택된 포인트 저장
-        setStoredPosition(selectedPoint);
+        // 새로 선택된 포인트 저장 (직접 전달된 위치가 아닌 경우만)
+        if (!options?.position) {
+          setStoredPosition(selectedPoint);
+        }
       }
 
       // 2. 음영분석 옵션 설정
