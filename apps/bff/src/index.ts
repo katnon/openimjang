@@ -86,6 +86,15 @@ app.use('*', cors({
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
+// 간단한 헬스체크 엔드포인트
+app.get('/health', (c) => {
+    const dbUrl = process.env.DATABASE_URL;
+    if (dbUrl) {
+        return c.json({ status: 'ok', hasDatabaseUrl: true });
+    } else {
+        return c.json({ status: 'fail', hasDatabaseUrl: false });
+    }
+});
 // 라우트 등록
 app.route('/api/search', searchRoute);
 app.route('/api/poi', poi);
@@ -113,15 +122,7 @@ app.route('/api', buildings);
 // 정적 파일 서빙 (업로드된 파일들)
 app.use('/uploads/*', serveStatic({ root: './public' }));
 
-// 간단한 헬스체크 엔드포인트
-app.get('/health', (c) => {
-    const dbUrl = process.env.DATABASE_URL;
-    if (dbUrl) {
-        return c.json({ status: 'ok', hasDatabaseUrl: true });
-    } else {
-        return c.json({ status: 'fail', hasDatabaseUrl: false });
-    }
-});
+
 
 // 헬스체크 + DB 테스트
 app.get('/api/db/now', async (c) => {
