@@ -5,11 +5,13 @@ interface PresetPoint {
     id: number;
     lat: number;
     lon: number;
+    height?: number; // 🆕 높이 정보 추가
     apt_nm: string;
     jibun_address: string;
     dong: string;
     ho: string;
     exclu_use_ar: number;
+    apt_id: number; // 🆕 아파트 ID 추가
     floorplan_image_url?: string;
     created_at: string;
 }
@@ -22,6 +24,8 @@ interface ApartmentPreviewPanelProps {
     onWindowViewAction?: (preset: PresetPoint) => void; // 창가뷰 실행 콜백
     onShadeAnalysisAction?: (preset: PresetPoint) => void; // 음영분석 실행 콜백
     onDeletePreset?: (presetId: number) => void; // 프리셋 삭제 콜백 (개발자 모드)
+    onAreaClickNavigate?: (area: number) => void; // 전용면적 클릭 시 실거래가 탭으로 이동
+    highlightedPresetId?: number | null; // 하이라이팅할 프리셋 ID
 }
 
 const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
@@ -31,15 +35,33 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
     onFloorplanView,
     onWindowViewAction,
     onShadeAnalysisAction,
-    onDeletePreset
+    onDeletePreset,
+    onAreaClickNavigate,
+    highlightedPresetId
 }) => {
     const [presets, setPresets] = useState<PresetPoint[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [deletingPresetId, setDeletingPresetId] = useState<number | null>(null);
 
+    // 🔧 개발자 모드용 좌표 수정 상태
+    const [editingPresetId, setEditingPresetId] = useState<number | null>(null);
+    const [editCoords, setEditCoords] = useState<{lat: number, lon: number, height: number}>({lat: 0, lon: 0, height: 0});
+    const [updatingPresetId, setUpdatingPresetId] = useState<number | null>(null);
+
     // 개발자 모드 상태
     const { isDeveloperMode } = useDeveloperMode();
+
+    // 하이라이팅된 프리셋으로 스크롤
+    useEffect(() => {
+        if (highlightedPresetId && presets.length > 0) {
+            const element = document.getElementById(`preset-${highlightedPresetId}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                console.log('📍 하이라이팅된 프리셋으로 스크롤:', highlightedPresetId);
+            }
+        }
+    }, [highlightedPresetId, presets]);
 
     // 아파트의 프리셋 포인트 로드
     useEffect(() => {
@@ -74,6 +96,12 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
         onPresetSelect?.(preset);
     };
 
+    const handleAreaClick = (area: number, e: React.MouseEvent) => {
+        e.stopPropagation(); // 프리셋 선택 이벤트 방지
+        console.log('📐 전용면적 클릭됨:', area);
+        onAreaClickNavigate?.(area);
+    };
+
     const handleFloorplanClick = (preset: PresetPoint, e: React.MouseEvent) => {
         e.stopPropagation(); // 프리셋 선택 이벤트 방지
         console.log('📐 평면도 보기:', preset);
@@ -82,14 +110,48 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
 
     const handleWindowViewClick = (preset: PresetPoint, e: React.MouseEvent) => {
         e.stopPropagation(); // 프리셋 선택 이벤트 방지
-        console.log('🪟 창가뷰 실행:', preset);
-        onWindowViewAction?.(preset);
+        console.log('🪟 창가뷰 실행 (ID 기반):', preset);
+
+        // 🔥 새로운 ID 기반 함수 사용으로 항상 최신 데이터 조회
+        if (window.MapPrime3DNavigator?.executeWindowViewAtPresetById) {
+            window.MapPrime3DNavigator.executeWindowViewAtPresetById(preset.id)
+                .then(() => {
+                    console.log('✅ ID 기반 창가뷰 완료');
+                })
+                .catch((error) => {
+                    console.error('❌ ID 기반 창가뷰 실패:', error);
+                    // 실패 시 기존 방식으로 폴백
+                    console.log('🔄 기존 방식으로 폴백 실행');
+                    onWindowViewAction?.(preset);
+                });
+        } else {
+            // Navigator가 준비되지 않은 경우 기존 방식 사용
+            console.warn('⚠️ ID 기반 Navigator가 준비되지 않음, 기존 방식 사용');
+            onWindowViewAction?.(preset);
+        }
     };
 
     const handleShadeAnalysisClick = (preset: PresetPoint, e: React.MouseEvent) => {
         e.stopPropagation(); // 프리셋 선택 이벤트 방지
-        console.log('☀️ 음영분석 실행:', preset);
-        onShadeAnalysisAction?.(preset);
+        console.log('☀️ 음영분석 실행 (ID 기반):', preset);
+
+        // 🔥 새로운 ID 기반 함수 사용으로 항상 최신 데이터 조회
+        if (window.MapPrime3DNavigator?.executeShadeAnalysisAtPresetById) {
+            window.MapPrime3DNavigator.executeShadeAnalysisAtPresetById(preset.id)
+                .then(() => {
+                    console.log('✅ ID 기반 음영분석 완료');
+                })
+                .catch((error) => {
+                    console.error('❌ ID 기반 음영분석 실패:', error);
+                    // 실패 시 기존 방식으로 폴백
+                    console.log('🔄 기존 방식으로 폴백 실행');
+                    onShadeAnalysisAction?.(preset);
+                });
+        } else {
+            // Navigator가 준비되지 않은 경우 기존 방식 사용
+            console.warn('⚠️ ID 기반 Navigator가 준비되지 않음, 기존 방식 사용');
+            onShadeAnalysisAction?.(preset);
+        }
     };
 
     const handleDeleteClick = async (presetId: number, e: React.MouseEvent) => {
@@ -124,6 +186,108 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
             alert('삭제 중 오류가 발생했습니다.');
         } finally {
             setDeletingPresetId(null);
+        }
+    };
+
+    // 🔧 개발자 모드용 좌표 수정 함수들
+    const handleEditCoordinates = (preset: PresetPoint, e: React.MouseEvent) => {
+        e.stopPropagation(); // 프리셋 선택 이벤트 방지
+        console.log('🔧 편집할 프리셋 정보:', preset);
+        setEditingPresetId(preset.id);
+        setEditCoords({
+            lat: preset.lat,
+            lon: preset.lon,
+            height: preset.height !== undefined ? preset.height : 0
+        });
+        console.log('🔧 편집 폼 초기값:', {
+            lat: preset.lat,
+            lon: preset.lon,
+            height: preset.height !== undefined ? preset.height : 0
+        });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingPresetId(null);
+        setEditCoords({lat: 0, lon: 0, height: 0});
+    };
+
+    const handleSaveCoordinates = async (presetId: number) => {
+        try {
+            setUpdatingPresetId(presetId);
+
+            console.log('🔧 좌표 수정 요청:', {
+                presetId,
+                coords: editCoords,
+                url: `/api/preset-points/update-coordinates/${presetId}`
+            });
+
+            const response = await fetch(`/api/preset-points/update-coordinates/${presetId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    lat: editCoords.lat,
+                    lon: editCoords.lon,
+                    height: editCoords.height
+                })
+            });
+
+            console.log('🔧 API 응답 상태:', response.status, response.statusText);
+
+            const result = await response.json();
+            console.log('🔧 API 응답 내용:', result);
+
+            if (response.ok && result.success) {
+                // 성공 시 로컬 상태 업데이트
+                setPresets(prev => prev.map(p =>
+                    p.id === presetId
+                        ? { ...p, lat: editCoords.lat, lon: editCoords.lon, height: editCoords.height }
+                        : p
+                ));
+
+                setEditingPresetId(null);
+                console.log('✅ 프리셋 좌표 수정 성공:', result.data);
+
+                // 🔥 3D 지도의 프리셋 포인트들을 새로고침하여 실시간 반영
+                if (window.MapPrime3DNavigator?.reloadPresetPoints) {
+                    console.log('🔄 3D 지도 프리셋 포인트 새로고침 실행');
+                    window.MapPrime3DNavigator.reloadPresetPoints(aptId)
+                        .then(() => {
+                            console.log('✅ 3D 지도 프리셋 포인트 새로고침 완료');
+
+                            // 🎯 추가: 업데이트된 좌표로 현재 실행 중인 기능들 재실행
+                            const updatedPreset = {
+                                id: presetId,
+                                lat: editCoords.lat,
+                                lon: editCoords.lon,
+                                height: editCoords.height,
+                                dong: presets.find(p => p.id === presetId)?.dong || '',
+                                ho: presets.find(p => p.id === presetId)?.ho || ''
+                            };
+
+                            console.log('🎯 업데이트된 프리셋으로 기능 재실행 준비:', updatedPreset);
+                        })
+                        .catch((error) => {
+                            console.error('❌ 3D 지도 새로고침 실패:', error);
+                        });
+                } else {
+                    console.warn('⚠️ MapPrime3DNavigator가 준비되지 않음');
+                }
+
+                alert('좌표가 성공적으로 수정되었습니다!');
+            } else {
+                console.error('❌ 프리셋 좌표 수정 실패:', {
+                    status: response.status,
+                    result
+                });
+                alert(`좌표 수정에 실패했습니다: ${result.error || '알 수 없는 오류'}`);
+            }
+        } catch (error) {
+            console.error('❌ 프리셋 좌표 수정 중 네트워크 오류:', error);
+            alert(`좌표 수정 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+        } finally {
+            setUpdatingPresetId(null);
         }
     };
 
@@ -176,7 +340,12 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
                 {presets.map((preset) => (
                     <div
                         key={preset.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                        id={`preset-${preset.id}`}
+                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                            highlightedPresetId === preset.id
+                                ? 'border-blue-500 bg-blue-50 shadow-lg ring-2 ring-blue-200'
+                                : 'border-gray-200 hover:bg-gray-50'
+                        }`}
                         onClick={() => handlePresetClick(preset)}
                     >
                         <div className="space-y-3">
@@ -191,7 +360,11 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
                                             {preset.ho}
                                         </span>
                                         {preset.exclu_use_ar && (
-                                            <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2 py-1 rounded">
+                                            <span
+                                                className="bg-purple-100 text-purple-800 text-xs font-medium px-2 py-1 rounded cursor-pointer hover:bg-purple-200 transition-colors"
+                                                onClick={(e) => handleAreaClick(preset.exclu_use_ar, e)}
+                                                title="클릭하여 실거래가 탭으로 이동"
+                                            >
                                                 {preset.exclu_use_ar}㎡
                                             </span>
                                         )}
@@ -202,16 +375,28 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
                                     </div>
                                 </div>
 
-                                {/* 개발자 모드 삭제 버튼 */}
+                                {/* 개발자 모드 버튼들 */}
                                 {isDeveloperMode && (
-                                    <button
-                                        onClick={(e) => handleDeleteClick(preset.id, e)}
-                                        disabled={deletingPresetId === preset.id}
-                                        className="ml-2 bg-red-100 hover:bg-red-200 text-red-700 text-xs px-2 py-1 rounded transition-colors disabled:opacity-50"
-                                        title="프리셋 삭제 (개발자 모드)"
-                                    >
-                                        {deletingPresetId === preset.id ? '⏳' : '🗑️'}
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                        {/* 좌표 편집 버튼 */}
+                                        <button
+                                            onClick={(e) => handleEditCoordinates(preset, e)}
+                                            disabled={editingPresetId === preset.id}
+                                            className="bg-orange-100 hover:bg-orange-200 text-orange-700 text-xs px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                            title="좌표 편집 (개발자 모드)"
+                                        >
+                                            📍
+                                        </button>
+                                        {/* 삭제 버튼 */}
+                                        <button
+                                            onClick={(e) => handleDeleteClick(preset.id, e)}
+                                            disabled={deletingPresetId === preset.id}
+                                            className="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                            title="프리셋 삭제 (개발자 모드)"
+                                        >
+                                            {deletingPresetId === preset.id ? '⏳' : '🗑️'}
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
@@ -259,6 +444,71 @@ const ApartmentPreviewPanel: React.FC<ApartmentPreviewPanelProps> = ({
                                         e.currentTarget.style.display = 'none';
                                     }}
                                 />
+                            </div>
+                        )}
+
+                        {/* 🔧 개발자 모드용 좌표 편집 폼 */}
+                        {isDeveloperMode && editingPresetId === preset.id && (
+                            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
+                                <div className="text-xs font-medium text-orange-800 mb-2">📍 좌표 편집</div>
+
+                                <div className="space-y-2">
+                                    {/* 위도 */}
+                                    <div>
+                                        <label className="text-xs text-gray-600">위도 (Latitude)</label>
+                                        <input
+                                            type="number"
+                                            step="0.000001"
+                                            value={editCoords.lat}
+                                            onChange={(e) => setEditCoords(prev => ({...prev, lat: parseFloat(e.target.value) || 0}))}
+                                            className="w-full text-xs px-2 py-1 border border-gray-300 rounded"
+                                            placeholder="37.123456"
+                                        />
+                                    </div>
+
+                                    {/* 경도 */}
+                                    <div>
+                                        <label className="text-xs text-gray-600">경도 (Longitude)</label>
+                                        <input
+                                            type="number"
+                                            step="0.000001"
+                                            value={editCoords.lon}
+                                            onChange={(e) => setEditCoords(prev => ({...prev, lon: parseFloat(e.target.value) || 0}))}
+                                            className="w-full text-xs px-2 py-1 border border-gray-300 rounded"
+                                            placeholder="127.123456"
+                                        />
+                                    </div>
+
+                                    {/* 높이 */}
+                                    <div>
+                                        <label className="text-xs text-gray-600">높이 (Height, m)</label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={editCoords.height}
+                                            onChange={(e) => setEditCoords(prev => ({...prev, height: parseFloat(e.target.value) || 0}))}
+                                            className="w-full text-xs px-2 py-1 border border-gray-300 rounded"
+                                            placeholder="50.0"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 버튼 그룹 */}
+                                <div className="flex items-center gap-2 mt-3">
+                                    <button
+                                        onClick={() => handleSaveCoordinates(preset.id)}
+                                        disabled={updatingPresetId === preset.id}
+                                        className="bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-1 rounded transition-colors disabled:opacity-50"
+                                    >
+                                        {updatingPresetId === preset.id ? '⏳ 저장중...' : '✅ 저장'}
+                                    </button>
+                                    <button
+                                        onClick={handleCancelEdit}
+                                        className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-3 py-1 rounded transition-colors"
+                                    >
+                                        ❌ 취소
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>

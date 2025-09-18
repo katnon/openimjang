@@ -51,21 +51,48 @@ type SummaryCardProps = {
     // 🆕 3D 지도 연동 콜백
     onPresetSelect?: (preset: { lat: number; lon: number; dong: string; ho: string; exclu_use_ar: number }) => void; // 프리셋 선택 시 3D 카메라 이동
     onFloorplanView?: (preset: { floorplan_image_url?: string; dong: string; ho: string }) => void; // 평면도 보기
+    // 🆕 전용면적 클릭 시 실거래가 탭 이동 콜백
+    onAreaClickNavigate?: (area: number) => void; // 전용면적 클릭 시 실거래가 탭으로 이동
 };
 
-export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot, onWriteMemo, onOpenMyImjang, onPresetSelect, onFloorplanView }: SummaryCardProps) {
+export default function SummaryCard({ point, selectedApt, onMore, onExpandChange, onPOIHover, onFavoriteToggle, isFavorited, onOpenChatbot, onWriteMemo, onOpenMyImjang, onPresetSelect, onFloorplanView, onAreaClickNavigate }: SummaryCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<string>("실거래가");
     const [pnuData, setPnuData] = useState<PNUData | null>(null);
     const [isPnuLoading, setIsPnuLoading] = useState(false);
     const [aptMemos, setAptMemos] = useState<MemoPreview[]>([]);
     const [hasMoreMemos, setHasMoreMemos] = useState(false);
+    const [selectedArea, setSelectedArea] = useState<number | null>(null);
+    const [highlightedPresetId, setHighlightedPresetId] = useState<number | null>(null);
     const { user } = useAuth();
 
     // ✅ 확장 상태 변경 시 부모에게 알림
     useEffect(() => {
         onExpandChange?.(isExpanded);
     }, [isExpanded, onExpandChange]);
+
+    // 🎯 3D 지도에서 프리셋 클릭 시 미리보기 탭으로 이동 이벤트 리스너
+    useEffect(() => {
+        const handleSwitchToPreviewTab = (event: CustomEvent) => {
+            console.log('🎯 미리보기 탭 이동 이벤트 수신:', event.detail);
+            setActiveTab("아파트미리보기");
+            // 선택된 프리셋 하이라이팅 설정
+            if (event.detail?.presetId) {
+                setHighlightedPresetId(event.detail.presetId);
+                console.log('✨ 하이라이팅할 프리셋 ID:', event.detail.presetId);
+            }
+            // 확장되지 않았다면 확장
+            if (!isExpanded) {
+                setIsExpanded(true);
+            }
+        };
+
+        window.addEventListener('switchToPreviewTab', handleSwitchToPreviewTab as EventListener);
+
+        return () => {
+            window.removeEventListener('switchToPreviewTab', handleSwitchToPreviewTab as EventListener);
+        };
+    }, [isExpanded]);
 
     // PNU 조회
     useEffect(() => {
@@ -181,6 +208,24 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
             });
         }
     };
+
+    const handleAreaClick = (area: number) => {
+        // 실거래가 탭으로 이동 + 선택된 면적 설정
+        setActiveTab("실거래가");
+        setSelectedArea(area);
+        // 카드가 축소되어 있으면 확장
+        if (!isExpanded) {
+            setIsExpanded(true);
+        }
+        onAreaClickNavigate?.(area);
+    };
+
+    console.log('🔄 SummaryCard 렌더링:', {
+        isExpanded,
+        activeTab,
+        selectedApt: selectedApt?.apt_nm,
+        highlightedPresetId
+    });
 
     return (
         <div className={`absolute left-4 z-[200] bg-white shadow-xl rounded-xl border border-gray-200 transition-all duration-300 ${isExpanded
@@ -407,6 +452,7 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                 aptName={selectedApt.apt_nm}
                                 onClose={() => { }}
                                 isEmbedded={true}
+                                selectedArea={selectedArea}
                             />
                         )}
                         {activeTab === "건물/토지정보" && selectedApt && (
@@ -497,6 +543,8 @@ export default function SummaryCard({ point, selectedApt, onMore, onExpandChange
                                     console.log('🗑️ 프리셋 삭제됨:', presetId);
                                     // 3D 지도에서 해당 프리셋 포인트 제거하도록 알림
                                 }}
+                                onAreaClickNavigate={handleAreaClick}
+                                highlightedPresetId={highlightedPresetId}
                             />
                         )}
                     </div>

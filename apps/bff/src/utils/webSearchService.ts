@@ -46,7 +46,7 @@ export class WebSearchService {
   async search(query: string): Promise<SearchResult> {
     const startTime = Date.now();
     const cacheKey = this.getCacheKey(query);
-    
+
     // 캐시 확인
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
@@ -57,30 +57,174 @@ export class WebSearchService {
     console.log(`🌐 웹 검색 실행: "${query}"`);
 
     try {
-      // 실제 웹 검색 대신 Mock 데이터 반환
-      // 프로덕션에서는 Google Search API, Bing API 등 사용
-      const mockResult = await this.generateMockSearchResult(query);
-      
+      // 실제 Google Custom Search API 사용
+      const searchResult = await this.performGoogleSearch(query);
+
       // 캐시에 저장
       this.cache.set(cacheKey, {
-        data: mockResult,
+        data: searchResult,
         timestamp: Date.now(),
       });
 
-      console.log(`✅ 웹 검색 완료: ${mockResult.resultCount}개 결과`);
-      return mockResult;
+      console.log(`✅ 웹 검색 완료: ${searchResult.resultCount}개 결과`);
+      return searchResult;
 
     } catch (error) {
       console.error('❌ 웹 검색 오류:', error);
-      
-      // 오류 시 기본 결과 반환
+
+      // 오류 시 Mock 데이터로 폴백
+      const fallbackResult = await this.generateMockSearchResult(query);
+
       return {
         query,
-        results: [],
+        results: fallbackResult.results,
         searchTime: Date.now() - startTime,
-        resultCount: 0,
+        resultCount: fallbackResult.results.length,
       };
     }
+  }
+
+  /**
+   * 실제 Google Custom Search API 사용
+   */
+  private async performGoogleSearch(query: string): Promise<SearchResult> {
+    const startTime = Date.now();
+    const googleApiKey = process.env.GOOGLE_API_KEY;
+    const googleSearchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
+
+    console.log('🔑 API 키 확인:', {
+      hasApiKey: !!googleApiKey,
+      apiKeyLength: googleApiKey?.length || 0,
+      apiKeyPrefix: googleApiKey?.substring(0, 10) || 'none',
+      hasSearchEngineId: !!googleSearchEngineId,
+      searchEngineId: googleSearchEngineId || 'none'
+    });
+
+    if (!googleApiKey || !googleSearchEngineId) {
+      console.log('❌ Google API 키 또는 검색 엔진 ID가 없어 Mock 데이터 사용');
+      return this.generateMockSearchResult(query);
+    }
+
+    try {
+      // 쿼리 타입에 따른 검색어 최적화
+      const enhancedQuery = this.optimizeSearchQuery(query);
+
+      const googleUrl = `https://www.googleapis.com/customsearch/v1?key=${googleApiKey}&cx=${googleSearchEngineId}&q=${encodeURIComponent(enhancedQuery)}&num=10&gl=kr&hl=ko`;
+
+      console.log('🔍 Google API 호출:', enhancedQuery);
+
+      const response = await fetch(googleUrl);
+      if (!response.ok) {
+        throw new Error(`Google API ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      console.log('🔍 Google API 응답 구조:', {
+        hasItems: !!data.items,
+        itemsLength: data.items?.length || 0,
+        searchInformation: data.searchInformation,
+        totalResults: data.searchInformation?.totalResults,
+        firstItemTitle: data.items?.[0]?.title
+      });
+
+      if (data.items && data.items.length > 0) {
+        const results = data.items.map((item: any) => ({
+          title: item.title,
+          snippet: item.snippet,
+          url: item.link,
+          source: new URL(item.link).hostname,
+          relevance: this.calculateRelevance(item, query)
+        }));
+
+        console.log('✅ Google 검색 결과 매핑 완료:', {
+          originalItemsCount: data.items.length,
+          mappedResultsCount: results.length,
+          sampleResult: results[0]
+        });
+
+        return {
+          query: enhancedQuery,
+          results,
+          searchTime: Date.now() - startTime,
+          resultCount: results.length,
+        };
+      } else {
+        console.log('❌ Google 검색 결과 없음 상세 정보:', {
+          hasData: !!data,
+          hasItems: !!data.items,
+          itemsLength: data.items?.length,
+          dataKeys: Object.keys(data || {}),
+          searchInformation: data.searchInformation
+        });
+        console.log('❌ Google API 전체 응답:', JSON.stringify(data, null, 2));
+        return this.generateMockSearchResult(query);
+      }
+
+    } catch (error: any) {
+      console.error('❌ Google Search API 오류:', error.message);
+      return this.generateMockSearchResult(query);
+    }
+  }
+
+  /**
+   * 검색어 최적화 (쿼리 타입에 따라)
+   */
+  private optimizeSearchQuery(query: string): string {
+    const lowerQuery = query.toLowerCase();
+
+    // 핫플레이스, 트렌드 관련
+    if (lowerQuery.includes('핫플레이스') || lowerQuery.includes('핫플') || lowerQuery.includes('인기')) {
+      return `${query} 핫플레이스 인스타 맛집 카페 2024`;
+    }
+
+    // 맛집 관련
+    if (lowerQuery.includes('맛집') || lowerQuery.includes('음식') || lowerQuery.includes('카페')) {
+      return `${query} 맛집 추천 리뷰 맛있는집`;
+    }
+
+    // 놀거리, 데이트 관련
+    if (lowerQuery.includes('놀거리') || lowerQuery.includes('데이트') || lowerQuery.includes('갈만한')) {
+      return `${query} 데이트코스 놀거리 볼거리 추천`;
+    }
+
+    // 쇼핑, 상권 관련
+    if (lowerQuery.includes('쇼핑') || lowerQuery.includes('상권')) {
+      return `${query} 쇼핑몰 상권 매장 브랜드`;
+    }
+
+    // 기본: 그대로 반환
+    return query;
+  }
+
+  /**
+   * 검색 결과 관련도 계산
+   */
+  private calculateRelevance(item: any, originalQuery: string): number {
+    let relevance = 0.5; // 기본값
+
+    const title = (item.title || '').toLowerCase();
+    const snippet = (item.snippet || '').toLowerCase();
+    const queryLower = originalQuery.toLowerCase();
+
+    // 제목에 검색어 포함 시 높은 점수
+    if (title.includes(queryLower)) {
+      relevance += 0.3;
+    }
+
+    // 스니펫에 검색어 포함 시 추가 점수
+    if (snippet.includes(queryLower)) {
+      relevance += 0.2;
+    }
+
+    // 신뢰할 만한 도메인 추가 점수
+    const trustedDomains = ['naver.com', 'daum.net', 'kakao.com', 'seoul.go.kr', 'blog.naver.com'];
+    const domain = item.displayLink || '';
+    if (trustedDomains.some(trusted => domain.includes(trusted))) {
+      relevance += 0.1;
+    }
+
+    return Math.min(relevance, 1.0); // 최대 1.0으로 제한
   }
 
   private async generateMockSearchResult(query: string): Promise<SearchResult> {
@@ -278,3 +422,6 @@ export interface WebSearchResponse {
   totalResults: number;
   searchTime: number;
 }
+
+// 서비스 인스턴스 export
+export const webSearchService = new WebSearchService();

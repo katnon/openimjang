@@ -3,13 +3,17 @@ import { use3DEqbHighlight } from "@/hooks/use3DEqbHighlight";
 import { useWindowView } from "@/hooks/useWindowView";
 import { useFirstPersonLook } from "@/hooks/useFirstPersonLook";
 import { useWalkingMode } from "@/hooks/useWalkingMode";
-import { useShadeAnalysis, type SeasonPreset } from "@/hooks/useShadeAnalysis";
+import { useShadeAnalysis, type SeasonPreset, type SunlightData } from "@/hooks/useShadeAnalysis";
 import { useResizable } from "@/hooks/useResizable";
 import { useNaverStreetView } from "@/hooks/useNaverStreetView";
 import { useCameraFrustum, type CameraFrustum } from "@/hooks/useCameraFrustum";
 import { useSkyline } from "@/hooks/useSkyline";
+import { useCesiumTime } from "@/hooks/useCesiumTime";
 import { useDeveloperMode } from "@/contexts/DeveloperModeProvider";
 import PointInputModal from "@/components/map/PointInputModal";
+import TimeController from "@/components/TimeController";
+import SeasonalSunlightComparisonPopup from "@/components/SeasonalSunlightComparisonPopup";
+import { FloorplanPopup } from "@/components/FloorplanPopup";
 
 declare global {
     interface Window {
@@ -19,6 +23,7 @@ declare global {
             navigateToPreset: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
             executeWindowViewAtPreset: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
             executeShadeAnalysisAtPreset: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
+            executeShadeAnalysisAtPresetById: (presetId: number) => Promise<void>; // 🆕 ID 기반 음영분석
         };
     }
 }
@@ -42,9 +47,11 @@ type Props = {
     onPresetNavigated?: (preset: { lat: number; lon: number; dong: string; ho: string }) => void;
     // 🆕 3D 시야 범위 업데이트 콜백
     onFrustumUpdate?: (frustum: CameraFrustum) => void;
+    // 🆕 프리셋 포인트 선택 시 확장카드 미리보기 탭 열기
+    onPresetPointSelect?: (preset: any) => void;
 };
 
-export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation, selectedApt, mapViewMode = '2D', onToggleMapView, onPresetNavigated, onFrustumUpdate }: Props) {
+export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation, selectedApt, mapViewMode = '2D', onToggleMapView, onPresetNavigated, onFrustumUpdate, onPresetPointSelect }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewerRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -63,8 +70,35 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
     const [showPointInputModal, setShowPointInputModal] = useState(false);
     const [newPointData, setNewPointData] = useState<any>(null);
 
+    // 🔧 평면도 모달 상태
+    const [showFloorplanModal, setShowFloorplanModal] = useState(false);
+    const [floorplanImageUrl, setFloorplanImageUrl] = useState<string>('');
+
+    // 🔧 라벨 표시 토글 상태
+    const [showPresetLabels, setShowPresetLabels] = useState(true);
+
+    // 🗑️ MapPrime3D DivPoint 사용으로 대부분 상태 제거
+    const [pointLabelsData, setPointLabelsData] = useState<Map<string, any>>(new Map());
+
+    // 🔧 평면도 팝업 상태
+    const [showFloorplanPopup, setShowFloorplanPopup] = useState(false);
+    const [currentFloorplanData, setCurrentFloorplanData] = useState<{
+        aptName?: string;
+        dong?: string;
+        ho?: string;
+        exclu_use_ar?: number;
+        floorplanImageUrl?: string;
+    } | null>(null);
+
+    // 🕐 시간 컨트롤러 상태
+    const [showTimeController, setShowTimeController] = useState(false);
+
+
     // ✅ 3D 단지 하이라이트 훅
     const { highlightApartment, clearHighlight } = use3DEqbHighlight(viewerRef.current, abortControllerRef.current);
+
+    // 🕐 세슘 시간 제어 훅
+    const cesiumTimeHook = useCesiumTime(viewerRef.current);
 
     // ✅ 창가 뷰 훅
     useWindowView(viewerRef.current, isWindowViewMode, () => setIsWindowViewMode(false));
@@ -102,7 +136,8 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
         clearShadeAnalysis,
         clearShadeResults,
         error: shadeError,
-        setSeasonPreset
+        setSeasonPreset,
+        generateSeasonalComparisonData
     } = useShadeAnalysis(viewerRef.current, abortControllerRef.current);
 
     // ✅ 스카이라인 분석 훅
@@ -127,6 +162,10 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
     const [hasShadeResult, setHasShadeResult] = useState(false);
     // ✅ 마지막 음영분석 옵션 저장 (계절 변경 시 재실행용)
     const [lastShadeOptions, setLastShadeOptions] = useState<any>(null);
+    // ✅ 일조시간 분석 팝업 표시 상태
+    const [showSunlightComparisonPopup, setShowSunlightComparisonPopup] = useState(false);
+    // ✅ 일조시간 분석 데이터
+    const [sunlightComparisonData, setSunlightComparisonData] = useState<SunlightData[]>([]);
 
     // 리사이즈 기능
     const { width, height, resizeHandle } = useResizable({
@@ -265,8 +304,11 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                 if (isFirstPersonMode) setIsFirstPersonMode(false);
                 if (isStreetViewActive) setIsStreetViewActive(false);
 
-                // 프리셋 좌표를 Cesium Cartesian3로 변환
-                const position = window.Cesium.Cartesian3.fromDegrees(preset.lon, preset.lat, 50);
+                // 프리셋 좌표를 Cesium Cartesian3로 변환 (저장된 높이 사용)
+                const actualHeight = (preset as any).height || 50; // preset에 height가 있으면 사용, 없으면 기본값 50
+                const position = window.Cesium.Cartesian3.fromDegrees(preset.lon, preset.lat, actualHeight);
+
+                console.log(`✅ 기존 방식: 높이 ${actualHeight}m에서 음영분석 실행`);
 
                 // 프리셋 위치에서 직접 음영분석 실행 (position 직접 전달)
                 const options = {
@@ -287,18 +329,91 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
         }
     }, [flyToLocation, startShadeAnalysis, isWindowViewMode, isFirstPersonMode, isStreetViewActive]);
 
-    // useImperativeHandle을 사용하여 외부에서 함수 호출 가능하도록 설정
+    // 🆕 프리셋 ID 기반 음영분석 실행 (저장된 높이 사용)
+    const executeShadeAnalysisAtPresetById = useCallback(async (presetId: number) => {
+        console.log('☀️ ID 기반 음영분석 실행:', presetId);
+
+        // 1. 프리셋 데이터 조회
+        let presetData = null;
+        try {
+            const response = await fetch(`/api/preset-points/by-id/${presetId}`);
+            const result = await response.json();
+
+            if (result.success) {
+                presetData = result.data;
+                console.log('📍 프리셋 데이터 조회 성공:', presetData);
+            } else {
+                throw new Error(`프리셋 조회 실패: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('❌ 프리셋 데이터 조회 실패:', error);
+            return;
+        }
+
+        if (!viewerRef.current || !window.Cesium) {
+            console.warn('⚠️ Viewer 또는 Cesium이 준비되지 않음');
+            return;
+        }
+
+        try {
+            // 2. 해당 위치로 카메라 이동
+            flyToLocation(presetData.lat, presetData.lon);
+
+            // 3. 카메라 이동 완료 후 음영분석 자동 실행 (저장된 높이 사용)
+            setTimeout(async () => {
+                console.log('☀️ 저장된 높이로 음영분석 자동 시작:', {
+                    lat: presetData.lat,
+                    lon: presetData.lon,
+                    height: presetData.height || 50 // 저장된 높이 사용, 없으면 기본값 50
+                });
+
+                // 다른 모드들 비활성화
+                if (isWindowViewMode) setIsWindowViewMode(false);
+                if (isFirstPersonMode) setIsFirstPersonMode(false);
+                if (isStreetViewActive) setIsStreetViewActive(false);
+
+                // 🔥 저장된 실제 높이 사용
+                const actualHeight = presetData.height || 50;
+                const position = window.Cesium.Cartesian3.fromDegrees(presetData.lon, presetData.lat, actualHeight);
+
+                console.log(`✅ 실제 높이 ${actualHeight}m에서 음영분석 실행`);
+
+                // 프리셋 위치에서 직접 음영분석 실행 (저장된 높이로)
+                const options = {
+                    position: position, // 실제 높이로 위치 설정
+                    interval: 15,
+                    useStoredPosition: false // 새 위치 사용
+                };
+
+                await startShadeAnalysis(options);
+                setHasShadeResult(true);
+                setLastShadeOptions(options);
+
+                console.log(`✅ 프리셋 ID ${presetId} 위치(높이: ${actualHeight}m)에서 음영분석 실행 완료`);
+            }, 1500); // 카메라 이동 완료를 위한 지연
+
+        } catch (error) {
+            console.error('❌ ID 기반 프리셋 음영분석 실행 실패:', error);
+        }
+    }, [flyToLocation, startShadeAnalysis, isWindowViewMode, isFirstPersonMode, isStreetViewActive]);
+
+    // useImperativeHandle을 사용하여 외부에서 함수 호출 가능하도록 설정 (한번만 실행)
     useEffect(() => {
-        if (window) {
-            console.log('🔧 MapPrime3DNavigator 전역 객체 설정');
+        if (window && !window.MapPrime3DNavigator) {
             window.MapPrime3DNavigator = {
                 navigateToPreset,
                 executeWindowViewAtPreset,
-                executeShadeAnalysisAtPreset
+                executeShadeAnalysisAtPreset,
+                executeShadeAnalysisAtPresetById // 🆕 ID 기반 음영분석 추가
             };
-            console.log('✅ MapPrime3DNavigator 설정 완료:', window.MapPrime3DNavigator);
+        } else if (window.MapPrime3DNavigator) {
+            // 이미 존재하면 함수들만 업데이트
+            window.MapPrime3DNavigator.navigateToPreset = navigateToPreset;
+            window.MapPrime3DNavigator.executeWindowViewAtPreset = executeWindowViewAtPreset;
+            window.MapPrime3DNavigator.executeShadeAnalysisAtPreset = executeShadeAnalysisAtPreset;
+            window.MapPrime3DNavigator.executeShadeAnalysisAtPresetById = executeShadeAnalysisAtPresetById; // 🆕 ID 기반 음영분석 추가
         }
-    }, [navigateToPreset, executeWindowViewAtPreset, executeShadeAnalysisAtPreset]);
+    }, [navigateToPreset, executeWindowViewAtPreset, executeShadeAnalysisAtPreset, executeShadeAnalysisAtPresetById]);
 
     // 🔧 포인트 생성 모드에서 지도 클릭 처리
     const handlePointCreation = async (lat: number, lon: number, height: number = 0) => {
@@ -426,13 +541,83 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                 alert('프리셋 포인트가 저장되었습니다!');
             } else {
                 console.error('❌ 프리셋 포인트 저장 실패:', result.error);
-                alert(`저장에 실패했습니다: ${result.error}`);
+
+                // 409 Conflict (중복) 에러인 경우 특별한 메시지 표시
+                if (response.status === 409) {
+                    alert(`⚠️ 중복 포인트: ${result.error}\n\n기존 포인트를 수정하거나 다른 호수를 선택해주세요.`);
+                } else {
+                    alert(`저장에 실패했습니다: ${result.error}`);
+                }
             }
 
         } catch (error) {
             console.error('❌ 프리셋 포인트 저장 중 오류:', error);
             alert('저장 중 오류가 발생했습니다.');
         }
+    };
+
+
+    // 🔧 글로벌 호버/클릭 핸들러 함수들
+    const setupGlobalHandlers = () => {
+        // 글로벌 말풍선 HTML 생성 함수
+        window.createSpeechBubbleLabelHtml = (point: any) => {
+            const areaText = point.exclu_use_ar ? `${point.exclu_use_ar}㎡` : '';
+            const dongText = point.dong || '';
+            const hoText = point.ho || '';
+
+            // 기본 말풍선 라벨만 제공
+            return `
+                <div class="speech-bubble"
+                     data-point-id="${point.id || 'unknown'}"
+                     onclick="window.handlePresetPointClick && window.handlePresetPointClick('${point.id}')"
+                     style="
+                    position: absolute;
+                    background-color: #00d4dd;
+                    color: white;
+                    padding: 10px 14px;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    min-width: 90px;
+                    cursor: pointer;
+                    user-select: none;
+                    transition: all 0.2s ease;
+                    transform: translate(-50%, -80%);
+                    left: 50%;
+                    bottom: 2px;
+                ">
+                    <div style="font-size: 15px; font-weight: bold; line-height: 1.2;">${dongText} ${hoText}</div>
+                    <div style="font-size: 11px; opacity: 0.9; margin-top: 3px;">${areaText}</div>
+                    <div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid #00d4dd;"></div>
+                </div>
+            `;
+        };
+
+        // 호버 핸들러 제거 - 클릭 이벤트만 사용
+
+        window.handlePresetPointClick = async (pointId: string) => {
+            // 포인트 데이터 찾기
+            let point = pointLabelsData.get(pointId) ||
+                       Array.from(pointLabelsData.values()).find(p => String(p.id) === pointId) ||
+                       Array.from(pointLabelsData.values()).find(p => `${p.dong}-${p.ho}` === pointId);
+
+            if (!point) {
+                console.error('포인트를 찾을 수 없습니다:', pointId);
+                return;
+            }
+
+            console.log('🏠 프리셋 포인트 클릭됨:', point);
+
+            // 확장카드 미리보기 탭 열기 (클로저를 통해 onPresetPointSelect 접근)
+            if (typeof onPresetPointSelect === 'function') {
+                onPresetPointSelect(point);
+            } else {
+                console.warn('⚠️ onPresetPointSelect 콜백이 정의되지 않았습니다');
+            }
+        };
     };
 
     // 🔧 저장된 프리셋 포인트들 로딩 (스마트 필터링)
@@ -451,6 +636,7 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
             if (result.success) {
                 console.log(`✅ 프리셋 포인트 ${result.data.length}개 로딩 완료 (아파트 ID: ${aptId || '전체'})`);
                 setPresetPoints(result.data);
+
 
                 // 3D 지도에 포인트들 표시
                 if (viewerRef.current && result.data.length > 0) {
@@ -472,12 +658,70 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
         }
     };
 
+    // 🗑️ createHTMLLabel 함수 제거 - addHTMLLabelForPoint로 대체
+
+
+    // 🗑️ expandLabelText, collapseLabelText 함수 제거 - HTML 라벨로 대체
+
+    // 🆕 MapPrime3D _createDivPoint를 사용한 청록색 라벨 생성
+    const addMapPrimeDivPoint = (point: any, position: any) => {
+        const pointId = `${point.dong}-${point.ho}`;
+
+        // 포인트 데이터를 여러 키로 저장 (다양한 방법으로 접근 가능하도록)
+        pointLabelsData.set(String(point.id), point);  // ID로 저장
+        pointLabelsData.set(pointId, point);  // "동-호"로 저장
+
+        try {
+            // MapPrime3D의 _createDivPoint 사용
+            if (viewerRef.current && viewerRef.current._createDivPoint) {
+                const divPoint = viewerRef.current._createDivPoint({
+                    name: pointId,
+                    position: [point.lon, point.lat, point.height || 50], // [경도, 위도, 높이]
+                    html: window.createSpeechBubbleLabelHtml(point),
+                    maxVisibleDistance: 5000, // 5km까지 표시
+                });
+
+                // 글로벌 핸들러로 이벤트 처리됨 (HTML onmouseenter/onmouseleave/onclick)
+            } else {
+                console.error('❌ MapPrime3D _createDivPoint 메서드를 찾을 수 없습니다');
+            }
+        } catch (error) {
+            console.error(`❌ 말풍선 DivPoint 생성 실패 (${pointId}):`, error);
+        }
+    };
+
+    // 🗑️ HTML 라벨 확장/축소 함수 제거 - MapPrime3D DivPoint로 대체
+
     // 🔧 3D 지도에서 모든 포인트 제거
     const clearPointsFromMap = () => {
         if (!viewerRef.current) return;
 
         try {
             console.log('🧹 3D 지도에서 프리셋 포인트들 제거');
+
+            // MapPrime3D DivPoint 제거
+            if (viewerRef.current && viewerRef.current._removeDivPoint) {
+                // 모든 프리셋 DivPoint 제거
+                presetPoints.forEach(point => {
+                    const pointId = `${point.dong}-${point.ho}`;
+                    try {
+                        viewerRef.current._removeDivPoint(pointId);
+                        console.log(`🗑️ DivPoint 제거: ${pointId}`);
+                    } catch (error) {
+                        console.warn(`⚠️ DivPoint 제거 실패: ${pointId}`, error);
+                    }
+                });
+            }
+
+            // 🗑️ 기존 HTML 라벨 제거 로직 제거됨
+
+            // DOM에서 남아있는 프리셋 라벨들도 제거
+            const existingLabels = document.querySelectorAll('[class*="mapprime-preset-label"]');
+            existingLabels.forEach(label => {
+                if (label.parentNode) {
+                    label.parentNode.removeChild(label);
+                }
+            });
 
             // 프리셋 포인트 entities 제거
             const entitiesToRemove = [];
@@ -533,7 +777,7 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                 return;
             }
 
-            // 각 포인트를 3D 지도에 표시
+            // 각 포인트를 3D 지도에 표시 (상세 정보 포함)
             validPoints.forEach((point, index) => {
                 try {
                     console.log(`📍 포인트 ${index + 1} 표시: (${point.lat}, ${point.lon})`);
@@ -541,35 +785,42 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                     // 지형 높이를 자동으로 계산하여 표시 (고정 높이 사용 안함)
                     const position = window.Cesium.Cartesian3.fromDegrees(point.lon, point.lat, 50); // 지면에서 50m 위;
 
-                    // Cesium Entity를 직접 생성하여 포인트 표시
+                    // 상세 라벨 텍스트 생성
+                    const areaText = point.exclu_use_ar ? `${point.exclu_use_ar}㎡` : '';
+                    const priceText = point.recent_deal_amount ? `${point.recent_deal_amount}만원` : '';
+                    const floorplanText = point.floorplan_image_url ? ' 📋' : '';
+
+                    const detailText = [areaText, priceText].filter(t => t).join(' | ');
+                    const fullLabelText = `${point.dong} ${point.ho}${floorplanText}\n${detailText}`;
+
+                    // Cesium Entity를 직접 생성하여 포인트 표시 (스크린샷과 동일한 디자인)
                     const entity = {
                         name: `프리셋_${point.dong}_${point.ho}`,
                         position: position,
-                        point: {
-                            pixelSize: 20,
-                            color: window.Cesium.Color.YELLOW,
-                            outlineColor: window.Cesium.Color.BLACK,
-                            outlineWidth: 2,
-                            heightReference: window.Cesium.HeightReference.RELATIVE_TO_GROUND,
-                            disableDepthTestDistance: Number.POSITIVE_INFINITY
+                        // 확장된 포인트 속성 저장
+                        properties: {
+                            id: point.id, // 프리셋 포인트의 실제 ID 추가
+                            dong: point.dong,
+                            ho: point.ho,
+                            exclu_use_ar: point.exclu_use_ar,
+                            recent_deal_amount: point.recent_deal_amount,
+                            floorplan_image_url: point.floorplan_image_url,
+                            apt_nm: point.apt_nm,
+                            jibun_address: point.jibun_address
                         },
+                        // 🗑️ 노란 점 제거 - 라벨만 표시
+                        // 라벨 제거 - 새로운 청록색 라벨 시스템으로 대체
                         label: {
-                            text: `${point.dong} ${point.ho}`,
-                            font: '12pt monospace',
-                            fillColor: window.Cesium.Color.WHITE,
-                            outlineColor: window.Cesium.Color.BLACK,
-                            outlineWidth: 2,
-                            style: window.Cesium.LabelStyle.FILL_AND_OUTLINE,
-                            verticalOrigin: window.Cesium.VerticalOrigin.BOTTOM,
-                            pixelOffset: new window.Cesium.Cartesian2(0, -40),
-                            heightReference: window.Cesium.HeightReference.RELATIVE_TO_GROUND,
-                            disableDepthTestDistance: Number.POSITIVE_INFINITY
+                            show: false // 기존 라벨 완전히 숨김
                         }
                     };
 
                     // 뷰어의 entities에 추가
                     const addedEntity = viewerRef.current.entities.add(entity);
                     console.log(`✅ 포인트 ${index + 1} 표시 완료:`, addedEntity.name);
+
+                    // 🆕 MapPrime3D DivPoint로 청록색 라벨 추가
+                    addMapPrimeDivPoint(point, position);
 
                 } catch (error) {
                     console.error(`❌ 포인트 ${index + 1} 표시 실패:`, error);
@@ -578,41 +829,15 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
 
             console.log(`🎯 총 ${validPoints.length}개 프리셋 포인트 표시 완료`);
 
+            // HTML 라벨에서 이벤트를 직접 처리하므로 registerPointEvents 제거
+
         } catch (error) {
             console.error('❌ 포인트 표시 실패:', error);
             console.error('상세 오류:', error.stack);
         }
     };
 
-    // 🔧 포인트 클릭 이벤트 등록
-    const registerPointClickEvents = (points: any[]) => {
-        if (!viewerRef.current) return;
-
-        try {
-            const handler = viewerRef.current.cesiumWidget.screenSpaceEventHandler;
-
-            // 기존 클릭 핸들러와 충돌하지 않도록 별도로 처리
-            const pointClickHandler = (event: any) => {
-                // 포인트 생성 모드일 때는 무시
-                if (isPointCreationMode) return;
-
-                const pickedObject = viewerRef.current.scene.pick(event.position);
-
-                if (pickedObject?.id) {
-                    // 클릭된 포인트 찾기 (위치 기반으로 매칭)
-                    const clickedPoint = findPointByPosition(event.position, points);
-                    if (clickedPoint) {
-                        showPointInfoPopup(clickedPoint, event.position);
-                    }
-                }
-            };
-
-            handler.setInputAction(pointClickHandler, window.Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        } catch (error) {
-            console.error('❌ 포인트 클릭 이벤트 등록 실패:', error);
-        }
-    };
+    // 🗑️ registerPointEvents 함수 제거 - HTML 라벨에서 직접 이벤트 처리
 
     // 🔧 클릭 위치에서 포인트 찾기
     const findPointByPosition = (screenPosition: any, points: any[]) => {
@@ -644,17 +869,66 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
         }
     };
 
-    // 🔧 포인트 정보 팝업 표시
-    const showPointInfoPopup = (point: any, screenPosition: any) => {
+    // 🔧 포인트 정보 팝업 표시 (포인트 정확한 위치에)
+    const showPointInfoPopup = (point: any, entity?: any) => {
         console.log('📋 포인트 정보 팝업 표시:', point);
+
+        // Entity가 있으면 실제 포인트 위치로, 없으면 마우스 위치로
+        let screenPosition;
+        if (entity && entity.position) {
+            try {
+                // 3D 월드 좌표를 화면 좌표로 변환
+                const worldPosition = entity.position.getValue(viewerRef.current.clock.currentTime);
+                screenPosition = window.Cesium.SceneTransforms.wgs84ToWindowCoordinates(
+                    viewerRef.current.scene,
+                    worldPosition
+                );
+
+                if (!screenPosition) {
+                    // 변환 실패시 화면 중앙에 표시
+                    screenPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+                }
+            } catch (error) {
+                console.warn('포인트 위치 변환 실패:', error);
+                screenPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+            }
+        } else {
+            // 마우스 위치 사용
+            screenPosition = point.screenPosition || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        }
 
         setSelectedPointInfo({
             ...point,
             screenPosition: {
                 x: screenPosition.x,
-                y: screenPosition.y - 80 // 포인트 위쪽에 표시
+                y: screenPosition.y - 60 // 포인트 위쪽에 표시
             }
         });
+    };
+
+    // 🔧 평면도 모달 열기
+    const openFloorplanModal = (imageUrl: string) => {
+        console.log('📋 평면도 모달 열기:', imageUrl);
+        setFloorplanImageUrl(imageUrl);
+        setShowFloorplanModal(true);
+        setSelectedPointInfo(null); // 팝업 닫기
+    };
+
+    // 🔧 프리셋 라벨 토글 기능
+    const togglePresetLabels = () => {
+        const newShowLabels = !showPresetLabels;
+        setShowPresetLabels(newShowLabels);
+
+        // 기존 entities의 label 가시성 업데이트
+        if (viewerRef.current) {
+            viewerRef.current.entities.values.forEach((entity: any) => {
+                if (entity.name && entity.name.includes('프리셋_') && entity.label) {
+                    entity.label.show = newShowLabels;
+                }
+            });
+        }
+
+        console.log(`🏷️ 프리셋 라벨 토글: ${newShowLabels ? '표시' : '숨김'}`);
     };
 
     // ✅ 뷰어 한 번만 생성 관리 (파괴하지 않음)
@@ -882,23 +1156,29 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
         };
     }, [isPointCreationMode]);
 
-    // 🔧 뷰어 준비 시 프리셋 포인트 로딩 (개발 모드에서는 전체 프리셋 표시)
+    // 🔧 글로벌 핸들러 초기화
+    useEffect(() => {
+        setupGlobalHandlers();
+        return () => {
+            // 컴포넌트 언마운트 시 글로벌 함수 정리
+            delete window.handlePresetPointHover;
+            delete window.handlePresetPointClick;
+            delete window.createSpeechBubbleLabelHtml;
+        };
+    }, [onPresetPointSelect, pointLabelsData]); // onPresetPointSelect와 pointLabelsData 변경 시 핸들러 재설정
+
+    // 🔧 통합된 프리셋 포인트 로딩 (중복 호출 방지)
     useEffect(() => {
         if (viewerRef.current && !isLoading && !error) {
             if (isDeveloperMode) {
                 console.log('🔧 개발자 모드: 전체 프리셋 포인트 로딩');
                 loadPresetPoints(); // 전체 프리셋 표시
+            } else if (selectedApt?.id) {
+                console.log('🏠 선택된 아파트의 프리셋 포인트 로딩:', selectedApt.id);
+                loadPresetPoints(selectedApt.id);
             }
         }
-    }, [viewerRef.current, isLoading, error, isDeveloperMode]);
-
-    // 🔧 선택된 아파트 변경 시 해당 아파트의 프리셋 포인트만 로딩 (스마트 필터링)
-    useEffect(() => {
-        if (viewerRef.current && !isLoading && !error) {
-            console.log('🏠 선택된 아파트 변경:', selectedApt);
-            loadPresetPoints(selectedApt?.id);
-        }
-    }, [selectedApt?.id, viewerRef.current, isLoading, error]);
+    }, [viewerRef.current, isLoading, error, isDeveloperMode, selectedApt?.id]);
 
     // ✅ 카메라 이동 및 하이라이트 처리 (selectedLocation 변경 시)
     useEffect(() => {
@@ -1013,12 +1293,12 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                     )}
                 </div>
 
-                {/* 3D 지도 조작 버튼들 (3D 메인 모드에서만 표시, 우측 배치) */}
+                {/* 3D 지도 조작 버튼들 (3D 메인 모드에서만 표시, 하단 중앙 배치) */}
                 {mapViewMode === '3D' && (
-                    <div className="fixed right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-[300]">
+                    <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col gap-3 z-[300]">
 
-                        {/* 첫 번째 줄: 메인 기능 버튼들 */}
-                        <div className="flex gap-2">
+                        {/* 메인 기능 버튼들 - 하단 중앙 가로 배치 */}
+                        <div className="flex gap-2 flex-wrap justify-center">
                             {/* 🔧 개발자 모드 전용 포인트 생성 버튼 */}
                             {isDeveloperMode && (
                                 <button
@@ -1127,6 +1407,22 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                                 </div>
                             </button>
 
+                            {/* 🕐 시간 컨트롤러 버튼 */}
+                            <button
+                                className={`${showTimeController
+                                    ? "bg-amber-500 text-white border-amber-500"
+                                    : "bg-white/90 hover:bg-white border-gray-300 text-gray-700"
+                                    } rounded-lg shadow-md transition-all px-3 py-2 text-sm border backdrop-blur-sm`}
+                                onClick={() => setShowTimeController(!showTimeController)}
+                                disabled={isLoading || !!error}
+                                title="시간 조작 (태양 위치 제어)"
+                            >
+                                <div className="flex flex-col items-center">
+                                    <span className="text-base">🕐</span>
+                                    <span className="text-xs">시간</span>
+                                </div>
+                            </button>
+
                             {/* 🗺️ 로드뷰 버튼 */}
                             <button
                                 className={`${isStreetViewActive
@@ -1146,10 +1442,8 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                                     <span className="text-xs">로드뷰</span>
                                 </div>
                             </button>
-                        </div>
 
-                        {/* 두 번째 줄: 음영분석 관련 버튼들 */}
-                        <div className="flex gap-2">
+                            {/* ☀️ 음영분석 버튼 */}
                             <button
                                 className={`${isAnalyzing
                                     ? "bg-orange-500 text-white border-orange-500"
@@ -1201,6 +1495,60 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                                     <span className="text-xs">초기화</span>
                                 </div>
                             </button>
+
+                            {/* ☀️ 계절별 일조시간 비교 버튼 */}
+                            <button
+                                className={`${showSunlightComparisonPopup
+                                    ? "bg-orange-600 text-white border-orange-600"
+                                    : "bg-white/90 hover:bg-white border-gray-300 text-gray-700"
+                                    } rounded-lg shadow-md transition-all px-3 py-2 text-xs border backdrop-blur-sm`}
+                                onClick={async () => {
+                                    // 음영분석 데이터가 있으면 계절별 비교 팝업 표시
+                                    if (hasShadeResult) {
+                                        if (!showSunlightComparisonPopup) {
+                                            console.log('🌅 일조시간 분석 데이터 생성 중...');
+                                            try {
+                                                const sunlightData = await generateSeasonalComparisonData();
+                                                setSunlightComparisonData(sunlightData);
+                                                setShowSunlightComparisonPopup(true);
+                                                console.log('✅ 일조시간 분석 팝업 열기 완료:', sunlightData);
+                                            } catch (error) {
+                                                console.error('❌ 일조시간 분석 데이터 생성 실패:', error);
+                                                alert('일조시간 분석 데이터를 생성하는데 실패했습니다.');
+                                            }
+                                        } else {
+                                            setShowSunlightComparisonPopup(false);
+                                        }
+                                    } else {
+                                        alert('먼저 음영분석을 실행해주세요.');
+                                    }
+                                }}
+                                disabled={isLoading || !!error || !hasShadeResult}
+                                title="계절별 일조시간 비교표"
+                            >
+                                <div className="flex flex-col items-center">
+                                    <span className="text-base">📊</span>
+                                    <span className="text-xs">일조표</span>
+                                </div>
+                            </button>
+
+                            {/* 🏷️ 프리셋 라벨 토글 버튼 */}
+                            {isDeveloperMode && (
+                                <button
+                                    className={`${showPresetLabels
+                                        ? "bg-green-500 text-white border-green-500"
+                                        : "bg-white/90 hover:bg-white border-gray-300 text-gray-700"
+                                        } rounded-lg shadow-md transition-all px-3 py-2 text-xs border backdrop-blur-sm`}
+                                    onClick={togglePresetLabels}
+                                    disabled={isLoading || !!error}
+                                    title="프리셋 포인트 라벨 표시/숨김"
+                                >
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-base">🏷️</span>
+                                        <span className="text-xs">라벨</span>
+                                    </div>
+                                </button>
+                            )}
                         </div>
 
                         {/* 계절 프리셋 드롭다운 (음영분석 결과가 있을 때만 표시) */}
@@ -1350,72 +1698,50 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                 </div>
             )}
 
-            {/* 포인트 정보 팝업 */}
+            {/* 포인트 정보 팝업 (스크린샷과 동일한 초록색 그라데이션 디자인) */}
             {selectedPointInfo && (
                 <div
-                    className="fixed bg-white border border-gray-200 shadow-xl rounded-lg p-4 z-[600] min-w-[200px] max-w-[300px]"
+                    className="fixed bg-gradient-to-br from-teal-400 to-cyan-500 text-white shadow-xl rounded-lg p-3 z-[600] min-w-[180px] max-w-[250px]"
                     style={{
-                        left: Math.max(10, Math.min(selectedPointInfo.screenPosition.x - 100, window.innerWidth - 320)), // 화면 경계 내 유지
+                        left: Math.max(10, Math.min(selectedPointInfo.screenPosition.x - 90, window.innerWidth - 260)),
                         top: Math.max(10, selectedPointInfo.screenPosition.y)
                     }}
                 >
-                    <div className="space-y-2">
-                        {/* 헤더 */}
-                        <div className="flex justify-between items-start">
-                            <h4 className="font-bold text-blue-600 text-sm">
-                                📍 프리셋 포인트
-                            </h4>
-                            <button
-                                onClick={() => setSelectedPointInfo(null)}
-                                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-                                title="닫기"
-                            >
-                                ×
-                            </button>
+                    {/* 메인 정보 (동호수와 면적) */}
+                    <div className="text-center mb-2">
+                        <div className="font-bold text-lg">
+                            {selectedPointInfo.dong} {selectedPointInfo.ho}
                         </div>
-
-                        {/* 아파트 정보 */}
-                        {selectedPointInfo.apt_nm && (
-                            <div className="bg-blue-50 p-2 rounded">
-                                <p className="font-medium text-blue-800 text-sm">
-                                    🏠 {selectedPointInfo.apt_nm}
-                                </p>
-                                {selectedPointInfo.jibun_address && (
-                                    <p className="text-xs text-blue-600 mt-1">
-                                        {selectedPointInfo.jibun_address}
-                                    </p>
-                                )}
+                        {selectedPointInfo.exclu_use_ar && (
+                            <div className="text-sm opacity-90">
+                                {selectedPointInfo.exclu_use_ar}㎡
                             </div>
                         )}
+                    </div>
 
-                        {/* 세부 정보 */}
-                        <div className="space-y-1 text-sm">
-                            {selectedPointInfo.dong && (
-                                <p>
-                                    <span className="text-gray-600">🏢 동:</span>
-                                    <span className="ml-1 font-medium">{selectedPointInfo.dong}</span>
-                                </p>
-                            )}
-                            {selectedPointInfo.ho && (
-                                <p>
-                                    <span className="text-gray-600">🚪 호:</span>
-                                    <span className="ml-1 font-medium">{selectedPointInfo.ho}</span>
-                                </p>
-                            )}
-                            {selectedPointInfo.exclu_use_ar && (
-                                <p>
-                                    <span className="text-gray-600">📐 면적:</span>
-                                    <span className="ml-1 font-medium">{selectedPointInfo.exclu_use_ar}㎡</span>
-                                </p>
-                            )}
+                    {/* 실거래가 정보 */}
+                    {selectedPointInfo.recent_deal_amount && (
+                        <div className="text-center text-sm opacity-90 mb-3">
+                            최근 거래: {selectedPointInfo.recent_deal_amount}만원
                         </div>
+                    )}
 
-                        {/* 생성 정보 */}
-                        <div className="pt-2 border-t border-gray-100">
-                            <p className="text-xs text-gray-500">
-                                생성: {new Date(selectedPointInfo.created_at).toLocaleDateString('ko-KR')}
-                            </p>
-                        </div>
+                    {/* 액션 버튼들 */}
+                    <div className="space-y-1">
+                        {selectedPointInfo.floorplan_image_url && (
+                            <button
+                                onClick={() => openFloorplanModal(selectedPointInfo.floorplan_image_url)}
+                                className="w-full bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-2 rounded transition-colors backdrop-blur-sm"
+                            >
+                                📋 평면도 보기
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setSelectedPointInfo(null)}
+                            className="w-full bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 rounded transition-colors backdrop-blur-sm"
+                        >
+                            닫기
+                        </button>
                     </div>
                 </div>
             )}
@@ -1698,6 +2024,60 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
             }}
         />
 
+        {/* 🕐 시간 컨트롤러 */}
+        {mapViewMode === '3D' && (
+            <TimeController
+                isVisible={showTimeController}
+                onClose={() => setShowTimeController(false)}
+                viewer={viewerRef.current}
+                position={{ x: 100, y: 100 }}
+            />
+        )}
+
+        {/* ☀️ 계절별 일조시간 비교 팝업 */}
+        <SeasonalSunlightComparisonPopup
+            isVisible={showSunlightComparisonPopup}
+            onClose={() => setShowSunlightComparisonPopup(false)}
+            sunlightData={sunlightComparisonData}
+            position={{ x: 200, y: 150 }}
+        />
+
+        {/* 📋 평면도 이미지 모달 */}
+        {showFloorplanModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[900]">
+                {/* 모달 컨테이너 */}
+                <div className="relative bg-white rounded-lg shadow-2xl max-w-4xl max-h-[90vh] w-full mx-4">
+                    {/* 헤더 */}
+                    <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-t-lg">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                            📋 평면도
+                        </h3>
+                        <button
+                            onClick={() => setShowFloorplanModal(false)}
+                            className="text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+                            title="닫기"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    {/* 이미지 컨테이너 */}
+                    <div className="p-4 flex items-center justify-center bg-gray-50 rounded-b-lg" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+                        <img
+                            src={floorplanImageUrl}
+                            alt="평면도"
+                            className="max-w-full max-h-full object-contain rounded shadow-lg"
+                            style={{ maxHeight: 'calc(90vh - 120px)' }}
+                            onError={(e) => {
+                                console.error('평면도 이미지 로딩 실패:', floorplanImageUrl);
+                                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="%23f3f4f6"/><text x="150" y="100" text-anchor="middle" fill="%236b7280" font-size="14" font-family="Arial">이미지를 불러올 수 없습니다</text></svg>';
+                            }}
+                        />
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* 🎯 시야 범위 디버그 정보 (개발자 모드) */}
         {isDeveloperMode && cameraFrustumHook.frustum.isValid && (
             <div className="absolute top-4 left-4 bg-black bg-opacity-80 text-white text-xs p-2 rounded max-w-xs">
@@ -1708,6 +2088,31 @@ export default function MapPrime3DViewer({ isVisible, onClose, selectedLocation,
                 <div className="text-green-400 mt-1">미니맵에 실시간 반영됨</div>
             </div>
         )}
+
+        {/* 🏠 평면도 팝업 */}
+        {currentFloorplanData && (
+            <FloorplanPopup
+                isOpen={showFloorplanPopup}
+                onClose={() => {
+                    setShowFloorplanPopup(false);
+                    setCurrentFloorplanData(null);
+                }}
+                title="평면도"
+                floorplanImageUrl={currentFloorplanData.floorplanImageUrl}
+                aptName={currentFloorplanData.aptName}
+                dong={currentFloorplanData.dong}
+                ho={currentFloorplanData.ho}
+                exclu_use_ar={currentFloorplanData.exclu_use_ar}
+            />
+        )}
+
+        {/* ☀️ 계절별 일조시간 비교 팝업 */}
+        <SeasonalSunlightComparisonPopup
+            isVisible={showSunlightComparisonPopup}
+            onClose={() => setShowSunlightComparisonPopup(false)}
+            sunlightData={sunlightComparisonData}
+            position={{ x: 200, y: 150 }}
+        />
         </>
     );
 }

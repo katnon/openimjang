@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polygon Entity 그리기</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @font-face {
+            font-family: 'Daeojamjil';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302_01@1.0/TheJamsil1Thin.woff2') format('woff2');
+            font-weight: 100;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Daeojamjil';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302_01@1.0/TheJamsil2Light.woff2') format('woff2');
+            font-weight: 300;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Daeojamjil';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302_01@1.0/TheJamsil3Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Daeojamjil';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302_01@1.0/TheJamsil4Medium.woff2') format('woff2');
+            font-weight: 500;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Daeojamjil';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302_01@1.0/TheJamsil5Bold.woff2') format('woff2');
+            font-weight: 700;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Daeojamjil';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302_01@1.0/TheJamsil6ExtraBold.woff2') format('woff2');
+            font-weight: 800;
+            font-display: swap;
+        }
+
+        .mapprime-black-panel {
+            font-family: 'Daeojamjil';
+        }
+    </style>
+</head>
+
+<body>
+    <div id="world-container"></div>
+    <script>
+        window.onload = () => {
+            viewer._setCameraView({
+                longitude: 127.1124,
+                latitude: 37.50828,
+                height: 600,
+                heading: 300,
+                pitch: -23
+            });
+            viewer._createDivPlane({
+                name: 'broswer',
+                position: [127.09158102492748, 37.52394344764828, 1],
+                html: `<iframe src="/" style="
+                    width: 1200px;
+                    height:700px;
+                    border:0;
+                    border-radius:20px;
+                    border:10px solid #ffc00080;
+                "></iframe>`,
+                scale: .7,
+                heading: 340,
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+            });
+            viewer._createDivPlane({
+                name: 'clock',
+                position: [127.099944, 37.5114212, 110],
+                scale: .15,
+                html: `<div class="mapprime-panel-clock-wrap">
+                        <div class="mapprime-panel-clock">
+                            <h5 class="mapprime-panel-clock-date"></h5>
+                            <span class="mapprime-panel-clock-time"></span>
+                        </div>
+                    </div>`,
+                    depthTest: true
+            });
+            viewer._createDivPlane({
+                name: '롯데월드타워',
+                position: [127.10263525131434, 37.51255437981149, 550],
+                html: `<div class="mapprime-panel-flag">
+                            <div class="mapprime-panel-flag-text" style="font-family: 'Daeojamjil';">롯데월드타워</div>
+                            <div class="mapprime-panel-flag-wave"></div>
+                        </div>`,
+                heading: 0
+            });
+            viewer._createDivPlane({
+                name: '석촌호수',
+                position: [127.10546718798979, 37.51142462946519, 8],
+                html: `<div>
+                            <span style="font-size:2rem;color:#fff;font-weight:bold;white-space:nowrap;">석촌호수</span>
+                        </div>`,
+                heading: -40,
+                roll: 0
+            });
+            viewer._createDivPlane({
+                name: '송파나루공원',
+                position: [127.10314991308162, 37.50873146536893, 13],
+                html: `<div style="position:relative;overflow:hidden;border-radius:10px;width:150px;height:100px;">
+                        <div style="position:absolute;left:25px;top:20px;font-weight:bold;background-color:rgba(255,255,255,.7);padding:5px;">송파나루공원</div>
+                            <img src="/static/images/park.jpg" style="width:100%;height:100%;">
+                        </div>`,
+                heading: -60,
+                scale: .5,
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+            });
+            viewer._createDivPlane({
+                name: 'typhoon',
+                position: {
+                    type: "time", 
+                    speed: 30,
+                    list: [
+                        [127.105706, 37.509748, 96.4],
+                        [127.106580, 37.510393, 114.7],
+                        [127.107026, 37.513144, 11.9],
+                        [127.105892, 37.514515, 46.4],
+                        [127.103980, 37.513318, 88.7],
+                        [127.105706, 37.509748, 96.4],
+                    ]
+                },
+                //position: [127.10569097376693, 37.50973767593252, 100],
+                html: `<image src="/static/images/typhoon.gif" style="width:100px;height:100px;">`,
+                heading: -60,
+                scale: .5,
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+            });
+            let lastSecond = null;
+            viewer.clock.onTick.addEventListener((time) => {
+                const jsDate = Cesium.JulianDate.toDate(time.currentTime);
+
+                const currentSecond = jsDate.getSeconds();
+                if (currentSecond === lastSecond) {
+                    return;
+                }
+                lastSecond = currentSecond;
+                const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+                const dayOfWeek = weekdays[jsDate.getDay()];
+                const year = jsDate.getFullYear();
+                const month = (jsDate.getMonth() + 1).toString().padStart(2, '0');
+                const day = jsDate.getDay().toString().padStart(2, '0');
+                const hours = jsDate.getHours().toString().padStart(2, '0');
+                const minutes = jsDate.getMinutes().toString().padStart(2, '0');
+                const seconds = jsDate.getSeconds().toString().padStart(2, '0');
+                viewer._updateDivGraphic({
+                    name:'clock',
+                    html: `<div class="mapprime-panel-clock-wrap">
+                            <div class="mapprime-panel-clock">
+                                <h5 class="mapprime-panel-clock-date">${year}년 ${month}월 ${day}일 ${dayOfWeek}요일</h5>
+                                <span class="mapprime-panel-clock-time">${hours}:${minutes}:${seconds}</span>
+                            </div>
+                            </div>`
+                        });
+            });
+        };
+
+    </script>
+</body>
+
+</html>

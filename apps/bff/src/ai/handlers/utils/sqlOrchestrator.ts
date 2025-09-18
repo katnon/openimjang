@@ -51,6 +51,16 @@ export async function orchestrateSelect(options: OrchestrateOptions) {
     'You are a SQL generator for PostgreSQL.',
     'Use only SELECT. Never use INSERT/UPDATE/DELETE/DDL.',
     'Prefer explicit schema names if known (e.g., oi.).',
+
+    // 🚫 CLAUDE.md 데이터베이스 규칙 강화
+    'FORBIDDEN TABLES: oi.apt_deal_trade_raw, oi.apt_deal_rent_raw, oi.old_apt_deal_* (사용 금지)',
+    'CORRECT TABLE: Use oi.apt_deal_all (통합 거래 테이블) for all real estate transactions',
+    'CORRECT COLUMNS: deal_amount, deposit, monthly_rent, exclu_use_ar, floor, deal_year, deal_month, deal_day, apt_nm, jibun_address',
+    'APARTMENT NAME RULES: "이편한세상" → "e편한세상", "e-편한세상" → "e편한세상"',
+    'AREA SEARCH: ±1㎡ tolerance (84㎡ search: exclu_use_ar BETWEEN 83 AND 85)',
+    'DATE FILTER: Use simple year comparison, avoid MAKE_DATE function',
+    'DEAL TYPE: deal_amount exists=매매, deal_amount NULL+monthly_rent=0=전세, deal_amount NULL+monthly_rent>0=월세',
+
     'Date columns may be named dealymd/contract_ymd/ymd/... Use RAG context.',
     ...(forceSchemaHints.length ? ['Schema hints:', ...forceSchemaHints] : []),
     ...(requireColumns.length ? [`Required columns: ${requireColumns.join(', ')}`] : []),
@@ -97,7 +107,7 @@ function enhanceQuestionWithProfile(question: string, userProfile?: any): string
     const maxBudgetWon = userProfile.budgetRange[1];
     const minBudgetManwon = Math.floor(minBudgetWon / 10000); // 만원 단위
     const maxBudgetManwon = Math.floor(maxBudgetWon / 10000);
-    enhancement += ` 사용자 예산 범위: ${minBudgetManwon}만원~${maxBudgetManwon}만원 (dealamount 기준으로 가격 필터링 고려).`;
+    enhancement += ` 사용자 예산 범위: ${minBudgetManwon}만원~${maxBudgetManwon}만원 (deal_amount 기준으로 가격 필터링 고려).`;
   }
 
   // 선호 건축연식이 있으면 추가

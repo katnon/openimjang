@@ -36,6 +36,7 @@ export class ActionExecutor {
     // this.actionHandlers.set('rag', new RAGHandler());
     this.actionHandlers.set('searchRealEstate', new SearchRealEstateHandler());
     this.actionHandlers.set('searchPOI', new SearchPOIHandler());
+    this.actionHandlers.set('webSearch', new WebSearchHandler());
     this.actionHandlers.set('calculateStats', new CalculateStatsHandler());
     this.actionHandlers.set('visualize', new VisualizeHandler());
     this.actionHandlers.set('summarize', new SummarizeHandler());
@@ -395,24 +396,34 @@ class SearchRealEstateHandler implements ActionHandler {
       
       // 슬롯에서 검색 파라미터 구성
       const searchArgs: any = {};
-      
+
       // 아파트 메타데이터가 있으면 활용
       if (slots.apartmentMetadata?.id) {
         searchArgs.apartmentId = slots.apartmentMetadata.id;
       } else if (slots.apartmentName) {
         searchArgs.apartmentName = slots.apartmentName;
       }
-      
+
       if (slots.dealType && slots.dealType !== '전체') {
         searchArgs.dealType = slots.dealType;
       }
-      
+
       if (slots.area) {
         searchArgs.area = slots.area.toString();
       }
-      
+
       if (slots.period) {
         searchArgs.period = slots.period;
+      }
+
+      // 🆕 첨부된 아파트 정보 전달 (세션 기반 메모리)
+      if (context.persistentAttachedApartments && context.persistentAttachedApartments.length > 0) {
+        searchArgs.persistentAttachedApartments = context.persistentAttachedApartments;
+      }
+
+      // 기존 아파트 추출 데이터 호환성
+      if (context.extractedApartments) {
+        searchArgs.contextAptData = context.extractedApartments;
       }
       
       console.log('🔍 검색 파라미터:', searchArgs);
@@ -705,14 +716,307 @@ class RecommendHandler implements ActionHandler {
 class CompareHandler implements ActionHandler {
   async execute(action: PlanAction, context: PlanContext, previousResults: ActionResult[]): Promise<any> {
     const { comparisonType, includeMetrics } = action.parameters || {};
-    
+    const { slots } = context;
+
     console.log('⚖️ 비교 분석:', { comparisonType, includeMetrics });
-    
+
+    try {
+      // 실제 compareMultipleApartments 함수 호출
+      const { compareMultipleApartments } = await import('../handlers/compareMultipleApartments.enhanced');
+
+      // 비교할 아파트 목록 구성
+      const apartmentList = this.extractApartmentListForComparison(context);
+
+      console.log('🔍 비교할 아파트 목록:', apartmentList);
+
+      if (apartmentList.length < 2) {
+        return {
+          comparison: null,
+          error: '비교하려면 최소 2개 이상의 아파트가 필요합니다.',
+          suggestion: '다른 아파트를 추가로 언급해주세요.',
+          apartmentList
+        };
+      }
+
+      // 비교 분석 실행
+      const comparisonArgs = {
+        apartmentList,
+        region: slots.region,
+        dealType: slots.dealType || '매매',
+        period: slots.period,
+        area: slots.area,
+        limit: 50,
+        persistentAttachedApartments: context.persistentAttachedApartments
+      };
+
+      console.log('🔍 비교 분석 파라미터:', comparisonArgs);
+
+      const result = await compareMultipleApartments(comparisonArgs);
+
+      return {
+        comparison: result,
+        apartmentList,
+        metrics: result?.metrics,
+        conclusion: `${apartmentList.join(' vs ')} 비교 분석이 완료되었습니다.`
+      };
+
+    } catch (error: any) {
+      console.error('❌ 비교 분석 실패:', error.message);
+      return {
+        comparison: null,
+        error: `비교 분석 중 오류가 발생했습니다: ${error.message}`,
+        apartmentList: []
+      };
+    }
+  }
+
+  /**
+   * 컨텍스트에서 비교할 아파트 목록 추출
+   */
+  private extractApartmentListForComparison(context: PlanContext): string[] {
+    const apartments: string[] = [];
+
+    // 1. 현재 언급된 아파트 (최우선)
+    if (context.slots.apartmentName) {
+      apartments.push(context.slots.apartmentName);
+    }
+
+    // 2. 첨부된 아파트들 (세션 메모리)
+    if (context.persistentAttachedApartments) {
+      context.persistentAttachedApartments.forEach(apt => {
+        if (!apartments.includes(apt.name)) {
+          apartments.push(apt.name);
+        }
+      });
+    }
+
+    // 3. 메타데이터의 아파트들
+    if (context.slots.apartmentMetadata) {
+      const metaAptName = context.slots.apartmentMetadata.apt_nm || context.slots.apartmentMetadata.name;
+      if (metaAptName && !apartments.includes(metaAptName)) {
+        apartments.push(metaAptName);
+      }
+    }
+
+    return apartments;
+  }
+}
+
+/**
+ * 웹 검색 핸들러 - 트렌드, 핫플레이스, 맛집 등 외부 정보 검색
+ */
+class WebSearchHandler implements ActionHandler {
+  async execute(action: PlanAction, context: PlanContext): Promise<any> {
+    const { query, searchType, region } = action.parameters || {};
+    const { slots } = context;
+
+    console.log('🌐 웹 검색 실행:', { query, searchType, region });
+
+    try {
+      // 기존 webSearchService 활용
+      const { webSearchService } = await import('../../utils/webSearchService');
+
+      // LLM 기반 지능형 검색어 생성
+      const intelligentQuery = await this.generateIntelligentSearchQuery(
+        query || action.description,
+        context,
+        region
+      );
+
+      console.log('🔍 최종 검색 쿼리:', intelligentQuery);
+
+      // 웹 검색 실행
+      const webResults = await webSearchService.search(intelligentQuery);
+
+      console.log('🔍 webSearchService 응답 구조:', {
+        hasResults: !!webResults,
+        hasResultsArray: !!webResults?.results,
+        resultsCount: webResults?.results?.length || 0,
+        resultCount: webResults?.resultCount || 0,
+        sampleResult: webResults?.results?.[0]
+      });
+
+      if (webResults && webResults.results && webResults.results.length > 0) {
+        console.log('✅ 웹 검색 성공:', {
+          resultCount: webResults.results.length,
+          totalCount: webResults.resultCount,
+          searchQuery
+        });
+
+        return {
+          type: 'web_search_results',
+          query: intelligentQuery,
+          results: webResults.results,
+          totalCount: webResults.results.length,
+          searchType: searchType || 'general',
+          region: region || slots.region,
+          source: 'web_search',
+          confidence: 0.8
+        };
+      } else {
+        console.log('❌ 웹 검색 결과 없음:', intelligentQuery);
+
+        return {
+          type: 'web_search_results',
+          query: intelligentQuery,
+          results: [],
+          totalCount: 0,
+          searchType: searchType || 'general',
+          region: region || slots.region,
+          source: 'web_search',
+          error: '관련 정보를 찾을 수 없습니다.',
+          confidence: 0.3
+        };
+      }
+
+    } catch (error: any) {
+      console.error('❌ 웹 검색 실패:', error.message);
+
+      return {
+        type: 'web_search_results',
+        query: action.description,
+        results: [],
+        totalCount: 0,
+        searchType: searchType || 'general',
+        source: 'web_search',
+        error: `웹 검색 중 오류가 발생했습니다: ${error.message}`,
+        confidence: 0.1
+      };
+    }
+  }
+
+  /**
+   * LLM 기반 지능형 검색어 생성
+   */
+  private async generateIntelligentSearchQuery(
+    userQuery: string,
+    context: PlanContext,
+    region?: string
+  ): Promise<string> {
+    try {
+      const { slots } = context;
+
+      // 아파트 정보 수집
+      const apartmentInfo = this.extractApartmentInfo(context);
+
+      console.log('🏠 아파트 정보 추출:', apartmentInfo);
+
+      // 지역 정보가 이미 있으면 단순 결합
+      if (region) {
+        return `${region} ${userQuery}`;
+      }
+
+      // 아파트 정보가 있으면 LLM으로 지능형 검색어 생성
+      if (apartmentInfo.hasApartment) {
+        const { default: OpenAI } = await import('openai');
+        const openai = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY
+        });
+
+        const prompt = `사용자가 "${userQuery}"라고 질문했습니다.
+
+현재 컨텍스트:
+- 아파트: ${apartmentInfo.name}
+- 주소: ${apartmentInfo.address || '정보 없음'}
+- 지역: ${apartmentInfo.region || '정보 없음'}
+
+사용자 질문의 의도를 파악하여 해당 아파트 주변 지역을 포함한 효과적인 검색어를 생성해주세요.
+
+예시:
+- "놀만한 곳 있어?" → "${apartmentInfo.region || apartmentInfo.name} 주변 놀거리 데이트코스 볼거리"
+- "맛집 추천해줘" → "${apartmentInfo.region || apartmentInfo.name} 근처 맛집 추천 맛있는집"
+- "카페 어디 있어?" → "${apartmentInfo.region || apartmentInfo.name} 카페 분위기좋은 추천"
+
+검색어만 반환해주세요:`;
+
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1
+        });
+
+        const intelligentQuery = completion.choices[0]?.message?.content?.trim();
+
+        if (intelligentQuery) {
+          console.log('🧠 LLM 생성 검색어:', intelligentQuery);
+          return intelligentQuery;
+        }
+      }
+
+      // 폴백: 원본 쿼리 반환
+      return userQuery;
+
+    } catch (error) {
+      console.error('❌ 지능형 검색어 생성 실패:', error);
+      return userQuery;
+    }
+  }
+
+  /**
+   * 컨텍스트에서 아파트 정보 추출
+   */
+  private extractApartmentInfo(context: PlanContext) {
+    const { slots } = context;
+
+    // persistentAttachedApartments에서 정보 추출
+    if (context.persistentAttachedApartments && context.persistentAttachedApartments.length > 0) {
+      const apt = context.persistentAttachedApartments[0];
+      return {
+        hasApartment: true,
+        name: apt.name,
+        address: apt.address,
+        region: this.extractRegionFromAddress(apt.address)
+      };
+    }
+
+    // apartmentMetadata에서 정보 추출
+    if (slots.apartmentMetadata) {
+      const metadata = slots.apartmentMetadata;
+      return {
+        hasApartment: true,
+        name: metadata.apt_nm || metadata.name,
+        address: metadata.address || metadata.jibun_address,
+        region: this.extractRegionFromAddress(metadata.address || metadata.jibun_address)
+      };
+    }
+
+    // apartmentName에서 정보 추출
+    if (slots.apartmentName) {
+      return {
+        hasApartment: true,
+        name: slots.apartmentName,
+        address: null,
+        region: null
+      };
+    }
+
     return {
-      comparison: {},
-      metrics: includeMetrics ? {} : undefined,
-      conclusion: '비교 분석이 완료되었습니다.'
+      hasApartment: false,
+      name: null,
+      address: null,
+      region: null
     };
+  }
+
+  /**
+   * 주소에서 지역명 추출
+   */
+  private extractRegionFromAddress(address?: string): string | null {
+    if (!address) return null;
+
+    // "서울 강남구" 형태로 추출
+    const addressParts = address.split(' ');
+    if (addressParts.length >= 2) {
+      return addressParts.slice(0, 2).join(' ');
+    }
+
+    // 구 단위만 추출
+    const districtMatch = address.match(/([\uAC00-\uD7A3]+구)/);
+    if (districtMatch) {
+      return `서울 ${districtMatch[1]}`;
+    }
+
+    return null;
   }
 }
 

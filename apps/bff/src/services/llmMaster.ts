@@ -348,13 +348,25 @@ export class LLMMaster {
 - 현재 아파트 컨텍스트: ${sessionContext.apartments.map(a => a.name).join(', ') || '없음'}
 - 첨부 이미지: ${attachedImages?.length || 0}개
 
+**중요: 웹 검색 필요 여부 판단**
+다음과 같은 질문은 기존 DB/카카오 POI로 답변할 수 없으므로 웹 검색이 필요합니다:
+- 핫플레이스, 트렌디한 곳, 인기 장소, 맛집, 분위기 좋은 곳
+- 최신 트렌드, 요즘 뜨는 곳, 젊은 사람들이 가는 곳
+- 데이트 코스, 놀거리, 쇼핑 명소, 관광지
+- 리뷰, 평점, 추천 맛집 등 주관적/최신 정보
+
+기존 DB/카카오 POI로 답변 가능한 것:
+- 지하철역, 버스정류장, 병원, 학교, 마트, 은행 등 고정 시설
+- 거리, 교통 편의성, 생활 편의시설 개수 등 객관적 정보
+
 **분석 카테고리:**
 1. apartment_search: 아파트 찾기, 위치 확인
 2. deal_search: 실거래가, 매매/전세/월세 정보 검색
 3. building_info: 건물 정보, 세대수, 층수 등
-4. poi_search: 주변 편의시설, 교통 정보
-5. general: 일반 상담, 추천 요청
-6. clarification: 불명확한 질문으로 추가 정보 필요
+4. poi_search: 주변 편의시설, 교통 정보 (지하철역, 병원, 학교 등 고정 시설만)
+5. web_search: 핫플레이스, 맛집, 트렌드 등 웹 검색 필요한 질문
+6. general: 일반 상담, 추천 요청
+7. clarification: 불명확한 질문으로 추가 정보 필요
 
 **응답 형식 (JSON):**
 {
@@ -383,6 +395,9 @@ export class LLMMaster {
 **예시:**
 - "잠실 래미안 아파트 84평 매매가" → deal_search (충분한 정보)
 - "강남 아파트 시세" → deal_search (충분한 정보)
+- "주변에 지하철역 있어?" → poi_search (고정 시설)
+- "핫플레이스 갈만한데가 근처에 있어?" → web_search (트렌드 정보)
+- "근처 맛집 추천해줘" → web_search (주관적 정보)
 - "아파트 가격 알려주세요" → clarification (정보 부족)
 
 JSON 형식으로만 응답하세요.`;
@@ -650,10 +665,14 @@ JSON 형식으로만 응답하세요.`;
         }
         
         const executionTime = Date.now() - startTime;
-        
+
+        // 🔍 핵심 버그 수정: 실제 result.success 값 확인
+        const actualSuccess = result?.success !== false; // undefined도 성공으로 간주
+        console.log(`🔍 ExecutionResult 생성: stepId=${step.id}, result.success=${result?.success}, actualSuccess=${actualSuccess}`);
+
         const executionResult: ExecutionResult = {
           stepId: step.id,
-          success: true,
+          success: actualSuccess,
           data: result,
           executionTime,
           quality: this.assessResultQuality(result)
@@ -790,11 +809,11 @@ JSON 형식으로만 응답하세요.`;
    */
   private async executeDealsSearch(params: any, stepResults: Map<string, any>): Promise<any> {
     const apartmentData = stepResults.get('resolve_apartment');
-    
+
     if (!apartmentData?.apartment) {
       throw new Error('아파트 정보가 필요합니다');
     }
-    
+
     const result = await searchRealEstateDeals({
       apartmentName: apartmentData.apartment.name,
       aptId: apartmentData.apartment.id,
@@ -803,7 +822,20 @@ JSON 형식으로만 응답하세요.`;
       period: params.period,
       limit: 10
     });
-    
+
+    // 🔍 핵심 버그 수정: searchRealEstateDeals 결과가 success: false인 경우 예외 발생
+    console.log('🔍 executeDealsSearch 결과 확인:', {
+      success: result.success,
+      hasDeals: result.deals?.length > 0,
+      totalCount: result.totalCount,
+      error: result.error
+    });
+
+    // DirectSql이나 다른 시스템에서 성공적으로 데이터를 가져왔는지 확인
+    if (!result.success && (!result.deals || result.deals.length === 0)) {
+      throw new Error(result.error || '실거래 데이터를 찾을 수 없습니다');
+    }
+
     return result;
   }
 
@@ -912,8 +944,8 @@ JSON 형식으로만 응답하세요.`;
    * 최종 응답 생성
    */
   private async synthesizeResponse(
-    results: ExecutionResult[], 
-    intent: UserIntent, 
+    results: ExecutionResult[],
+    intent: UserIntent,
     qualityCheck: any
   ): Promise<{
     reply: string;
@@ -921,9 +953,25 @@ JSON 형식으로만 응답하세요.`;
     sources: string[];
     metadata: Record<string, any>;
   }> {
+    // 🔍 핵심 버그 디버깅: 어떤 결과가 필터링되는지 확인
+    console.log('🔍 synthesizeResponse 전체 결과 확인:', results.map(r => ({
+      stepId: r.stepId,
+      success: r.success,
+      hasData: !!r.data,
+      dataKeys: r.data ? Object.keys(r.data) : [],
+      error: r.error
+    })));
+
     const successfulResults = results.filter(r => r.success);
-    
+
+    console.log('🔍 성공한 결과만 필터링:', {
+      totalResults: results.length,
+      successfulResults: successfulResults.length,
+      failedResults: results.length - successfulResults.length
+    });
+
     if (successfulResults.length === 0) {
+      console.log('❌ 성공한 결과가 없어서 기본 실패 응답 반환');
       return {
         reply: "죄송합니다. 요청하신 정보를 처리할 수 없었습니다. 다시 시도해 주세요.",
         confidence: 0.1,
@@ -975,24 +1023,81 @@ JSON 형식으로만 응답하세요.`;
       step: r.stepId,
       data: r.data
     }));
-    
-    return `당신은 친근하고 전문적인 부동산 상담사입니다.
+
+    // 🧠 데이터 조합 분석 추가
+    const hasMultipleDataSources = results.length > 1;
+    const hasAreaAnalysis = results.some(r => r.data?.areaAnalysis);
+    const hasSmartRetry = results.some(r => r.data?.isSmartRetry);
+    const dealCount = results.find(r => r.stepId === 'search_deals')?.data?.totalCount || 0;
+    const retryAttempts = results.find(r => r.data?.attemptNumber)?.data?.attemptNumber || 1;
+
+    return `당신은 친근하고 전문적인 부동산 상담사입니다. 단순한 데이터 나열이 아닌, 의미있는 인사이트와 실용적인 조언을 제공해야 합니다.
 
 **사용자 의도:** ${intent.category}
 **실행 결과:** ${JSON.stringify(dataContext, null, 2)}
 **품질 점수:** ${qualityCheck.overallQuality}
+**데이터 특성:** 복합데이터${hasMultipleDataSources}, 면적분석${hasAreaAnalysis}, 재시도${hasSmartRetry}, 거래${dealCount}건, 시도${retryAttempts}회
 
-**응답 작성 지침:**
-1. 전문적이지만 이해하기 쉬운 한국어로 작성
-2. 구체적인 데이터가 있으면 표나 목록으로 정리
-3. 사용자에게 도움이 되는 추가 조언 포함
-4. 데이터 품질이 낮으면 한계 명시
-5. 후속 질문을 유도하는 마무리
+**🧠 지능형 인사이트 도출 지침:**
 
-**금지사항:**
-- 데이터에 없는 내용 추측하지 말기
-- 투자 조언이나 추천은 신중하게
-- 과도한 기술 용어 사용 금지`;
+1. **패턴 분석:**
+   - 거래량 트렌드, 가격 변화, 면적별 선호도 분석
+   - 시장 활성도: 거래 빈도와 최신성 평가
+   - 거래유형 분포: 매매/전세/월세 비율과 의미
+
+2. **비교 관점:**
+   - 면적별 단가 비교 (㎡당 가격)
+   - 시기별 변화 (최근 vs 과거)
+   - 동일 지역 내 다른 아파트와의 상대적 위치
+
+3. **실용적 조언:**
+   - 구체적인 투자/거주 관점 제시
+   - 시장 상황에 따른 거래 타이밍 조언
+   - 예산 범위별 추천 면적대
+
+4. **데이터 품질 투명성:**
+   - 재시도 과정에서 얻은 추가 정보 활용
+   - 데이터 부족 시 대안 제시
+   - 면적별 분석 결과 적극 활용
+
+**🏢 아파트명 표기 통일 규칙:**
+- "이편한세상" → "e편한세상" (예: "청구이편한세상" → "청구e편한세상")
+- "e-편한세상" → "e편한세상" (하이픈 제거)
+
+**📊 데이터 해석 규칙:**
+- deal_amount: 매매가 (만원 단위, 30000 = 3억원)
+- exclu_use_ar: 전용면적 (㎡ 단위)
+- 거래유형: deal_amount 존재=매매, deal_amount 없음+monthly_rent=0=전세, deal_amount 없음+monthly_rent>0=월세
+- 면적 검색: ±1㎡ 허용 범위 (84㎡ 검색 시 83-85㎡)
+
+**🔧 데이터베이스 스키마 정보:**
+- 메인 테이블: oi.apt_deal_all (통합 거래 테이블)
+- 기본 정보: oi.apt_info (아파트 마스터)
+- 건물 정보: oi.apt_building_info
+- 올바른 컬럼명: deal_amount, exclu_use_ar, deal_year, deal_month, apt_nm, jibun_address
+
+**📝 응답 작성 지침:**
+1. **인사이트 우선:** 데이터 나열보다는 의미있는 해석과 조언
+2. **시각적 구성:** 핵심 정보를 표나 구조화된 형태로 정리
+3. **맥락 제공:** 시장 상황, 지역 특성, 트렌드 설명
+4. **행동 가능한 조언:** 구체적이고 실행 가능한 다음 단계 제시
+5. **투명한 한계:** 데이터 품질과 한계 솔직하게 설명
+6. **자연스러운 표현:** 가격을 억/만원 단위로 직관적 표현
+7. **후속 질문 유도:** 사용자의 추가 관심사 예상하여 질문 제안
+
+**💡 스마트 응답 패턴:**
+- "재시도를 통해 발견한 패턴..."
+- "면적별 분석 결과 흥미로운 점은..."
+- "이 데이터로 볼 때 추천드리는 방향은..."
+- "주의깊게 봐야 할 포인트는..."
+- "비슷한 조건에서 고려해볼 다른 옵션은..."
+
+**🚫 금지사항:**
+- 단순한 데이터 나열
+- 근거 없는 투자 조언
+- 과도한 기술 용어
+- raw 테이블 언급 (oi.apt_deal_trade_raw, oi.apt_deal_rent_raw)
+- "데이터가 없습니다" 같은 부정적 결론만 제시`;
   }
 
   /**
@@ -1642,7 +1747,7 @@ JSON만 응답하세요.`;
       );
       
       return {
-        reply: empathicError.response || "이런, 예상치 못한 문제가 발생했네요. 다시 한 번 말씩해 주시면 더 나은 도움을 드릴 수 있을 것 같아요.",
+        reply: empathicError.response || "이런, 예상치 못한 문제가 발생했네요. 😅 다시 한 번 말씀해 주시면 더 나은 도움을 드릴 수 있을 것 같아요!",
         confidence: 0.1,
         sources: [],
         metadata: { ai3Error: true, emotionalTone: emotionalContext.recommendedTone }

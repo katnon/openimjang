@@ -45,13 +45,24 @@ export class SmartPlanner implements IPlanner {
       context.userProfile,
       context.sessionHistory?.messageHistory
     );
-    
+
     // 2. 슬롯 업데이트 (LLM이 추출한 정보로)
     context.slots = mergeLLMSlots(context.slots, llmAnalysis.slots);
-    context.intent = {
-      ...llmAnalysis.intent,
-      entities: [] // 기존 호환성을 위해
-    };
+
+    // 3. 의도 업데이트 (기존 분석된 의도가 web_search면 보존)
+    if (context.intent && context.intent.category === 'web_search') {
+      console.log('🌐 기존 web_search 의도 보존:', context.intent);
+      // web_search 의도는 보존하되, 추천 액션만 업데이트
+      context.intent = {
+        ...context.intent,
+        actions: context.intent.actions || ['webSearch']
+      };
+    } else {
+      context.intent = {
+        ...llmAnalysis.intent,
+        entities: [] // 기존 호환성을 위해
+      };
+    }
 
     if (this.config.debugMode) {
       console.log('🧠 LLM 분석 완료:', {
@@ -128,7 +139,23 @@ export class SmartPlanner implements IPlanner {
             });
           }
           break;
-          
+
+        case 'webSearch':
+          actions.push({
+            id: uuidv4(),
+            type: 'webSearch',
+            name: 'Web Search for Trends',
+            description: '웹 검색으로 최신 트렌드 정보를 찾습니다',
+            reason: intent.reasoning || 'DB에 없는 최신/주관적 정보가 필요합니다',
+            priority: ActionPriority.HIGH,
+            parameters: {
+              query: context.question,
+              apartmentContext: slots.apartmentName || slots.apartmentMetadata?.aptName,
+              searchType: 'local_trends'
+            }
+          });
+          break;
+
         case 'searchRealEstate':
           actions.push({
             id: uuidv4(),
@@ -425,8 +452,8 @@ export class SmartPlanner implements IPlanner {
     const actions: PlanAction[] = [];
     const { intent } = context;
 
-    // 🧠 LLM 추천 액션 우선 처리
-    if (intent.actions && intent.actions.length > 0) {
+    // 🧠 LLM 추천 액션 우선 처리 (단, comparison 의도는 예외)
+    if (intent.actions && intent.actions.length > 0 && intent.category !== 'comparison') {
       console.log('🎯 LLM 추천 액션:', intent.actions);
       
       intent.actions.forEach(actionName => {
@@ -456,6 +483,19 @@ export class SmartPlanner implements IPlanner {
               maxResults: 50
             }
           });
+        } else if (actionName === 'webSearch') {
+          actions.push({
+            id: uuidv4(),
+            type: 'webSearch',
+            name: 'Web Search',
+            description: '트렌드 정보, 핫플레이스, 맛집 등을 웹에서 검색합니다',
+            reason: 'LLM이 웹 검색을 추천했습니다',
+            priority: ActionPriority.HIGH,
+            parameters: {
+              query: context.question,
+              searchType: 'trend'
+            }
+          });
         }
       });
       
@@ -477,6 +517,22 @@ export class SmartPlanner implements IPlanner {
         parameters: {
           includeHistory: true,
           maxResults: 50
+        }
+      });
+    }
+
+    if (intent.category === 'web_search') {
+      actions.push({
+        id: uuidv4(),
+        type: 'webSearch',
+        name: 'Web Search for Trends',
+        description: '웹 검색으로 최신 트렌드 정보를 찾습니다',
+        reason: '기존 DB에 없는 최신/주관적 정보가 필요합니다',
+        priority: ActionPriority.HIGH,
+        parameters: {
+          query: context.question,
+          apartmentContext: slots.apartmentName || slots.apartmentMetadata?.aptName,
+          searchType: 'local_trends'
         }
       });
     }
@@ -641,16 +697,18 @@ export class SmartPlanner implements IPlanner {
   private generateComparisonDataActions(context: PlanContext): PlanAction[] {
     const actions: PlanAction[] = [];
 
+    // 비교 분석 액션 생성
     actions.push({
       id: uuidv4(),
-      type: 'searchRealEstate',
-      name: 'Collect Comparison Data',
-      description: '비교 분석을 위한 데이터를 수집합니다',
-      reason: '비교 대상들의 데이터가 필요합니다',
+      type: 'compare',
+      name: 'Compare Multiple Apartments',
+      description: '여러 아파트의 시세와 특성을 비교 분석합니다',
+      reason: '사용자가 아파트 비교를 요청했습니다',
       priority: ActionPriority.HIGH,
       parameters: {
-        includeComparables: true,
-        includeMarketData: true
+        comparisonType: 'price_analysis',
+        includeMetrics: true,
+        includeMarketTrend: true
       }
     });
 

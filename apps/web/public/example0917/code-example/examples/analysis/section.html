@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>종횡단면 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 차트 컨테이너 */
+        #chartContainer {
+            position: absolute;
+            top: 8vw;
+            left: 1vw;
+            width: 400px;
+            height: 300px;
+            background: white;
+            border: 1px solid gray;
+            padding: 10px;
+            z-index: 999;
+            display: none;
+            /* 기본적으로 숨겨둠 */
+        }
+
+        #profileChart {
+            width: 300;
+            height: 180;
+        }
+
+        /* 팝업 스타일 */
+        #crossSectionPopup {
+            display: none;
+            position: absolute;
+            top: 28vw;
+            left: 1vw;
+            width: 400px;
+            height: 350px;
+            background: white;
+            border: 1px solid #aaa;
+            z-index: 2000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 팝업 제목 스타일 */
+        #popupTitleBar {
+            background: #eee;
+            padding: 8px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+    <div id="helper">
+        지도를 클릭하여 2개 이상 종횡단면 분석을 실행할 점을 클릭 후 우클릭 해주세요
+    </div>
+    <div class="buttons-wrap">
+        <button id="start">시작하기</button>
+        <button id="deleteBtn">선택 건물 삭제</button>
+        <button id="refreshBtn">초기화</button>
+    </div>
+
+    <!-- 차트 컨테이너 (기본적으로 숨겨짐) -->
+    <div id="chartContainer">
+        <div id="popupTitleBar">
+            <span>종단면 분석</span>
+            <div>
+                <button id="closeDistance">✖</button>
+            </div>
+        </div>
+        <canvas id="profileChart"></canvas>
+    </div>
+
+
+    <!-- 횡단면 분석 차트 -->
+    <div id="crossSectionPopup">
+        <div id="popupTitleBar">
+            <span>횡단면 분석</span>
+            <div>
+                <button id="closeCross">✖</button>
+            </div>
+        </div>
+        <div id="popupContent">
+            <select id="sectionSelector" style="margin-bottom:10px;"></select>
+            <canvas id="crossSectionChart" width="380" height="250"></canvas>
+        </div>
+    </div>
+
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+    <script>
+        window.onload = () => {
+            const cameraView = {
+                longitude: 127.02641,
+                latitude: 37.54342,
+                height: 250,
+                heading: 25,
+                pitch: -35
+            };
+            viewer._setCameraView(cameraView);
+
+            const analysisSection = () => {
+                helper.style.display = 'block';
+                let cross;
+
+                const testAnalysisSection = () => {
+                    viewer._drawAction({
+                        shapeType: 1,
+                    }).then((res) => {
+                        const helper = document.getElementById('helper');
+                        // 종횡단면 분석 실행
+                        viewer._startAnalysisSection({
+                            positions: res.data.positions,
+                            distanceStep: 2,
+                            crossStep: 2
+                        }).then((res) => {
+                            helper.style.display = 'none'
+                            const elevation = res.data.elevation;
+                            let cross = res.data.cross;
+
+                            // 거리 단위 km로 변환해서 차트 그리기
+                            const distance = elevation.map(e => parseFloat(e.distance)); // string → float
+
+                            cross = res.data.cross;
+
+                            showChart(distance, elevation);
+                            showCrossSectionPopup(cross);
+                        });
+                    });
+                }
+
+                const selector = document.getElementById("sectionSelector");
+
+                // 차트 그리기
+                let currentChart = null;
+
+                async function showChart(xLabels, data) {
+                    requestAnimationFrame(() => {
+                        const chartContainer = document.getElementById("chartContainer");
+                        chartContainer.style.display = "block";
+
+                        const canvas = document.getElementById("profileChart");
+                        canvas.width = 380;
+                        canvas.height = 250;
+                        canvas.style.display = "block";
+
+                        const ctx = canvas.getContext("2d");
+                        if (!ctx) return;
+
+                        if (currentChart) currentChart.destroy();
+
+                        const terrainHeight = data.map((item) => { return item.terrainHeight })
+                        const buildingHeight = data.map((item) => { return item.buildingHeight })
+
+                        currentChart = new Chart(ctx, {
+                            type: "line",
+                            data: {
+                                labels: xLabels,
+                                datasets: [{
+                                    label: "지형 고도 그래프 (m)",
+                                    data: terrainHeight,
+                                    borderColor: "blue",
+                                    backgroundColor: "rgba(0,0,255,0.1)",
+                                    pointRadius: 2,
+                                    tension: 0.1,
+                                    fill: true
+                                },
+                                {
+                                    label: "건물 고도 그래프 (m)",
+                                    data: buildingHeight,
+                                    borderColor: "gray",
+                                    backgroundColor: "rgba(0,0,255,0.1)",
+                                    pointRadius: 2,
+                                    tension: 0.1,
+                                    fill: true
+                                }
+
+                                ]
+                            },
+                            options: {
+                                responsive: false,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    x: {
+                                        title: {
+                                            display: true,
+                                            text: "거리 (km)"
+                                        }
+                                    },
+                                    y: {
+                                        title: {
+                                            display: true,
+                                            text: "고도 (m)"
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    });
+                }
+
+                let crossChart = null;
+
+                function showCrossSectionPopup(cross) {
+                    const popup = document.getElementById("crossSectionPopup");
+                    const selector = document.getElementById("sectionSelector");
+                    const canvas = document.getElementById("crossSectionChart");
+
+                    popup.style.display = "block";
+                    document.getElementById("popupContent").style.display = "block";
+
+                    // 드롭다운 초기화
+                    selector.innerHTML = "";
+                    cross.forEach((data, idx) => {
+                        const option = document.createElement("option");
+                        option.value = idx;
+                        option.text = `횡단면 ${data.pointIndex}`;
+                        selector.appendChild(option);
+                    });
+
+                    // 차트 생성 함수
+                    const drawChart = (data) => {
+                        if (crossChart) crossChart.destroy();
+                        crossChart = new Chart(canvas, {
+                            type: "line",
+                            data: {
+                                labels: data.distance,
+                                datasets: [{
+                                    label: `횡단면 ${data.pointIndex} 지형`,
+                                    data: data.terrainHeight,
+                                    borderColor: "green",
+                                    backgroundColor: "rgba(0,255,0,0.1)",
+                                    fill: true,
+                                    tension: 0.1,
+                                    pointRadius: 2
+                                },
+                                {
+                                    label: `횡단면 ${data.pointIndex} 건물`,
+                                    data: data.buildingHeight,
+                                    borderColor: "black",
+                                    backgroundColor: "rgba(0,255,0,0.1)",
+                                    fill: true,
+                                    tension: 0.1,
+                                    pointRadius: 2
+                                },
+                                ]
+                            },
+                            options: {
+                                responsive: false,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    x: { title: { display: true, text: "거리 (m)" } },
+                                    y: { title: { display: true, text: "고도 (m)" } }
+                                }
+                            }
+                        });
+                    };
+
+                    // 기본 첫 번째 횡단면
+                    drawChart(cross[0]);
+
+                    selector.onchange = () => {
+                        const selected = cross[parseInt(selector.value)];
+                        drawChart(selected);
+                    };
+                }
+
+                document.getElementById("closeCross").addEventListener("click", function () {
+                    document.getElementById("crossSectionPopup").style.display = "none";
+                });
+                document.getElementById("closeDistance").addEventListener("click", function () {
+                    document.getElementById("chartContainer").style.display = "none";
+                })
+
+                testAnalysisSection();
+
+            }
+
+            const silhouetteEffect = () => {
+                const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+
+                window.hiddenFeatures = [];
+
+                const silhouetteBlue =
+                    Cesium.PostProcessStageLibrary.createEdgeDetectionStage();
+                silhouetteBlue.uniforms.color = Cesium.Color.BLUE;
+                silhouetteBlue.uniforms.length = 0.01;
+                silhouetteBlue.selected = [];
+
+                const silhouetteRed = Cesium.PostProcessStageLibrary.createEdgeDetectionStage();
+                silhouetteRed.uniforms.color = Cesium.Color.RED;
+                silhouetteRed.uniforms.length = 0.01;
+                silhouetteRed.selected = [];
+
+                viewer.scene.postProcessStages.add(
+                    Cesium.PostProcessStageLibrary.createSilhouetteStage([
+                        silhouetteBlue,
+                        silhouetteRed,
+                    ]),
+                );
+                const silhouetteHover = () => {
+
+                    handler.setInputAction(function onMouseMove(movement) {
+                        silhouetteBlue.selected = [];
+
+                        const pickedFeature = viewer.scene.pick(movement.endPosition);
+
+                        if (!Cesium.defined(pickedFeature)) {
+                            return;
+                        }
+
+                        silhouetteBlue.selected = [pickedFeature];
+                    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+                }
+
+                const silhouetteTarget = () => {
+                    handler.setInputAction((click) => {
+                        silhouetteBlue.selected = [];
+
+                        const pickedFeature = viewer.scene.pick(click.position);
+
+                        if (Cesium.defined(pickedFeature) && pickedFeature instanceof Cesium.Cesium3DTileFeature) {
+                            const pickedPosition = viewer.scene.pickPosition(click.position);
+                            if (!pickedPosition) return;
+
+                            // 숨긴 건물 저장
+                            window.hiddenFeatures.push(pickedFeature);
+
+                            // 윤곽선만 표시
+                            if (Cesium.PostProcessStageLibrary.isSilhouetteSupported(viewer.scene)) {
+                                silhouetteRed.selected.push(pickedFeature);
+                            }
+                        }
+                    }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+                }
+
+
+                silhouetteHover();
+                silhouetteTarget();
+            }
+
+            const createBuilding = () => {
+                const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+                window.buildingDataSource = new Cesium.CustomDataSource('building-structure');
+                viewer.dataSources.add(window.buildingDataSource);
+
+                // 휠클릭을 통한 건물 생성
+                handler.setInputAction(async (click) => {
+                    const position = viewer.scene.pickPosition(click.position);
+                    if (!position) return;
+
+                    const buildingX = 35;
+                    const buildingY = 35;
+                    const buildingZ = 100;
+
+                    const cartographic = Cesium.Cartographic.fromCartesian(position);
+                    const updatedPositions = await Cesium.sampleTerrainMostDetailed(
+                        viewer.terrainProvider,
+                        [cartographic]
+                    );
+                    const terrainHeight = updatedPositions[0].height;
+
+                    const heightOffset = buildingZ / 2;
+                    const adjustedCartographic = new Cesium.Cartographic(
+                        cartographic.longitude,
+                        cartographic.latitude,
+                        terrainHeight + heightOffset
+                    );
+
+                    const adjustedPosition = Cesium.Cartesian3.fromRadians(
+                        adjustedCartographic.longitude,
+                        adjustedCartographic.latitude,
+                        adjustedCartographic.height
+                    );
+
+                    const building = {
+                        position: adjustedPosition,
+                        box: {
+                            dimensions: new Cesium.Cartesian3(buildingX, buildingY, buildingZ),
+                            material: Cesium.Color.GRAY.withAlpha(1),
+                            outline: true,
+                            outlineColor: Cesium.Color.BLACK
+                        }
+                    }
+
+                    buildingDataSource.entities.add(building);
+
+                }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+            }
+
+            createBuilding();
+            silhouetteEffect();
+
+            const hideBuilding = () => {
+                window.hiddenFeatures.forEach(function (feature) {
+                    if (feature != undefined) {
+                        feature.show = false;
+                    }
+                });
+            }
+
+            const startBtn = document.getElementById('start');
+            startBtn.addEventListener('click', function () {
+                analysisSection();
+            });
+
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.addEventListener('click', function () {
+                hideBuilding();
+            });
+
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.addEventListener('click', function () {
+                // 캔버스 초기화
+                ["chartContainer", "crossSectionPopup"].forEach(id => {
+                    const c = document.getElementById(id);
+                    c.style.display = "none";
+
+                });
+                window.buildingDataSource.entities.removeAll();
+                window.hiddenFeatures.forEach(function (feature) {
+                    if (feature != undefined) {
+                        feature.show = true;
+                    }
+                });
+                silhouetteEffect();
+                viewer._removeAnalysisSection();
+            });
+        }
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>일조량 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+
+    <style>
+        #resultTable {
+            position: absolute;
+            top: 10vw;
+            right: 1vw;
+            width: 400px;
+            height: 260px;
+            display: none;
+            bottom: 50px;
+            max-height: 70%;
+            overflow: auto;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+
+        #resultTable table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        #resultTable th,
+        #resultTable td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+
+        .time-cell {
+            cursor: pointer;
+            color: #007bff;
+            text-decoration: underline;
+        }
+
+        .time-cell:hover {
+            background-color: #f0f8ff;
+        }
+
+        .time-cell:active {
+            background-color: #e0e0e0;
+        }
+
+        #legendContainer {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            width: 300px;
+            padding: 4px;
+            background: white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            z-index: 1000;
+            font-size: 11px;
+        }
+
+        .legendBar {
+            height: 20px;
+            /* background: linear-gradient(to right,
+      blue, green, yellow, orange, red); */
+            margin-bottom: 4px;
+            border-radius: 3px;
+        }
+
+        .legendLabels {
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+
+    <div id="helper">
+        지도를 클릭하여 3개 이상의 점으로 일조량 분석을 실행할 영역을 만든 후 우클릭 해주세요
+    </div>
+    <div class="buttons-wrap">
+        <button id="start">시작하기</button>
+        <button id="refresh">초기화</button>
+    </div>
+
+    <div id="resultTable"></div>
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+
+    <div id="legendContainer" style="display: none;">
+        <div class="legendBar"></div>
+        <div id="legendLabels" class="legendLabels">
+            <span id="legendLabel0">0.00</span>
+            <span id="legendLabel1">0.20</span>
+            <span id="legendLabel2">0.40</span>
+            <span id="legendLabel3">0.60</span>
+            <span id="legendLabel4">0.80</span>
+            <span id="legendLabel5">1.00</span>
+        </div>
+    </div>
+
+    <script>
+        window.onload = () => {
+            window.analysisInsolation = () => {
+                let AverageResult = [];
+                let cartesianGrid = [];
+                let fraction = [];
+                let grid = [];
+                let gridX;
+                let gridY;
+                let gridLayer = null;
+                let gammaValues = [];
+
+                const timeCells = document.getElementsByClassName("time-cell");
+                const tableDiv = document.getElementById("resultTable");
+                const helper = document.getElementById('helper');
+
+                let positions;
+
+                // 시간 설정 함수
+                function setViewerTime(isoDateTimeKST) {
+                    const date = new Date(isoDateTimeKST);
+                    const isoDateTimeUTC = date.toISOString();
+                    viewer.clock.currentTime = Cesium.JulianDate.fromIso8601(isoDateTimeUTC);
+                }
+
+                function testAnalysisInsolation() {
+                    helper.style.display = 'block';
+                    viewer._drawAction({
+                        shapeType: 2,
+                    }).then((res) => {
+                        helper.style.display = 'none';
+                        positions = res.data.positions;
+                        const heatmap = 6;
+                        // 일조량 분석 실행
+                        viewer._startAnalysisInsolation({
+                            positions: positions,
+                            interval: 30,
+                            heatmap: heatmap
+                        }).then((res) => {
+                            const result = res.data;
+                            console.log(result)
+                            AverageResult = result.AverageResult;
+                            fraction = result.Result.map(e => e.fractions);
+                            grid = result.Grid;
+                            cartesianGrid = grid.map(point =>
+                                Cesium.Cartesian3.fromDegrees(point.longitude, point.latitude, point.height)
+                            );
+                            gridX = result.gridX;
+                            gridY = result.gridY
+
+                            updateLegend(0, 1);
+                            showLegend();
+
+                            helper.style.display = 'none'
+                            // 시간대 별 평균 값을 테이블 형식으로 표현
+                            renderTable(AverageResult, result);
+                        });
+
+                    });
+                }
+
+                // 태양고도에 따른 대략적인 일사량 추정 함수 예시
+                function computeIrradianceByAltitude(altitudeDeg, tau = 0.75) {
+                    const E0 = 1361; // 태양 상수 W/m²
+                    const rad = (altitudeDeg * Math.PI) / 180;
+                    if (rad <= 0) return 0;
+                    return E0 * Math.sin(rad) * tau; // GHI 근사값
+                }
+
+                // — 테이블 렌더링 —
+                function renderTable(averageData, data) {
+                    let totalMin = 0;
+                    let totalEnergy = 0;
+                    let html = "<table style='width: 28vw'><tr><th>시간</th><th>조도</th><th>고도각</th><th>일사량(W/m²)</th><th>누적 일사량 (Wh/m²)</th></tr>";
+                    
+                    console.log(averageData)
+                    averageData.forEach((r, idx) => {
+                        const irradiance = computeIrradianceByAltitude(r.altitude); // W/m²
+                        const energy = irradiance * (r.stepMinutes / 60); // Wh/m²
+                        totalEnergy += energy;
+
+                        if (irradiance > 0) totalMin += r.stepMinutes;
+
+                        const timeLabel = r.time;
+                        const displayTotalEnergy = totalEnergy.toFixed(2);
+
+                        html += `<tr>
+                            <td class="time-cell" data-time="${r.time}" data-idx="${idx}">${timeLabel}</td>
+                            <td>${(r.fraction * 100).toFixed(1)}%</td>
+                            <td>${r.altitude.toFixed(1)}°</td>
+                            <td>${irradiance.toFixed(1)}</td>
+                            <td>${displayTotalEnergy}</td>
+                        </tr>`;
+                    });
+
+                    html += "</table>";
+                    html += `<div style="margin-top:8px;font-weight:bold;">
+                            총 햇빛 조사 시간: ${totalMin}분<br>
+                            누적 일사량: ${totalEnergy.toFixed(2)} Wh/m²
+                        </div>`;
+
+                    tableDiv.innerHTML = html;
+                    tableDiv.style.display = 'block';
+                
+                    // - 테이블 시간 클릭 리스너 - 
+                    Array.from(timeCells).forEach(cell => {
+                        cell.addEventListener("click", (event) => {
+                            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+
+                            // 혹은 분석을 다시 시도해서 heatmap에 값을 줘서 분석결과 시각화를 시도한다
+                            viewer._renderGridHeatmap({
+                                analysisResult: data,
+                                heatmap: idx,
+                            });
+                        });
+                    });
+                }
+
+
+                testAnalysisInsolation();
+
+            }
+
+
+            function cesiumColorToCss(color) {
+                const r = Math.round(color.red * 255);
+                const g = Math.round(color.green * 255);
+                const b = Math.round(color.blue * 255);
+                const a = color.alpha !== undefined ? color.alpha : 1.0;
+                return `rgba(${r}, ${g}, ${b}, ${a})`;
+            }
+
+            function updateLegend(min, max) {
+                const steps = 6;
+
+                // 1. 범례 숫자 레이블 업데이트
+                for (let i = 0; i < steps; i++) {
+                    const t = i / (steps - 1);
+                    const value = (min + t * (max - min)).toFixed(2);
+                    const label = document.getElementById(`legendLabel${i}`);
+                    if (label) label.textContent = value;
+                }
+
+                // 2. 기본 colorRamp 정의 (0~1 기준)
+                const baseColorRamp = [
+                    { value: 0.0, color: Cesium.Color.DARKBLUE },
+                    { value: 0.2, color: Cesium.Color.CYAN },
+                    { value: 0.4, color: Cesium.Color.LIME },
+                    { value: 0.6, color: Cesium.Color.YELLOW },
+                    { value: 0.8, color: Cesium.Color.ORANGE },
+                    { value: 1.0, color: Cesium.Color.RED }
+                ];
+
+                // 3. min/max 기준으로 필요한 구간만 추출 (0~1 기준에서 min/max 사이인 값만)
+                const filteredRamp = [];
+
+                for (let i = 0; i < baseColorRamp.length - 1; i++) {
+                    const a = baseColorRamp[i];
+                    const b = baseColorRamp[i + 1];
+
+                    // [a,b] 구간이 min~max와 겹치는 경우만 추가
+                    if (b.value < min || a.value > max) continue;
+
+                    const start = Math.max(a.value, min);
+                    const end = Math.min(b.value, max);
+
+                    const t0 = (start - a.value) / (b.value - a.value);
+                    const t1 = (end - a.value) / (b.value - a.value);
+
+                    const colorStart = Cesium.Color.lerp(a.color, b.color, t0, new Cesium.Color());
+                    const colorEnd = Cesium.Color.lerp(a.color, b.color, t1, new Cesium.Color());
+
+                    filteredRamp.push({ value: start, color: colorStart });
+                    filteredRamp.push({ value: end, color: colorEnd });
+                }
+
+                // 중복 제거 (같은 value 두 번 안 나오게)
+                const uniqueRamp = [];
+                const seen = new Set();
+                for (const r of filteredRamp) {
+                    const key = r.value.toFixed(6);
+                    if (!seen.has(key)) {
+                        uniqueRamp.push(r);
+                        seen.add(key);
+                    }
+                }
+
+                // 4. 실제 그라디언트 비율 적용
+                const gradientStops = uniqueRamp.map(r => {
+                    const percent = ((r.value - min) / (max - min)) * 100;
+                    return `${cesiumColorToCss(r.color)} ${percent.toFixed(1)}%`;
+                });
+
+                document.querySelector('.legendBar').style.background = `linear-gradient(to right, ${gradientStops.join(', ')})`;
+            }
+
+            function showLegend() {
+                const legend = document.getElementById("legendContainer");
+                legend.style.display = "block";
+            }
+
+            function hideLegend() {
+                const legend = document.getElementById("legendContainer");
+                legend.style.display = "none";
+            }
+
+            document.getElementById("start").addEventListener('click', function () {
+                analysisInsolation();
+            });
+
+            const refreshBtn = document.getElementById('refresh');
+            refreshBtn.addEventListener('click', function () {
+                const tableDiv = document.getElementById("resultTable");
+                tableDiv.innerHTML = "";
+                tableDiv.style.display = "none"
+                hideLegend();
+                viewer._removeAnalysisInsolation();
+            });
+        }
+    </script>
+</body>
+
+</html>

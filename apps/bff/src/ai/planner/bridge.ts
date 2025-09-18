@@ -35,7 +35,9 @@ export class RealEstateSearchBridge implements ActionHandler {
         priceRange: slots.priceRange,
         limit: maxResults || 50,
         userProfile,
-        contextAptData: slots.contextAptData // chatBot.ts에서 전달된 아파트 정보
+        contextAptData: slots.contextAptData, // chatBot.ts에서 전달된 아파트 정보
+        // 🆕 첨부된 아파트 정보 전달 (세션 기반 메모리)
+        persistentAttachedApartments: context.persistentAttachedApartments
       };
 
       console.log('🏠 기존 함수 호출: searchRealEstateDeals', params);

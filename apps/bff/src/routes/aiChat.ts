@@ -35,9 +35,10 @@ aiChatRoute.post('/chat-legacy', authMiddleware, slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
-        console.log('🔍 챗봇 요청:', { 
+        console.log('🔍 챗봇 요청:', {
             message: message?.slice(0, 100) + '...',
-            extractedApartments: context?.extractedApartments?.length || 0
+            extractedApartments: context?.extractedApartments?.length || 0,
+            persistentAttachedApartments: context?.persistentAttachedApartments?.length || 0
         });
 
         // 1) 시스템/유저 메시지 구성 (사용자 프로필 + 대화 기록 + 슬롯 정보 + 추출된 아파트 정보 포함)
@@ -629,7 +630,11 @@ aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
     try {
         const { message, context } = await c.req.json();
         
-        console.log('🎯 플래너 기반 챗봇 요청:', { message: message?.slice(0, 100) + '...' });
+        console.log('🎯 플래너 기반 챗봇 요청:', {
+            message: message?.slice(0, 100) + '...',
+            extractedApartments: context?.extractedApartments?.length || 0,
+            persistentAttachedApartments: context?.persistentAttachedApartments?.length || 0
+        });
 
         // 0. Clarify 모드 확인 및 처리
         const { clarifyResponseHandler } = await import('../ai/clarify/responseHandler');
@@ -703,6 +708,9 @@ aiChatRoute.post('/chat', authMiddleware, slotMiddleware, async (c) => {
             intent: { category: 'general', confidence: 0, entities: [], actions: [] }, // 플래너에서 분석
             slots: c.slots || {},
             userProfile: context?.userProfile || c.session?.userProfile,
+            // 🆕 첨부된 아파트 정보 추가
+            extractedApartments: context?.extractedApartments,
+            persistentAttachedApartments: context?.persistentAttachedApartments,
             sessionHistory: {
                 messageCount: c.session?.messageHistory?.length || 0,
                 lastQuestionTypes: [], // 추후 구현

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>물효과</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+</head>
+<body>
+    <div class="buttons-wrap">
+        <label>물높이<input type="range" min="0" max="100" value="7" id="range"></label>
+        <label>투명도<input type="range" min="0" max="1" value="0.8" step="0.1" id="alpha"></label>
+        <label>크기<input type="range" min="1" max="1000" value="500" id="size"></label>
+        <label>반사율<input type="range" min="0" max="1" value="0.3" step="0.1" id="reflectivity"></label>
+        <label>왜곡 강도<input type="range" min="0" max="10" value="3.7" step="0.1" id="distortionScale"></label>
+        <label>색상<input type="text" value="#008aa4" id="color"></label>
+        <button id="delete">제거</button>
+    </div>
+
+    <div id="world-container"></div>
+    <script>
+        window.onload = () => {
+            const coordinates = [
+                [127.01011, 37.54385],
+                [127.01257, 37.54943],
+                [127.01696, 37.55252],
+                [127.03038, 37.55396],
+                [127.04397, 37.55389],
+                [127.0447, 37.54708],
+                [127.04381, 37.53852],
+                [127.04349, 37.53783],
+                [127.03952, 37.53135],
+                [127.03343, 37.53378],
+                [127.02913, 37.53433],
+                [127.02794, 37.53466],
+                [127.02566, 37.53402],
+                [127.02177, 37.52954],
+                [127.02022, 37.52712],
+                [127.01902, 37.52627],
+                [127.01557, 37.52436],
+                [127.00988, 37.53031],
+                [127.0059, 37.53591],
+                [127.00511, 37.5371],
+                [127.00613, 37.54034],
+                [127.01011, 37.54385]
+            ];
+
+            //수면높이
+            let waterHeight = 7;
+
+            //화면이동
+            const cameraView = {
+                longitude: 127.02023,
+                latitude: 37.5363,
+                height: 95,
+                heading: 340,
+                pitch: -7
+            };
+            viewer._setCameraView(cameraView);
+            let positions = coordinates.map(coord => Cesium.Cartesian3.fromDegrees(coord[0], coord[1], waterHeight));
+
+            // 초기 물 옵션
+            let waterOptions = {
+                positions: positions,
+                flowDegrees: 50,
+                height: waterHeight,
+                alpha: 0.8,
+                size: 500,
+                reflectivity: 0.3,
+                distortionScale: 3.7,
+                flowDegrees: 120,
+                color: '#008aa4'
+            };
+
+            let sideEntity = viewer._createPolygon({
+                positions: positions,
+                closeTop: false,
+                clampToGround: false,
+                extrudedHeight: -20,
+                material: Cesium.Color.fromCssColorString('#008aa4')
+            });
+            viewer._createWater(waterOptions);
+
+            const inputs = {
+                height: document.getElementById('range'),
+                alpha: document.getElementById('alpha'),
+                size: document.getElementById('size'),
+                reflectivity: document.getElementById('reflectivity'),
+                distortionScale: document.getElementById('distortionScale'),
+                color: document.getElementById('color')
+            };
+            Object.entries(inputs).forEach(([key, input]) => {
+                input.addEventListener('input', (e) => {
+                    if (key == "height") {
+                        let value = e.target.type === 'range' ? Number(e.target.value) : e.target.value;
+                        waterHeight = value;
+                        positions = coordinates.map(coord => Cesium.Cartesian3.fromDegrees(coord[0], coord[1], waterHeight - 0.01));
+
+                        viewer._removeEntity(sideEntity);
+
+                        sideEntity = viewer._createPolygon({
+                            positions: positions,
+                            closeTop: false,
+                            clampToGround: false,
+                            extrudedHeight: -20,
+                            material: Cesium.Color.fromCssColorString('#008aa4')
+                        });
+                    }
+                    let value = e.target.type === 'range' ? Number(e.target.value) : e.target.value;
+                    waterOptions[key] = value;
+                    viewer._updateWater(waterOptions);
+                });
+            });
+            //제거
+            const refreshBtn = document.getElementById('delete');
+            refreshBtn.addEventListener('click', () => {
+                viewer._removeWater();
+            });
+        }
+    </script>
+</body>
+
+</html>

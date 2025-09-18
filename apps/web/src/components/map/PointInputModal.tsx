@@ -36,12 +36,49 @@ const PointInputModal: React.FC<PointInputModalProps> = ({
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
 
+    // 🆕 전용면적 드롭다운을 위한 상태
+    const [availableAreas, setAvailableAreas] = useState<number[]>([]);
+    const [isLoadingAreas, setIsLoadingAreas] = useState(false);
+    const [useAreaRange, setUseAreaRange] = useState<boolean>(false);
+
     // pointData가 변경될 때 formData 업데이트
     useEffect(() => {
         if (pointData) {
             setFormData(pointData);
         }
     }, [pointData]);
+
+    // 🆕 아파트가 감지되면 해당 아파트의 전용면적 목록 조회
+    useEffect(() => {
+        const fetchAvailableAreas = async () => {
+            if (!formData.detectedApt?.id) {
+                setAvailableAreas([]);
+                return;
+            }
+
+            setIsLoadingAreas(true);
+            try {
+                console.log(`🔍 아파트 ID ${formData.detectedApt.id}의 전용면적 목록 조회`);
+                const response = await fetch(`/api/search/areas/${formData.detectedApt.id}`);
+
+                if (response.ok) {
+                    const areas = await response.json();
+                    console.log(`✅ 전용면적 ${areas.length}개 조회 완료:`, areas);
+                    setAvailableAreas(areas);
+                } else {
+                    console.warn('⚠️ 전용면적 조회 실패');
+                    setAvailableAreas([]);
+                }
+            } catch (error) {
+                console.error('❌ 전용면적 조회 중 오류:', error);
+                setAvailableAreas([]);
+            } finally {
+                setIsLoadingAreas(false);
+            }
+        };
+
+        fetchAvailableAreas();
+    }, [formData.detectedApt?.id]);
 
     const handleInputChange = (field: keyof PointData, value: string) => {
         setFormData(prev => ({
@@ -184,18 +221,83 @@ const PointInputModal: React.FC<PointInputModalProps> = ({
                             </div>
                         </div>
                         
+                        {/* 🆕 전용면적 드롭다운 시스템 */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
                                 전용면적 (㎡)
                             </label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                placeholder="예: 84.91"
-                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                                value={formData.exclu_use_ar}
-                                onChange={(e) => handleInputChange('exclu_use_ar', e.target.value)}
-                            />
+
+                            {/* 감지된 아파트가 있고 전용면적 목록이 있는 경우 */}
+                            {formData.detectedApt && availableAreas.length > 0 ? (
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            value={formData.exclu_use_ar}
+                                            onChange={(e) => handleInputChange('exclu_use_ar', e.target.value)}
+                                            className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                        >
+                                            <option value="">전용면적 선택</option>
+                                            {availableAreas.map((area) => (
+                                                <option key={area} value={area.toString()}>
+                                                    {area}㎡
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        {/* ±1㎡ 범위 토글 */}
+                                        {formData.exclu_use_ar && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setUseAreaRange(!useAreaRange)}
+                                                className={`px-2 py-2 text-xs font-medium rounded border transition-all ${
+                                                    useAreaRange
+                                                        ? "bg-cyan-100 text-cyan-800 border-cyan-200"
+                                                        : "bg-white text-gray-600 border-gray-300 hover:bg-cyan-50 hover:text-cyan-700"
+                                                }`}
+                                                title="전용면적 ±1㎡ 범위로 검색"
+                                            >
+                                                {useAreaRange && "✓ "}±1㎡
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* 로딩 상태 표시 */}
+                                    {isLoadingAreas && (
+                                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                                            <div className="animate-spin w-3 h-3 border border-gray-300 border-t-cyan-500 rounded-full"></div>
+                                            전용면적 목록 로딩 중...
+                                        </div>
+                                    )}
+
+                                    {/* 선택된 면적 범위 표시 */}
+                                    {formData.exclu_use_ar && useAreaRange && (
+                                        <div className="text-xs text-cyan-600 bg-cyan-50 p-2 rounded">
+                                            📏 검색 범위: {(Number(formData.exclu_use_ar) - 1).toFixed(1)}㎡ ~ {(Number(formData.exclu_use_ar) + 1).toFixed(1)}㎡
+                                        </div>
+                                    )}
+                                </div>
+                            ) : formData.detectedApt && isLoadingAreas ? (
+                                /* 로딩 중 */
+                                <div className="flex items-center gap-2 p-2 border border-gray-300 rounded-lg bg-gray-50">
+                                    <div className="animate-spin w-4 h-4 border border-gray-300 border-t-cyan-500 rounded-full"></div>
+                                    <span className="text-sm text-gray-600">전용면적 목록 조회 중...</span>
+                                </div>
+                            ) : (
+                                /* 아파트가 감지되지 않았거나 전용면적 목록이 없는 경우 - 수동 입력 */
+                                <div className="space-y-2">
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="예: 84.91"
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                        value={formData.exclu_use_ar}
+                                        onChange={(e) => handleInputChange('exclu_use_ar', e.target.value)}
+                                    />
+                                    <div className="text-xs text-gray-500">
+                                        ⚠️ 아파트 정보가 없어 수동 입력으로 전환되었습니다.
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* 평면도 업로드 */}

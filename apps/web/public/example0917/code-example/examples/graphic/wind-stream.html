@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>바람 벡터</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+    <style>
+    </style>
+</head>
+
+<body>
+    <div id="wind-radios" class="buttons-wrap"></div>
+    <div class="update form-wrap">
+        <label>속도<input type="number" value="0.15" step="0.1" max="1" id="speed"></label>
+        <label>두께 최소<input type="range" value="0" step="0.1" max="10" id="width-min"></label>
+        <label>두께 최대<input type="range" value="0" step="0.1" max="10" id="width-max"></label>
+        <label>길이 최소<input type="range" value="1" step="1" max="20" id="length-min"></label>
+        <label>길이 최대<input type="range" value="5" step="1" max="20" id="length-max"></label>
+        <label>갯수<input type="range" value="150" step="1" max="150" id="size"></label>
+        <label>높이<input type="range" value="500" step="1" max="1000" id="height"></label>
+        <label>색상범위<textarea type="text" rows="10"
+                id="colorRamp">rgb(175, 240, 91)\ rgb(150, 243, 87)\ rgb(124, 246, 88)\ rgb(100, 247, 95)\ rgb(78, 246, 105)\ rgb(59, 242, 119)\ rgb(44, 237, 135)\ rgb(34, 229, 153)\ rgb(27, 218, 170)\ rgb(25, 206, 186)\ rgb(27, 192, 201)\ rgb(32, 177, 212)\ rgb(41, 161, 221)\ rgb(51, 145, 225)\ rgb(62, 129, 225)\ rgb(74, 113, 221)\ rgb(85, 99, 213)\ rgb(95, 86, 201)\ rgb(104, 74, 187)\ rgb(110, 64, 170)</textarea></label>
+        <button id="update">업데이트</button>
+    </div>
+    <div id="resultTable"></div>
+    <div id="world-container"></div>
+    <script>
+        window.onload = () => {
+            const container = document.getElementById("wind-radios");
+            const baseDate = "20250813";
+            for (let h = 0; h < 24; h++) {
+                const hour = h.toString().padStart(2, "0");
+                const dataName = `${baseDate}${hour}00`;
+                const label = document.createElement("label");
+                const input = document.createElement("input");
+                input.type = "radio";
+                input.name = "wind";
+                input.className = "wind";
+                input.dataset.name = dataName;
+                if (h === 0) input.checked = true;
+                label.appendChild(input);
+                label.append(`${hour}시`);
+                container.appendChild(label);
+            }
+
+            const windRadio = document.querySelectorAll('input[name="wind"]');
+            windRadio.forEach(radio => {
+                radio.addEventListener('click', (e) => {
+                    const name = e.target.dataset.name;
+                    viewer._updateWindLayer({ data: `/static/windData/${name}.json` });
+                });
+            });
+            viewer._createWindLayer(`/static/windData/202508130000.json`, {
+                speed: 0.15,
+                height: 650,
+                onClick: (e) => {
+                    document.getElementById('resultTable').innerHTML = `<output>풍향: ${Number(e.angle.toFixed(2))}°, 풍속: ${Number(e.speed.toFixed(2))}m/s</output>`;
+                }
+            });
+        }
+        let windOptions = {
+            speed: 0.3,
+            height: 520,
+            size: 150,
+            widthMin: 0.2,
+            widthMax: 0.3,
+            lengthMin: 1,
+            lengthMax: 5,
+            colors: ['rgb(175, 240, 91)', 'rgb(150, 243, 87)', 'rgb(124, 246, 88)', 'rgb(100, 247, 95)', 'rgb(78, 246, 105)', 'rgb(59, 242, 119)', 'rgb(44, 237, 135)', 'rgb(34, 229, 153)', 'rgb(27, 218, 170)', 'rgb(25, 206, 186)', 'rgb(27, 192, 201)', 'rgb(32, 177, 212)', 'rgb(41, 161, 221)', 'rgb(51, 145, 225)', 'rgb(62, 129, 225)', 'rgb(74, 113, 221)', 'rgb(85, 99, 213)', 'rgb(95, 86, 201)', 'rgb(104, 74, 187)', 'rgb(110, 64, 170)']
+        };
+
+        const inputs = {
+            height: document.getElementById('height'),
+            speed: document.getElementById('speed'),
+            size: document.getElementById('size'),
+            widthMin: document.getElementById('width-min'),
+            widthMax: document.getElementById('width-max'),
+            lengthMin: document.getElementById('length-min'),
+            lengthMax: document.getElementById('length-max'),
+            colors: document.getElementById('colorRamp')
+        };
+        Object.entries(inputs).forEach(([key, input]) => {
+            input.addEventListener('input', (e) => {
+                let value = e.target.type === 'range' ? Number(e.target.value) : e.target.id === 'colorRamp' ? e.target.value.split('\\') : e.target.value;
+                windOptions[key] = value;
+                windOptions.width = { min: windOptions.widthMin, max: windOptions.widthMax };
+                windOptions.length = { min: windOptions.lengthMin, max: windOptions.lengthMax };
+                viewer._updateWindLayer(windOptions);
+            });
+        });
+    </script>
+</body>
+
+</html>

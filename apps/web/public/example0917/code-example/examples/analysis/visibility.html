@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가시권 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+    <style>
+        #resultTable {
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #resultTable table {
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        #resultTable th,
+        #resultTable td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+    </style>
+    </script>
+</head>
+
+<body>
+    <div id="helper">
+        지도를 클릭하여 가시권 분석을 진행할 시점과 종점을 클릭 후 우클릭 해주세요
+    </div>
+    <div id="resultTable"></div>
+    <div class="buttons-wrap">
+        <button id="start">분석 시작</button>
+        <button id="deleteBtn">선택 건물 삭제</button>
+        <button id="refreshBtn">초기화</button>
+    </div>
+
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+    <script>
+        window.onload = () => {
+            const analysisVisiblity = () => {
+                function testAnalysisVisiblity() {
+                    const helper = document.getElementById('helper');
+
+                    helper.style.display = 'block';
+                    viewer._drawAction({
+                        shapeType: 1,
+                        applyTo: 0
+                    }).then((res) => {
+                        helper.style.display = 'none';
+                        const positions = res.data.positions
+
+                        const start = positions[0];
+
+                        // 시작점과 끝점을 사람 시야 높이(대략 150cm) 만큼 위로 올려서 
+                        // 약간의 터레인 높이 차로 막혀서 비가시권으로 되는 것 방지
+                        const personHeight = 1.5;
+
+                        const cartographicStartPosition = Cesium.Cartographic.fromCartesian(start);
+                        cartographicStartPosition.height += personHeight;
+                        const elevatedStart = Cesium.Cartographic.toCartesian(cartographicStartPosition);
+
+                        const end = positions[1];
+                        const cartographicEndPosition = Cesium.Cartographic.fromCartesian(end);
+                        cartographicEndPosition.height += personHeight;
+                        const elevatedEnd = Cesium.Cartographic.toCartesian(cartographicEndPosition);
+
+                        const analysisPoint = [elevatedStart, elevatedEnd];
+
+                        // 종횡단면 분석 실행
+                        viewer._startAnalysisVisibility({
+                            positions: analysisPoint,
+                        }).then((res) => {
+                            const result = res.data;
+                            const totalArea = result.totalArea;
+                            const visibleArea = result.visibleArea;
+                            const invisibleArea = result.invisibleArea;
+
+                            renderTable(visibleArea, totalArea, invisibleArea);
+                        });
+                    });
+                }
+
+                const tableDiv = document.getElementById('resultTable');
+
+                // — 테이블 렌더링 —
+                const renderTable = (visibleArea, totalArea, invisibleArea) => {
+                    const html = `
+                <table style="width: 28vw">
+                    <tr><th>총 면적</th><th>가시면적</th><th>비가시면적</th></tr>
+                    <tr>
+                    <td>${totalArea.toFixed(2)} m²</td>
+                    <td>${visibleArea.toFixed(2)} m²</td>
+                    <td>${invisibleArea.toFixed(2)} m²</td>
+                    </tr>
+                </table>
+                `;
+                    tableDiv.innerHTML = html;
+                }
+
+                testAnalysisVisiblity();
+            }
+
+            const silhouetteEffect = () => {
+                const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+
+                window.hiddenFeatures = [];
+
+                const silhouetteBlue =
+                    Cesium.PostProcessStageLibrary.createEdgeDetectionStage();
+                silhouetteBlue.uniforms.color = Cesium.Color.BLUE;
+                silhouetteBlue.uniforms.length = 0.01;
+                silhouetteBlue.selected = [];
+
+                const silhouetteRed = Cesium.PostProcessStageLibrary.createEdgeDetectionStage();
+                silhouetteRed.uniforms.color = Cesium.Color.RED;
+                silhouetteRed.uniforms.length = 0.01;
+                silhouetteRed.selected = [];
+
+                viewer.scene.postProcessStages.add(
+                    Cesium.PostProcessStageLibrary.createSilhouetteStage([
+                        silhouetteBlue,
+                        silhouetteRed,
+                    ]),
+                );
+                const silhouetteHover = () => {
+
+                    handler.setInputAction(function onMouseMove(movement) {
+                        silhouetteBlue.selected = [];
+
+                        const pickedFeature = viewer.scene.pick(movement.endPosition);
+
+                        if (!Cesium.defined(pickedFeature)) {
+                            return;
+                        }
+
+                        silhouetteBlue.selected = [pickedFeature];
+                    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+                }
+
+                const silhouetteTarget = () => {
+                    handler.setInputAction((click) => {
+                        silhouetteBlue.selected = [];
+
+                        const pickedFeature = viewer.scene.pick(click.position);
+
+                        if (Cesium.defined(pickedFeature) && pickedFeature instanceof Cesium.Cesium3DTileFeature) {
+                            const pickedPosition = viewer.scene.pickPosition(click.position);
+                            if (!pickedPosition) return;
+
+                            // 숨긴 건물 저장
+                            window.hiddenFeatures.push(pickedFeature);
+
+                            // 윤곽선만 표시
+                            if (Cesium.PostProcessStageLibrary.isSilhouetteSupported(viewer.scene)) {
+                                silhouetteRed.selected.push(pickedFeature);
+                            }
+                        }
+                    }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+                }
+
+
+                silhouetteHover();
+                silhouetteTarget();
+            }
+
+            const createBuilding = () => {
+                const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+                window.buildingDataSource = new Cesium.CustomDataSource('building-structure');
+                viewer.dataSources.add(window.buildingDataSource);
+
+                // 휠클릭을 통한 건물 생성
+                handler.setInputAction(async (click) => {
+                    const position = viewer.scene.pickPosition(click.position);
+                    if (!position) return;
+
+                    const buildingX = 35;
+                    const buildingY = 35;
+                    const buildingZ = 100;
+
+                    const cartographic = Cesium.Cartographic.fromCartesian(position);
+                    const updatedPositions = await Cesium.sampleTerrainMostDetailed(
+                        viewer.terrainProvider,
+                        [cartographic]
+                    );
+                    const terrainHeight = updatedPositions[0].height;
+
+                    const heightOffset = buildingZ / 2;
+                    const adjustedCartographic = new Cesium.Cartographic(
+                        cartographic.longitude,
+                        cartographic.latitude,
+                        terrainHeight + heightOffset
+                    );
+
+                    const adjustedPosition = Cesium.Cartesian3.fromRadians(
+                        adjustedCartographic.longitude,
+                        adjustedCartographic.latitude,
+                        adjustedCartographic.height
+                    );
+
+                    const building = {
+                        position: adjustedPosition,
+                        box: {
+                            dimensions: new Cesium.Cartesian3(buildingX, buildingY, buildingZ),
+                            material: Cesium.Color.GRAY.withAlpha(1),
+                            outline: true,
+                            outlineColor: Cesium.Color.BLACK
+                        }
+                    }
+
+                    buildingDataSource.entities.add(building);
+
+                }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+            }
+
+            createBuilding();
+            silhouetteEffect();
+
+            const hideBuilding = () => {
+                window.hiddenFeatures.forEach(function (feature) {
+                    if (feature != undefined) {
+                        feature.show = false;
+                    }
+                });
+            }
+
+            document.getElementById('start').addEventListener('click', function () {
+                analysisVisiblity();
+            });
+
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.addEventListener('click', function () {
+                hideBuilding();
+            });
+
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.addEventListener('click', function () {
+                window.buildingDataSource.entities.removeAll();
+                window.hiddenFeatures.forEach(function (feature) {
+                    if (feature != undefined) {
+                        feature.show = true;
+                    }
+                });
+                silhouetteEffect();
+            });
+        }
+    </script>
+</body>
+
+</html>

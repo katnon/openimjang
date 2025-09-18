@@ -70,6 +70,9 @@ export default function Home() {
         lon: number;
     } | null>(null);
 
+    // 선택된 전용면적 상태 (실거래가 탭에서 사용)
+    const [selectedArea, setSelectedArea] = useState<number | null>(null);
+
     // 평면도 모달 상태
     const [showFloorplanModal, setShowFloorplanModal] = useState(false);
     const [selectedFloorplan, setSelectedFloorplan] = useState<{
@@ -350,6 +353,39 @@ export default function Home() {
                             miniMapPopup.hide();
                         }
                     }}
+                    onPresetPointSelect={(preset) => {
+                        console.log('🏠 3D 지도에서 프리셋 포인트 선택됨:', preset);
+                        console.log('🔍 현재 카드 확장 상태:', isCardExpanded);
+                        console.log('🔍 현재 선택된 아파트:', selectedApt);
+
+                        // 선택된 아파트 설정 (확장카드 표시)
+                        const newApt = {
+                            id: preset.apt_id,
+                            apt_nm: preset.apt_nm,
+                            jibun_address: preset.jibun_address,
+                            lat: preset.lat,
+                            lon: preset.lon
+                        };
+                        console.log('🏠 새로 설정할 아파트:', newApt);
+                        setSelectedApt(newApt);
+
+                        // 확장카드를 열고 미리보기 탭으로 이동
+                        console.log('🔧 카드 확장 설정 중...');
+                        setIsCardExpanded(true);
+
+                        // SummaryCard에 미리보기 탭으로 이동하라고 신호 보내기 (약간의 지연)
+                        setTimeout(() => {
+                            console.log('🎯 미리보기 탭으로 이동 신호 보내기');
+                            // 이벤트를 통해 SummaryCard에 탭 변경 요청
+                            window.dispatchEvent(new CustomEvent('switchToPreviewTab', {
+                                detail: { presetId: preset.id }
+                            }));
+                        }, 100);
+
+                        // 선택된 면적 설정
+                        console.log('📐 선택된 면적 설정:', preset.exclu_use_ar);
+                        setSelectedArea(preset.exclu_use_ar);
+                    }}
                 />
             </main>
 
@@ -422,6 +458,10 @@ export default function Home() {
                     } else {
                         alert('이 프리셋에는 평면도가 등록되지 않았습니다.');
                     }
+                }}
+                onAreaClickNavigate={(area) => {
+                    console.log('📐 전용면적 클릭으로 실거래가 탭 이동:', area);
+                    setSelectedArea(area);
                 }}
             />
 

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시곡선 분석</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* 차트 컨테이너 */
+        #sectionChart {
+            position: absolute;
+            top: 3vw;
+            right: 1vw;
+            width: 400px;
+            height: 260px;
+            background: white;
+            border: 1px solid gray;
+            padding: 10px;
+            z-index: 9999;
+            display: none;
+            /* 기본적으로 숨겨둠 */
+        }
+    </style>
+</head>
+
+<body>
+    <div id="helper">
+        지도를 클릭하여 시곡선 시작점과 종단점을 클릭 후 우클릭 해주세요
+    </div>
+    <!-- 차트 컨테이너 (기본적으로 숨겨짐) -->
+    <canvas id="viewShedChart" width="200" height="120" style="
+    display: none;
+    position: fixed;
+    top: 10%;
+    right: 4%;
+    width: 450px;
+    height: 350px;
+    border: 2px solid #666;
+    background: white;
+    z-index: 9999;
+    pointer-events: none;
+    "></canvas>
+
+    <div class="buttons-wrap">
+        <button id="startBtn">분석</button>
+        <button id="deleteBtn">선택 건물 삭제</button>
+        <button id="refreshBtn">초기화</button>
+    </div>
+    <div class="map_section" style="width: 100vw; height: 100vh;" id="world-container">
+    </div>
+    <script>
+        window.onload = () => {
+            const analysisViewshed = () => {
+                function testAnalysisViewshed() {
+                    const helper = document.getElementById('helper');
+
+                    helper.style.display = 'block';
+                    viewer._drawAction({
+                        shapeType: 1,
+                    }).then((res) => {
+                        const positions = res.data.positions
+
+                        const start = positions[0];
+                        const end = positions[1];
+                        const analysisPoint = [start, end];
+                        // 시곡선 분석 실행
+                        viewer._startAnalysisViewshed({
+                            positions: analysisPoint,
+                            analysisAngle: 10,
+                            analysisStep: 80
+                        }).then((res) => {
+
+                            helper.style.display = 'none';
+
+                            const result = res.data.Result;
+
+
+                            //  거리, 지형 높이, 건물 높이 배열을 가져옴 
+                            const distances = result.map(e => parseFloat(e.distance));
+                            const terrainHeights = result.map(e => e.terrain);
+                            const buildingHeights = result.map(e => e.building);
+
+                            // 시곡선 높이를 가져오는데 값에 최초 시점의 terrain 값을 빼줌
+                            const terrainOffset = result[0].terrain;
+                            const baseline = result.map(e => e.baseline - terrainOffset);
+
+                            drawSectionChart(distances, terrainHeights, buildingHeights, baseline);
+                        });
+                    });
+                }
+
+                const drawSectionChart = (distances, heights, building, baseline) => {
+                    const canvas = document.getElementById("viewShedChart");
+                    const ctx = canvas.getContext("2d");
+
+                    canvas.width = 450;
+                    canvas.height = 350;
+                    canvas.style.display = "block";
+
+                    let minHeight = Math.min(...heights);
+                    let maxHeight = Math.max(...heights);
+
+                    if (baseline?.length === distances.length) {
+                        minHeight = Math.min(minHeight, ...baseline);
+                        maxHeight = Math.max(maxHeight, ...baseline);
+                    }
+
+                    const datasets = [];
+
+                    // 지면 (파란선 + fill)
+                    datasets.push({
+                        label: "지면 고도",
+                        data: distances.map((d, i) => ({ x: d, y: heights[i] })),
+                        borderColor: "blue",
+                        backgroundColor: "rgba(0, 0, 255, 0.1)",
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0,
+                    });
+
+                    // 기준선 (빨간선)
+                    if (baseline?.length === distances.length) {
+                        datasets.push({
+                            label: "기준선",
+                            data: distances.map((d, i) => ({ x: d, y: baseline[i] })),
+                            borderColor: "red",
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0,
+                        });
+                    }
+
+                    const buildingAreaDataset = {
+                        label: "건물 영역",
+                        data: (() => {
+                            // 건물 높이가 터레인 높이보다 클때에만 
+                            const buildingPoints = distances
+                                .map((d, i) => ({ x: d, y: building[i] > heights[i] ? building[i] : heights[i] }))
+                            const heightPoints = distances
+                                .map((d, i) => ({ x: d, y: heights[i] }))
+                                .reverse();
+                            return buildingPoints.concat(heightPoints);
+                        })(),
+                        borderColor: "rgba(0,0,0,1)",
+                        backgroundColor: "rgba(0, 0, 0, 0.8)",
+                        fill: true,
+                        showLine: true,
+                        pointRadius: 0,
+                        tension: 0,
+                    };
+
+                    datasets.push(buildingAreaDataset);
+
+                    // 기존 차트 제거
+                    if (window.viewShedChart instanceof Chart) {
+                        window.viewShedChart.destroy();
+                    }
+                    // Chart 생성
+                    window.viewShedChart = new Chart(canvas, {
+                        type: "line",
+                        data: {
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: false,
+                            animation: false,
+                            scales: {
+                                x: {
+                                    type: "linear",
+                                    position: "bottom",
+                                    title: {
+                                        display: true,
+                                        text: "거리 (m)",
+                                        font: { size: 14 }
+                                    },
+                                    ticks: {
+                                        callback: (v) => v.toFixed(2) + " m",
+                                        font: { size: 12 }
+                                    },
+                                    grid: {
+                                        color: "#ccc",
+                                        borderDash: [5, 5]
+                                    }
+                                },
+                                y: {
+                                    min: minHeight,
+                                    max: maxHeight,
+                                    title: {
+                                        display: true,
+                                        text: "높이 (m)",
+                                        font: { size: 14 }
+                                    },
+                                    ticks: {
+                                        callback: (v) => v.toFixed(0) + " m",
+                                        font: { size: 12 }
+                                    },
+                                    grid: {
+                                        color: "#ccc",
+                                        borderDash: [5, 5]
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                testAnalysisViewshed();
+            }
+
+            const silhouetteEffect = () => {
+                const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+
+                window.hiddenFeatures = [];
+
+                const silhouetteBlue =
+                    Cesium.PostProcessStageLibrary.createEdgeDetectionStage();
+                silhouetteBlue.uniforms.color = Cesium.Color.BLUE;
+                silhouetteBlue.uniforms.length = 0.01;
+                silhouetteBlue.selected = [];
+
+                const silhouetteRed = Cesium.PostProcessStageLibrary.createEdgeDetectionStage();
+                silhouetteRed.uniforms.color = Cesium.Color.RED;
+                silhouetteRed.uniforms.length = 0.01;
+                silhouetteRed.selected = [];
+
+                viewer.scene.postProcessStages.add(
+                    Cesium.PostProcessStageLibrary.createSilhouetteStage([
+                        silhouetteBlue,
+                        silhouetteRed,
+                    ]),
+                );
+                const silhouetteHover = () => {
+
+                    handler.setInputAction(function onMouseMove(movement) {
+                        silhouetteBlue.selected = [];
+
+                        const pickedFeature = viewer.scene.pick(movement.endPosition);
+
+                        if (!Cesium.defined(pickedFeature)) {
+                            return;
+                        }
+
+                        silhouetteBlue.selected = [pickedFeature];
+                    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+                }
+
+                const silhouetteTarget = () => {
+                    handler.setInputAction((click) => {
+                        silhouetteBlue.selected = [];
+
+                        const pickedFeature = viewer.scene.pick(click.position);
+
+                        if (Cesium.defined(pickedFeature) && pickedFeature instanceof Cesium.Cesium3DTileFeature) {
+                            const pickedPosition = viewer.scene.pickPosition(click.position);
+                            if (!pickedPosition) return;
+
+                            // 숨긴 건물 저장
+                            window.hiddenFeatures.push(pickedFeature);
+
+                            // 윤곽선만 표시
+                            if (Cesium.PostProcessStageLibrary.isSilhouetteSupported(viewer.scene)) {
+                                silhouetteRed.selected.push(pickedFeature);
+                            }
+                        }
+                    }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+                }
+
+
+                silhouetteHover();
+                silhouetteTarget();
+            }
+
+            const createBuilding = () => {
+                const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+                window.buildingDataSource = new Cesium.CustomDataSource('building-structure');
+                viewer.dataSources.add(window.buildingDataSource);
+
+                // 휠클릭을 통한 건물 생성
+                handler.setInputAction(async (click) => {
+                    const position = viewer.scene.pickPosition(click.position);
+                    if (!position) return;
+
+                    const buildingX = 35;
+                    const buildingY = 35;
+                    const buildingZ = 100;
+
+                    const cartographic = Cesium.Cartographic.fromCartesian(position);
+                    const updatedPositions = await Cesium.sampleTerrainMostDetailed(
+                        viewer.terrainProvider,
+                        [cartographic]
+                    );
+                    const terrainHeight = updatedPositions[0].height;
+
+                    const heightOffset = buildingZ / 2;
+                    const adjustedCartographic = new Cesium.Cartographic(
+                        cartographic.longitude,
+                        cartographic.latitude,
+                        terrainHeight + heightOffset
+                    );
+
+                    const adjustedPosition = Cesium.Cartesian3.fromRadians(
+                        adjustedCartographic.longitude,
+                        adjustedCartographic.latitude,
+                        adjustedCartographic.height
+                    );
+
+                    const building = {
+                        position: adjustedPosition,
+                        box: {
+                            dimensions: new Cesium.Cartesian3(buildingX, buildingY, buildingZ),
+                            material: Cesium.Color.GRAY.withAlpha(1),
+                            outline: true,
+                            outlineColor: Cesium.Color.BLACK
+                        }
+                    }
+
+                    buildingDataSource.entities.add(building);
+
+                }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+            }
+
+            createBuilding();
+            silhouetteEffect();
+
+            const hideBuilding = () => {
+                window.hiddenFeatures.forEach(function (feature) {
+                    if (feature != undefined) {
+                        feature.show = false;
+                    }
+                });
+            }
+
+            const startBtn = document.getElementById('startBtn');
+            startBtn.addEventListener('click', function () {
+                analysisViewshed();
+            });
+
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.addEventListener('click', function () {
+                hideBuilding();
+            });
+
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.addEventListener('click', function () {
+                // 캔버스 초기화
+                ["viewShedChart"].forEach(id => {
+                    const c = document.getElementById(id);
+                    if (c) {
+                        const ctx = c.getContext("2d");
+                        ctx.clearRect(0, 0, c.width, c.height);
+                        c.style.display = "none";
+                    }
+                });
+
+                window.buildingDataSource.entities.removeAll();
+                window.hiddenFeatures.forEach(function (feature) {
+                    if (feature != undefined) {
+                        feature.show = true;
+                    }
+                });
+                silhouetteEffect();
+
+                viewer._removeAnalysisViewshed();
+            });
+        }
+
+
+    </script>
+</body>
+
+</html>

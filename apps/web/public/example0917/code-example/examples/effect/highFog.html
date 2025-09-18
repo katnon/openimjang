@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>날씨효과 (안개)</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/lib/js/cesium/Cesium.js"></script>
+    <link href="/lib/js/cesium/Widgets/widgets.css" rel="stylesheet">
+    <script defer src="/lib/js/mapprime.cesium-controls.min.js"></script>
+    <script defer src="/static/js/main.js"></script>
+</head>
+
+<body>
+    <div class="buttons-wrap">
+    <button id="start">안개 효과</button>
+    <button id="refresh">초기화</button>
+    </div>
+    <div id="form-wrap" class="form-wrap">
+        <label>높이 <input type="range" value="150" id="height" min="0" max="1000" step="0.1"></label>
+        <label>농도 <input type="range" value="0" id="density" min="0" max="10" step="0.1"></label>
+        
+        <label>
+            색상 <input type="text" value="rgb(204,209,215)" id="color">
+        </label>
+    </div>
+    <div id="world-container"></div>
+    <script>
+        window.onload = () => {
+            //화면이동
+            viewer._setCameraView({
+                longitude: 127.06792,
+                latitude: 37.44116,
+                height: 706.15,
+                heading: 164,
+                pitch: -31,
+            });
+            //효과 적용
+            const applyHighFogEffect = () => {
+                viewer._addHighFogEffect({
+                    name: 'high-fog',
+                    height: 150
+                });
+            }
+            const start = document.getElementById('start');
+            start.addEventListener('click', () => {
+                applyHighFogEffect();
+            });
+            //효과 해제
+            const refreshBtn = document.getElementById('refresh');
+            refreshBtn.addEventListener('click', function () {
+                viewer._removeEffect('high-fog')
+            });
+            //높이
+            document.getElementById('height').addEventListener('input', (e) => {
+                const value = Number(e.target.value);
+                viewer._setHighFogEffect({ name: 'high-fog', height: value });
+            });
+            //농도
+            document.getElementById('density').addEventListener('input', (e) => {
+                const value = Number(e.target.value);
+                viewer._setHighFogEffect({ name: 'high-fog',density: value });
+            });
+            //색상
+            document.getElementById('color').addEventListener('input', (e) => {
+                const value = e.target.value;
+                viewer._setHighFogEffect({ name: 'high-fog',color: value });
+            });
+        }
+        
+    </script>
+</body>
+
+</html>

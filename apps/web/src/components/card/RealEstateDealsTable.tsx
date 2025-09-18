@@ -17,9 +17,10 @@ type Props = {
     aptName: string;
     onClose: () => void;
     isEmbedded?: boolean;
+    selectedArea?: number | null; // 외부에서 선택된 면적
 };
 
-export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedded = false }: Props) {
+export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedded = false, selectedArea: propSelectedArea }: Props) {
     const [allDeals, setAllDeals] = useState<Deal[]>([]);           // ✅ 전체 데이터
     const [displayedDeals, setDisplayedDeals] = useState<Deal[]>([]); // ✅ 화면에 표시할 데이터
     const [areas, setAreas] = useState<number[]>([]);
@@ -50,6 +51,14 @@ export default function RealEstateDealsTable({ aptId, aptName, onClose, isEmbedd
         };
         fetchAreas();
     }, [aptId]);
+
+    // 외부에서 면적이 선택되었을 때 자동 설정
+    useEffect(() => {
+        if (propSelectedArea) {
+            console.log('📐 외부에서 선택된 면적:', propSelectedArea);
+            setSelectedArea(propSelectedArea.toString());
+        }
+    }, [propSelectedArea]);
 
     // ✅ 실거래가 데이터 조회 부분만 수정 (fetchDeals 함수)
 

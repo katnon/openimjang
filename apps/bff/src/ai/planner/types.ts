@@ -6,7 +6,7 @@ import { ConversationSlots, UserProfile } from '../types/slots';
 /**
  * 플랜 액션 유형 (RAG 제거됨)
  */
-export type ActionType = 
+export type ActionType =
   | 'clarify'           // 사용자에게 추가 정보 요청
   | 'validate'          // 입력된 정보 검증
   // | 'rag'              // 외부 지식 검색 (RAG) - 제거됨: 의미 없는 벡터 검색 대신 DB 데이터 활용
@@ -14,6 +14,7 @@ export type ActionType =
   | 'executeSQL'       // SQL 쿼리 실행
   | 'searchRealEstate' // 부동산 데이터 검색
   | 'searchPOI'        // 주변 시설 정보 검색
+  | 'webSearch'        // 웹 검색 (핫플레이스, 맛집 등)
   | 'calculateStats'   // 통계 분석 수행
   | 'visualize'        // 데이터 시각화
   | 'summarize'        // 결과 요약 및 답변 생성
@@ -90,6 +91,15 @@ export interface PlanContext {
   sessionHistory: SessionContext; // 세션 기록
   capabilities: SystemCapabilities; // 시스템 기능
   constraints: PlanConstraints; // 제약 조건
+  // 챗봇에서 첨부된 아파트들 (세션 기반 메모리)
+  persistentAttachedApartments?: Array<{
+    id: number;
+    name: string;
+    address: string;
+    lat: number;
+    lon: number;
+  }>;
+  extractedApartments?: any;    // 기존 아파트 추출 데이터 호환성
 }
 
 /**

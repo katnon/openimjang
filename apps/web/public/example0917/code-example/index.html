@@ -1,0 +1,57 @@
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="/static/css/app.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <title>MapPrime Example Index</title>
+</head>
+
+<body>
+    <header>
+        <div>
+            <h4 class="logo">
+                <a href="https://mapprime.synology.me:15289/gallery" data-discover="true" style="text-decoration: none;"
+                    target="_blank">
+                    <img src="/static/images/logo.svg" style="width: 25px; height: 25px;">
+                    <span class="b700">map</span><span>prime</span>
+                </a>
+                <small>Example</small>
+            </h4>
+            <div>
+    </header>
+    <div class="container" id="content-root"></div>
+    <script>
+    fetch("_ex-root.json")
+      .then(res => res.json())
+      .then(data => {
+        const container = document.getElementById("content-root");
+        data.sections.forEach(section => {
+          const divider = document.createElement("div");
+          divider.className = "divider-horizontal";
+          divider.innerHTML = `<span>${section.title}</span>`;
+          container.appendChild(divider);
+          const ul = document.createElement("ul");
+          ul.className = "example-list";
+          section.items.forEach(item => {
+            const li = document.createElement("li");
+            li.innerHTML = `
+              <img src="${item.thumb}" alt="${item.title}">
+              <article>
+                <a href="${item.href}" target="_blank">${item.title}</a>
+                <small>${item.desc}</small>
+                <sub>${item.href}</sub>
+              </article>
+            `;
+            ul.appendChild(li);
+          });
+
+          container.appendChild(ul);
+        });
+      })
+      .catch(err => console.error("JSON error:", err));
+  </script>
+</body>
+
+</html>
