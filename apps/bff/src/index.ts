@@ -81,7 +81,7 @@ app.use('*', async (c, next) => {
 
 // CORS 설정
 app.use('*', cors({
-    origin: ['http://localhost:5173', 'http://localhost:5175', 'http://localhost:3000', process.env.CORS_ORIGIN || '*'],
+    origin: process.env.CORS_ORIGIN || '*',
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
