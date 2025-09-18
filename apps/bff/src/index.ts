@@ -142,7 +142,7 @@ app.get('/api/db/now', async (c) => {
 const port = Number(process.env.PORT) || 8787;
 
 console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
-
+console.log("CORS_ORIGIN =", process.env.CORS_ORIGIN);
 export default {
     port: port,
     fetch: app.fetch,
