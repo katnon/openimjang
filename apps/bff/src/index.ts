@@ -50,13 +50,13 @@ app.use('*', bodyLimit({
 // UTF-8 인코딩 강제 설정 미들웨어
 app.use('*', async (c, next) => {
     // 요청 헤더에 UTF-8 charset 강제 설정
-    c.req.header('Content-Type')?.includes('application/json') && !c.req.header('Content-Type')?.includes('charset') 
+    c.req.header('Content-Type')?.includes('application/json') && !c.req.header('Content-Type')?.includes('charset')
         && c.res.headers.set('Content-Type', 'application/json; charset=utf-8');
-    
+
     await next();
-    
+
     // 응답 헤더에 UTF-8 charset 강제 설정
-    if (c.res.headers.get('Content-Type')?.includes('application/json') && 
+    if (c.res.headers.get('Content-Type')?.includes('application/json') &&
         !c.res.headers.get('Content-Type')?.includes('charset')) {
         c.res.headers.set('Content-Type', 'application/json; charset=utf-8');
     }
@@ -69,9 +69,9 @@ app.use('*', async (c, next) => {
     if (contentType?.includes('application/json') && !contentType.includes('charset')) {
         c.res.headers.set('Content-Type', 'application/json; charset=utf-8');
     }
-    
+
     await next();
-    
+
     // 응답 헤더 UTF-8 charset 보장
     const responseContentType = c.res.headers.get('Content-Type');
     if (responseContentType?.includes('application/json') && !responseContentType.includes('charset')) {
@@ -81,7 +81,7 @@ app.use('*', async (c, next) => {
 
 // CORS 설정
 app.use('*', cors({
-    origin: ['http://localhost:5173', 'http://localhost:5175', 'http://localhost:3000'],
+    origin: ['http://localhost:5173', 'http://localhost:5175', 'http://localhost:3000', process.env.CORS_ORIGIN || '*'],
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
@@ -113,6 +113,16 @@ app.route('/api', buildings);
 // 정적 파일 서빙 (업로드된 파일들)
 app.use('/uploads/*', serveStatic({ root: './public' }));
 
+// 간단한 헬스체크 엔드포인트
+app.get('/health', (c) => {
+    const dbUrl = process.env.DATABASE_URL;
+    if (dbUrl) {
+        return c.json({ status: 'ok', hasDatabaseUrl: true });
+    } else {
+        return c.json({ status: 'fail', hasDatabaseUrl: false });
+    }
+});
+
 // 헬스체크 + DB 테스트
 app.get('/api/db/now', async (c) => {
     try {
@@ -133,7 +143,7 @@ const port = process.env.PORT || 8787;
 console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
 
 export default {
-  port: port,
-  fetch: app.fetch,
+    port: port,
+    fetch: app.fetch,
 
 };
