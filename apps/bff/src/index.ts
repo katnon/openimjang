@@ -139,7 +139,7 @@ app.get('/api/db/now', async (c) => {
 });
 
 // 서버 시작
-const port = Number(process.env.PORT) || 8787;
+const port = Number(process.env.PORT);
 
 console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
 console.log("CORS_ORIGIN =", process.env.CORS_ORIGIN);
