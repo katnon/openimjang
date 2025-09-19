@@ -7,9 +7,10 @@ import { DeveloperModeProvider } from "./contexts/DeveloperModeProvider";
 import axios from "axios";
 
 import "./index.css";
+import "./config/api"; // API 설정 import (fetch 인터셉터 포함)
 
 // Axios 글로벌 설정
-axios.defaults.baseURL = import.meta.env.VITE_API_BASE;
+axios.defaults.baseURL = import.meta.env.VITE_BFF_URL || 'http://localhost:8787';
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

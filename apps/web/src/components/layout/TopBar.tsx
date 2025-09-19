@@ -281,7 +281,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpen3D, onOpen2D, mapViewMode = '2D',
                                     <button
                                         onClick={() => {
                                             setShowUserMenu(false);
-                                            window.open('http://localhost:8787/api/docs/docs', '_blank');
+                                            window.open(`${import.meta.env.VITE_BFF_URL || 'http://localhost:8787'}/api/docs/docs`, '_blank');
                                         }}
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                     >

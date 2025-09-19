@@ -618,7 +618,7 @@ export default function Home() {
                             {/* 평면도 이미지 */}
                             <div className="p-4">
                                 <img
-                                    src={`http://localhost:8787${selectedFloorplan.imageUrl}`}
+                                    src={`${import.meta.env.VITE_BFF_URL || 'http://localhost:8787'}${selectedFloorplan.imageUrl}`}
                                     alt={`${selectedFloorplan.aptName} 평면도`}
                                     className="w-full h-auto rounded-lg shadow-md"
                                     style={{ maxHeight: '70vh' }}
