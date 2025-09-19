@@ -146,18 +146,7 @@ console.log(`🚀 서버를 ${hostname}:${port}에서 시작합니다...`);
 console.log("CORS_ORIGIN =", process.env.CORS_ORIGIN);
 console.log("Environment:", process.env.NODE_ENV || 'development');
 
-// Bun 서버 시작 (Railway와 로컬 모두 지원)
-if (typeof Bun !== 'undefined') {
-    const server = Bun.serve({
-        fetch: app.fetch,
-        port,
-        hostname,
-    });
-    console.log(`✅ Bun server started on ${hostname}:${port}`);
-    console.log(`🔗 Server URL: http://${hostname}:${port}`);
-}
-
-// Railway 배포용 export default도 유지
+// Railway 배포용 export default (Bun이 자동으로 서버 시작)
 export default {
     port,
     hostname,
