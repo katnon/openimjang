@@ -143,8 +143,12 @@ const port = Number(process.env.PORT);
 
 console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
 console.log("CORS_ORIGIN =", process.env.CORS_ORIGIN);
-export default {
-    port,
-    fetch: app.fetch,
+// export default {
+//     port,
+//     fetch: app.fetch,
 
-};
+// };
+Bun.serve({
+    fetch: app.fetch,
+    port,
+});
