@@ -88,13 +88,13 @@ app.use('*', cors({
 
 // 간단한 헬스체크 엔드포인트
 app.get('/health', (c) => {
-    const dbUrl = process.env.DATABASE_URL;
-    if (dbUrl) {
-        return c.json({ status: 'ok', hasDatabaseUrl: true });
-    } else {
-        return c.json({ status: 'fail', hasDatabaseUrl: false });
-    }
+    return c.json({
+        status: 'ok',
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+        hasOpenAiKey: !!process.env.OPENAI_API_KEY,
+    });
 });
+
 // 라우트 등록
 app.route('/api/search', searchRoute);
 app.route('/api/poi', poi);
@@ -144,7 +144,7 @@ const port = Number(process.env.PORT) || 8787;
 console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
 console.log("CORS_ORIGIN =", process.env.CORS_ORIGIN);
 export default {
-    port: port,
+    port,
     fetch: app.fetch,
 
 };
