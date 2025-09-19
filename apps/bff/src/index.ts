@@ -139,16 +139,26 @@ app.get('/api/db/now', async (c) => {
 });
 
 // 서버 시작
-const port = Number(process.env.PORT);
+const port = Number(process.env.PORT) || 8787;
+const hostname = '0.0.0.0'; // Railway 프록시 연결을 위해 필수
 
-console.log(`🚀 서버를 포트 ${port}에서 시작합니다...`);
+console.log(`🚀 서버를 ${hostname}:${port}에서 시작합니다...`);
 console.log("CORS_ORIGIN =", process.env.CORS_ORIGIN);
-// export default {
-//     port,
-//     fetch: app.fetch,
+console.log("Environment:", process.env.NODE_ENV || 'development');
 
-// };
-Bun.serve({
-    fetch: app.fetch,
+// Railway 배포용 export default 추가
+export default {
     port,
-});
+    hostname,
+    fetch: app.fetch,
+};
+
+// 로컬 개발용 Bun.serve (Railway에서는 무시됨)
+if (typeof Bun !== 'undefined' && process.env.NODE_ENV !== 'production') {
+    Bun.serve({
+        fetch: app.fetch,
+        port,
+        hostname,
+    });
+    console.log(`✅ Bun server started on ${hostname}:${port}`);
+}

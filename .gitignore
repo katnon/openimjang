@@ -102,3 +102,18 @@ temp/
 .env.*
 apps/bff/.env*
 nul
+
+# Database dumps and SQL files
+*.sql
+*.backup
+dump*
+chunks_by_table/
+per_table_dumps/
+table_list.txt
+split_*.sh
+upload_*.sh
+init_schema.sql
+clear_rds.sql
+
+# Claude settings
+.claude/settings.local.json

@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["bun"]
+
+[phases.install]
+cmds = ["bun install"]
+
+[phases.build]
+cmds = ["echo 'No build required for Bun'"]
+
+[start]
+cmd = "bun run src/index.ts"

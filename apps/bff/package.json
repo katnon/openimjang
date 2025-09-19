@@ -6,6 +6,7 @@
         "dev": "bun --watch src/index.ts",
         "dev:env": "bun --watch --env-file=.env src/index.ts",
         "start": "bun run src/index.ts",
+        "build": "bun install && bun run typecheck",
         "typecheck": "tsc -p tsconfig.json",
         "validate:assistant-tools": "bun --bun scripts/validate-assistant-tools.ts"
     },
